@@ -23,6 +23,7 @@ function New-LocalSecret {
 
 Push-Location $projectRoot
 try {
+    & (Join-Path $PSScriptRoot 'install-git-hooks.ps1')
     Invoke-Docker info --format '{{.ServerVersion}}'
     if (-not (Test-Path -LiteralPath '.env')) {
         Copy-Item -LiteralPath '.env.example' -Destination '.env'

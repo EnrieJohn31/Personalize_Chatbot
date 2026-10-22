@@ -16,7 +16,7 @@ The project uses a Sail-compatible custom PHP development image to retain the se
 ./scripts/setup.ps1
 ```
 
-The script checks Docker, creates `.env` if absent, replaces placeholder database passwords with random local values, builds both runtime images, installs `composer.lock` and `package-lock.json`, generates a missing application key, builds browser assets, starts MySQL/Pi, runs migrations and starts Laravel. The agent image installs its separate `agent-service/package-lock.json`. Re-running preserves non-placeholder passwords, the application key and the database volume. No default user is seeded; register through the application.
+The script first enables the repository's [contributor-policy Git hook](commit-policy.md), then checks Docker, creates `.env` if absent, replaces placeholder database passwords with random local values, builds both runtime images, installs `composer.lock` and `package-lock.json`, generates a missing application key, builds browser assets, starts MySQL/Pi, runs migrations and starts Laravel. The agent image installs its separate `agent-service/package-lock.json`. Re-running preserves non-placeholder passwords, the application key and the database volume. No default user is seeded; register through the application.
 
 Database passwords are applied by MySQL only when its volume is first initialized. If you later edit database passwords, update the existing database credentials as well. Do not delete the volume to resolve a credentials mismatch when it contains data you need.
 

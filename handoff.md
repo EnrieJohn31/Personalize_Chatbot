@@ -93,9 +93,11 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 ## Local Git and contributor requirements
 
-The initial local snapshot is saved on `main` as **`6736ac6` — Set up Laravel React development foundation**. It includes the application, all three lockfiles, setup/validation documents and this handoff. The earlier approval-review usage-limit issue was resolved and the commit succeeded. No remote is configured and nothing was pushed. A following documentation commit records this checkpoint; use `git log -2 --oneline` to inspect both.
+The initial local snapshot is saved on `main` as **`6736ac6` — Set up Laravel React development foundation**, with checkpoint documentation in `59fcdab`. It includes the application, all three lockfiles, setup/validation documents and this handoff. No remote is configured and nothing was pushed. Use `git log --oneline` to inspect the current local history.
 
 The user requires local-only commits with messages describing the changes. Use the configured human Git identity, `EnrieJohn31`. Do not add AI names, product/brand identities, generated-by attribution or co-author trailers to contributor metadata. Do not push or configure a remote without a new user instruction.
+
+This policy is now tracked in `AGENTS.md` and imported by `CLAUDE.md`; `.claude/settings.json` disables automatic attribution and session links. The active `.githooks/commit-msg` hook requires an approved human author/committer and rejects co-authors/common AI signatures. On a fresh checkout, run `./scripts/install-git-hooks.ps1` before committing. See [commit policy](docs/commit-policy.md) for tests, CI auditing and enforcement limits. Ten local hook cases and the existing-history audit passed. Task 2.1 remains the next application task.
 
 Before future commits, review `git status` and the staged file list. Keep `.env`, credentials, `.setup/`, dependencies, build output and database data out of Git. The initial snapshot was checked for these exclusions. Commit changed source, lockfiles and documentation together as appropriate, and update this handoff with the implementation commit reference.
 

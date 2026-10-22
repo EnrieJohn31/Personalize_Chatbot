@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+author=$(git var GIT_AUTHOR_IDENT)
+committer=$(git var GIT_COMMITTER_IDENT)
+exec sh "$root/scripts/check-commit-attribution.sh" "$1" "$author" "$committer"

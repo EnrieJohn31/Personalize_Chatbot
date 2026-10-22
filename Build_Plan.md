@@ -192,6 +192,7 @@ For each completed task, append: `ID — result — verification/evidence — re
 - 1.2 — Added a Sail-compatible pinned PHP image, Compose/MySQL configuration and repeatable PowerShell setup — all five migrations passed; a randomly named temporary account survived `docker compose restart mysql` and was removed afterward — the Windows checkout remains authoritative; Linux-filesystem relocation is an optimization, not a startup requirement.
 - 1.3 — Added the separate TypeScript/Pi service and lockfile — three service tests pass, Laravel receives its health response through `agent:3101`, all containers are healthy, and Docker reports no engine host port binding — provider authentication remains unconfigured as planned.
 - Handoff — Added `handoff.md`, linked the planning documents and corrected the outdated current-progress table — documentation checked against the source tree, validation record and Git state; initial local snapshot saved as `6736ac6` — task 2.1 is next.
+- Contributor policy — Added tracked repository/tool instructions, disabled automatic attribution, enabled a local Git hook and added a CI history audit — ten real-commit fixture cases and the existing-history audit passed; see `docs/commit-policy.md` — task 2.1 remains next; remote branch protection is not configured.
 
 ## Completion boundaries
 

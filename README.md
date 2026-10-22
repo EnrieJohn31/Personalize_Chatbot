@@ -22,6 +22,8 @@ See [handoff and next task](handoff.md), [setup and commands](docs/setup.md), [v
 
 ## Development
 
+Repository instructions and the [commit policy](docs/commit-policy.md) apply to every coding tool. Setup enables the local Git hook; for an existing checkout, run `./scripts/install-git-hooks.ps1` once before committing.
+
 ```powershell
 # Keep this terminal running for frontend hot reload.
 docker compose exec --user sail laravel.test npm run dev

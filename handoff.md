@@ -93,7 +93,7 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 ## Local Git and contributor requirements
 
-The initial local snapshot is saved on `main` as **`6736ac6` — Set up Laravel React development foundation**, with checkpoint documentation in `59fcdab`. It includes the application, all three lockfiles, setup/validation documents and this handoff. No remote is configured and nothing was pushed. Use `git log --oneline` to inspect the current local history.
+The initial local snapshot is saved on `main` as **`6736ac6` — Set up Laravel React development foundation**, with checkpoint documentation in `59fcdab` and contributor-policy enforcement in `804a379`. It includes the application, all three lockfiles, setup/validation documents and this handoff. The user supplied [the GitHub repository](https://github.com/EnrieJohn31/Personalize_Chatbot); `origin` now points to `https://github.com/EnrieJohn31/Personalize_Chatbot.git`. Read access was verified and `git ls-remote origin` returned no published references. Nothing has been pushed; the source and policy files remain local. Use `git log --oneline` and `git remote -v` to inspect the current state.
 
 The user requires local-only commits with messages describing the changes. Use the configured human Git identity, `EnrieJohn31`. Do not add AI names, product/brand identities, generated-by attribution or co-author trailers to contributor metadata. Do not push or configure a remote without a new user instruction.
 

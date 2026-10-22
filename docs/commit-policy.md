@@ -52,7 +52,7 @@ Local verification passed on 22 October 2026: two approved-human commits with te
 
 ## Scope and limits
 
-This is a persistent project policy with a local Git check, not an immutable server-side restriction. A deliberately disabled hook, low-level Git plumbing, some history import/rewrite operations, or a client that does not run Git hooks can bypass local enforcement. The history audit and CI provide an additional check, but remote branch protection has not been configured. No remote is currently configured in this checkout, and nothing was pushed.
+This is a persistent project policy with a local Git check, not an immutable server-side restriction. A deliberately disabled hook, low-level Git plumbing, some history import/rewrite operations, or a client that does not run Git hooks can bypass local enforcement. The history audit and CI provide an additional check, but remote branch protection has not been configured. The configured `origin` is `https://github.com/EnrieJohn31/Personalize_Chatbot.git`. Nothing has been pushed, so the instructions, settings and CI configuration are currently saved only in local history. Publishing requires a new user instruction.
 
 Message checks recognize common attribution signatures and links; they cannot classify every possible natural-language credit. The approved identity list provides an exact check for author and committer metadata. Managed/command-line tool settings can override project settings, and instructions alone cannot guarantee every agent's behavior. Do not bypass the policy; resolve a rejected commit by correcting its identity or message. Report conflicts to the user.
 

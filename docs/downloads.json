@@ -1,0 +1,36 @@
+{
+  "recordedDate": "2026-10-22",
+  "directory": ".setup/downloads",
+  "files": [
+    {
+      "name": "composer-2.10.3.phar",
+      "url": "https://getcomposer.org/download/2.10.3/composer.phar",
+      "sha256": "7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6",
+      "checksumSource": "https://getcomposer.org/download/2.10.3/composer.phar.sha256sum"
+    },
+    {
+      "name": "laravel-react-starter-717b8f5.zip",
+      "url": "https://codeload.github.com/laravel/react-starter-kit/zip/717b8f55aefd82d25d4119eaebdc8e3a72b8d7e5",
+      "sha256": "c93dc8ef2d3901df9e30c5a8b9f146c626c35f474410e1efbbdf181b654d827d",
+      "checksumSource": "Locally recorded checksum of the archive downloaded from the pinned upstream commit"
+    },
+    {
+      "name": "earendil-works-pi-ai-1.4.0.tgz",
+      "url": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-1.4.0.tgz",
+      "sha256": "b40e2ba8bb6fc332908f8b96e837dc2d1fdfb45eb9cd382f5aed111462981e3c",
+      "integrity": "sha512-hQM/C4+1w8rHYACzDDf+0vQMnEnpzIop1tptIERVgR3ZeT/hHSzBNG8PaWPgxWQjqSeKCyBZSyp8uTT6eKK1pQ=="
+    },
+    {
+      "name": "earendil-works-pi-agent-core-1.4.0.tgz",
+      "url": "https://registry.npmjs.org/@earendil-works/pi-agent-core/-/pi-agent-core-1.4.0.tgz",
+      "sha256": "2de67828f90c5b2aa16ff80288d23069b67c4a82cbcf9cc49ac3d031f2aeacda",
+      "integrity": "sha512-PoKY84SKUwnt7S5QBZaGUqfNO1kjP3KHpHUA9QpFTj4cOjaVWMYIcBPJ6FDRCdE8Zen9OSECQUd0uUfVgtSmgA=="
+    },
+    {
+      "name": "ubuntu-24.04.5-wsl-amd64.wsl",
+      "url": "https://releases.ubuntu.com/24.04.5/ubuntu-24.04.5-wsl-amd64.wsl",
+      "sha256": "bb415d824822c4b878125729af451a5d18fb13d1cf5cbed9a7393ad64ac6039e",
+      "checksumSource": "https://raw.githubusercontent.com/microsoft/WSL/master/distributions/DistributionInfo.json"
+    }
+  ]
+}

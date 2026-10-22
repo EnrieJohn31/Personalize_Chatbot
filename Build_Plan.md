@@ -1,7 +1,7 @@
 # Build Plan: Laravel + Pi Chatbot
 
 Updated: 22 October 2026  
-Version: 4  
+Version: 5\
 Companion: [Blueprint.md](Blueprint.md), revision 8; [handoff.md](handoff.md) for the continuation record  
 Status: Phases 0–1 complete. Laravel's React starter, MySQL persistence and the private Pi health service run locally through Docker Desktop/PowerShell. See [setup](docs/setup.md) and [validation](docs/validation.md).
 
@@ -175,7 +175,7 @@ Keep a short progress record here as implementation proceeds:
 | Current task | Ready for 2.1 — owned conversations/messages and non-secret provider connection records |
 | Last completed task | 1.3 — private Pi health service and Laravel connectivity verified |
 | Actual checks run on the application | 40 Laravel tests / 138 assertions; PHP static analysis/formatting; frontend build/types/lint; 3 agent tests; MySQL restart persistence; private connectivity; browser login — see docs/validation.md |
-| Local Git checkpoint | `6736ac6` — foundation; `804a379` — contributor policy. Origin configured for EnrieJohn31/Personalize_Chatbot; no push |
+| Git checkpoint and branches | `6736ac6` — foundation; `804a379` — contributor policy; `e4b9c7f` — remote record. Existing history published to `origin/main` and `origin/development`; continue on `development` |
 | Known prerequisite for live tests | Supported provider authentication entered through the intended runtime |
 | Next checkpoint | Task 2.1: user-owned sample history and connection records |
 
@@ -193,7 +193,8 @@ For each completed task, append: `ID — result — verification/evidence — re
 - 1.3 — Added the separate TypeScript/Pi service and lockfile — three service tests pass, Laravel receives its health response through `agent:3101`, all containers are healthy, and Docker reports no engine host port binding — provider authentication remains unconfigured as planned.
 - Handoff — Added `handoff.md`, linked the planning documents and corrected the outdated current-progress table — documentation checked against the source tree, validation record and Git state; initial local snapshot saved as `6736ac6` — task 2.1 is next.
 - Contributor policy — Added tracked repository/tool instructions, disabled automatic attribution, enabled a local Git hook and added a CI history audit — ten real-commit fixture cases and the existing-history audit passed; see `docs/commit-policy.md` — task 2.1 remains next; remote branch protection is not configured.
-- Repository connection — Configured `origin` from the user's supplied `EnrieJohn31/Personalize_Chatbot` GitHub URL — read access verified and no published references returned — local commits and contributor-policy files have not been pushed; task 2.1 remains next.
+- Repository connection — Configured `origin` from the user's supplied `EnrieJohn31/Personalize_Chatbot` GitHub URL — read access verified and no published references returned at connection time — publication was deferred until the user's later explicit request.
+- Repository publication — Pushed all four existing commits and their messages to `main` and the new `development` branch at the user's request; both track their matching origin branches — the existing-history attribution audit passed and ignored credentials/dependencies were excluded — enabled CI for development pushes and updated the handoff; remote CI results remain unverified, branch protection is not configured, and task 2.1 remains next.
 
 ## Completion boundaries
 

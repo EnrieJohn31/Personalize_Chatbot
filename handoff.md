@@ -88,14 +88,16 @@ Use the build plan's individual acceptance checks; this table does not replace t
 - Preserve the agreed Pi architecture. Redis, another agent framework, vector storage, WebSockets and a queue worker are not Phase 2 prerequisites.
 - Windows bind mounts were slow: the frontend build took about 156 seconds. A future move of the single authoritative checkout to Ubuntu's Linux filesystem is the main optimization suggestion. Ubuntu's initial user/Docker integration setup remains separate from the working PowerShell/Compose path.
 - The optional `fontaine` warning is non-fatal; fonts build and render. No new dependency was added just to silence it.
-- CI is configured but has not run remotely. A pristine-checkout run of the complete setup script, live provider tests, real mail delivery, physical passkey enrollment, production deployment and backup/restore are not verified.
+- CI is configured for pushes to `main` and `development`, and for pull requests. Remote CI results have not yet been verified. A pristine-checkout run of the complete setup script, live provider tests, real mail delivery, physical passkey enrollment, production deployment and backup/restore are not verified.
 - `.setup/` contains ignored downloads, temporary probes and dependency backups. It is not application source and is not included in a new clone. The persistence probe fixture was cleaned up.
 
-## Local Git and contributor requirements
+## Git branches and contributor requirements
 
-The initial local snapshot is saved on `main` as **`6736ac6` — Set up Laravel React development foundation**, with checkpoint documentation in `59fcdab` and contributor-policy enforcement in `804a379`. It includes the application, all three lockfiles, setup/validation documents and this handoff. The user supplied [the GitHub repository](https://github.com/EnrieJohn31/Personalize_Chatbot); `origin` now points to `https://github.com/EnrieJohn31/Personalize_Chatbot.git`. Read access was verified and `git ls-remote origin` returned no published references. Nothing has been pushed; the source and policy files remain local. Use `git log --oneline` and `git remote -v` to inspect the current state.
+The initial snapshot is **`6736ac6` — Set up Laravel React development foundation**, with checkpoint documentation in `59fcdab`, contributor-policy enforcement in `804a379` and remote configuration documentation in `e4b9c7f`. It includes the application, all three lockfiles, setup/validation documents and this handoff. On 22 October 2026, the user explicitly authorized publication to [the GitHub repository](https://github.com/EnrieJohn31/Personalize_Chatbot). All four existing commits were pushed successfully to both `main` and the new `development` branch with their messages and history preserved. `origin` points to `https://github.com/EnrieJohn31/Personalize_Chatbot.git`; both branches track their matching remote branches.
 
-The user requires local-only commits with messages describing the changes. Use the configured human Git identity, `EnrieJohn31`. Do not add AI names, product/brand identities, generated-by attribution or co-author trailers to contributor metadata. Do not push or configure a remote without a new user instruction.
+Continue application work on `development`; `main` retains the published foundation checkpoint. This publication update also enables the same CI checks for both branches. Use `git branch -vv`, `git log --oneline` and `git remote -v` to inspect the current state. Branch protection is not configured, and remote CI results have not yet been verified.
+
+Use descriptive commit messages and the configured human Git identity, `EnrieJohn31`. Do not add AI names, product/brand identities, generated-by attribution or co-author trailers to contributor metadata. The current push is explicitly authorized; subsequent work should remain in local commits unless the user requests publication. Do not change remotes without a user instruction.
 
 This policy is now tracked in `AGENTS.md` and imported by `CLAUDE.md`; `.claude/settings.json` disables automatic attribution and session links. The active `.githooks/commit-msg` hook requires an approved human author/committer and rejects co-authors/common AI signatures. On a fresh checkout, run `./scripts/install-git-hooks.ps1` before committing. See [commit policy](docs/commit-policy.md) for tests, CI auditing and enforcement limits. Ten local hook cases and the existing-history audit passed. Task 2.1 remains the next application task.
 
@@ -106,6 +108,7 @@ Before future commits, review `git status` and the staged file list. Keep `.env`
 ```text
 Read handoff.md, Blueprint.md and Build_Plan.md in this repository.
 Confirm the current Git and Docker state; preserve the existing local history.
+Continue on development, which tracks origin/development.
 Implement task 2.1: owned conversations/messages and non-secret provider connection records.
 Preserve the existing authentication flows and Laravel/Pi ownership boundaries.
 Use invented data and add meaningful ownership and access-denial tests.

@@ -17,7 +17,7 @@ Updated: 22 October 2026. Read this file first when resuming work.
 
 ## Completed and checked
 
-- Tasks 0.1–0.3: workspace selected, versions recorded and initial provider ownership/path documented. The requirement to save the generated lockfiles in local Git is still pending below.
+- Tasks 0.1–0.3: workspace selected, versions recorded and initial provider ownership/path documented. All three generated lockfiles are saved in local commit `6736ac6`.
 - Task 1.1: Laravel 13.38.0 with the official React/Inertia/TypeScript/Tailwind/shadcn/ui/Lucide starter. Registration, email verification, password reset/confirmation, two-factor and passkey scaffolding remain enabled. No default account is seeded.
 - Task 1.2: pinned PHP/Node development image, Compose services, MySQL 8.4.13, all five starter migrations and a persistent named volume. A temporary user survived a database restart and was then removed.
 - Task 1.3: `agent-service/` with Pi 1.4.0, TypeScript, its own lockfile and a private health endpoint. Laravel reached it by service name; no engine host port is published.
@@ -93,17 +93,17 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 ## Local Git and contributor requirements
 
-At handoff preparation, branch `main` has **no commits and no remote**; implementation and documentation are untracked. The earlier staging attempt was not executed because automatic approval review hit an account usage limit. The first local snapshot remains outstanding; do not treat it as already saved.
+The initial local snapshot is saved on `main` as **`6736ac6` — Set up Laravel React development foundation**. It includes the application, all three lockfiles, setup/validation documents and this handoff. The earlier approval-review usage-limit issue was resolved and the commit succeeded. No remote is configured and nothing was pushed. A following documentation commit records this checkpoint; use `git log -2 --oneline` to inspect both.
 
 The user requires local-only commits with messages describing the changes. Use the configured human Git identity, `EnrieJohn31`. Do not add AI names, product/brand identities, generated-by attribution or co-author trailers to contributor metadata. Do not push or configure a remote without a new user instruction.
 
-Before committing, review `git status` and the staged file list. Keep `.env`, credentials, `.setup/`, dependencies, build output and database data out of Git. Include all three lockfiles, source, configuration and these documents. A detailed initial message is prepared locally at `.setup/phase1-commit.txt`; that ignored file is not required to build the project. Record the successful commit reference here when the snapshot is made.
+Before future commits, review `git status` and the staged file list. Keep `.env`, credentials, `.setup/`, dependencies, build output and database data out of Git. The initial snapshot was checked for these exclusions. Commit changed source, lockfiles and documentation together as appropriate, and update this handoff with the implementation commit reference.
 
 ## Suggested continuation request
 
 ```text
 Read handoff.md, Blueprint.md and Build_Plan.md in this repository.
-Confirm the current Git and Docker state and finish the pending local snapshot if needed.
+Confirm the current Git and Docker state; preserve the existing local history.
 Implement task 2.1: owned conversations/messages and non-secret provider connection records.
 Preserve the existing authentication flows and Laravel/Pi ownership boundaries.
 Use invented data and add meaningful ownership and access-denial tests.

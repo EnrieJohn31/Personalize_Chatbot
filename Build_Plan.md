@@ -13,7 +13,7 @@ Build a reusable chatbot foundation with Laravel, React/Inertia, TypeScript, sha
 
 Use **Blueprint.md for design decisions** and **this file for work order and progress**. Update both when a decision changes. Read the relevant blueprint sections before each phase; there is no need to reproduce the entire architecture in every task.
 
-Read [handoff.md](handoff.md) when resuming: it records the stopping point, verified checks, pending local commit, startup commands and the next task's acceptance criteria.
+Read [handoff.md](handoff.md) when resuming: it records the stopping point, verified checks, local commit checkpoint, startup commands and the next task's acceptance criteria.
 
 The existing reference documents are enough to start. Use invented data and one sample lookup tool. Live provider testing will need a supported sign-in or locally configured credential. A future business connector needs its own access only when Phase 7 begins.
 
@@ -175,7 +175,7 @@ Keep a short progress record here as implementation proceeds:
 | Current task | Ready for 2.1 — owned conversations/messages and non-secret provider connection records |
 | Last completed task | 1.3 — private Pi health service and Laravel connectivity verified |
 | Actual checks run on the application | 40 Laravel tests / 138 assertions; PHP static analysis/formatting; frontend build/types/lint; 3 agent tests; MySQL restart persistence; private connectivity; browser login — see docs/validation.md |
-| Local Git checkpoint | Initial snapshot pending; main has no commits — see handoff.md |
+| Local Git checkpoint | `6736ac6` — foundation, lockfiles and handoff saved locally on main; no remote/push |
 | Known prerequisite for live tests | Supported provider authentication entered through the intended runtime |
 | Next checkpoint | Task 2.1: user-owned sample history and connection records |
 
@@ -191,7 +191,7 @@ For each completed task, append: `ID — result — verification/evidence — re
 - 1.1 — Scaffolded the pinned official React starter with Laravel 13.38.0; installed dependencies and built frontend assets — TypeScript passes, browser login renders without console errors, and Composer validation passes — Vite+ was updated to 1.3.0 to resolve upstream dependency advisories; lockfiles record the result.
 - 1.2 — Added a Sail-compatible pinned PHP image, Compose/MySQL configuration and repeatable PowerShell setup — all five migrations passed; a randomly named temporary account survived `docker compose restart mysql` and was removed afterward — the Windows checkout remains authoritative; Linux-filesystem relocation is an optimization, not a startup requirement.
 - 1.3 — Added the separate TypeScript/Pi service and lockfile — three service tests pass, Laravel receives its health response through `agent:3101`, all containers are healthy, and Docker reports no engine host port binding — provider authentication remains unconfigured as planned.
-- Handoff — Added `handoff.md`, linked the planning documents and corrected the outdated current-progress table — documentation checked against the source tree, validation record and Git state — task 2.1 and the initial local snapshot remain next.
+- Handoff — Added `handoff.md`, linked the planning documents and corrected the outdated current-progress table — documentation checked against the source tree, validation record and Git state; initial local snapshot saved as `6736ac6` — task 2.1 is next.
 
 ## Completion boundaries
 

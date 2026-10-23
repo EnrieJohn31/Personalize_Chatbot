@@ -1,6 +1,6 @@
 # Commit and contributor policy
 
-Updated: 22 October 2026. The repository owner requires human contributor identities, no co-authors and no AI attribution, regardless of which coding tool produced a change.
+Updated: 23 October 2026. The repository owner requires human contributor identities, no co-authors and no AI attribution, regardless of which coding tool produced a change.
 
 ## What is configured
 
@@ -8,7 +8,7 @@ Updated: 22 October 2026. The repository owner requires human contributor identi
 | --- | --- |
 | Shared repository instructions | Tracked `AGENTS.md` defines the rule for coding agents and future sessions |
 | Claude instructions | Tracked `CLAUDE.md` imports `AGENTS.md`, including its Git policy |
-| Claude attribution settings | `.claude/settings.json` sets `attribution.commit` and `attribution.pr` to empty strings, and `attribution.sessionUrl` to `false` |
+| Claude attribution settings | Local, ignored `.claude/settings.json` sets `attribution.commit` and `attribution.pr` to empty strings, and `attribution.sessionUrl` to `false`; it is not included in new clones |
 | Approved Git identities | `.githooks/allowed-identities` currently contains only `EnrieJohn31 <enriejohnedem@gmail.com>` |
 | Local enforcement | `.githooks/commit-msg` rejects an unapproved author or committer, any co-author trailer, and common AI signatures/session links |
 | History checks | `scripts/audit-commit-attribution.sh` checks all commits reachable from HEAD using the same policy |
@@ -36,6 +36,20 @@ git config --local core.hooksPath .githooks
 
 The PowerShell installer refuses to replace another hooks path or existing non-sample hooks without integration. It changes only the current repository, not global Git configuration. Use an approved human identity for both author and committer. Adding another real contributor requires the repository owner's approval and an explicit update to the identity list; agents must not add themselves or their vendors.
 
+The entire `.claude/` directory is ignored at the owner's request. The existing local settings are preserved, but new clones must create `.claude/settings.json` locally (or merge these values into existing settings) before using that tool:
+
+```json
+{
+    "attribution": {
+        "commit": "",
+        "pr": "",
+        "sessionUrl": false
+    }
+}
+```
+
+Keep this file untracked. The tracked repository instructions, identity list, hooks and CI audit continue to enforce the contributor policy.
+
 ## Verify
 
 From Git Bash, Linux or macOS:
@@ -56,7 +70,7 @@ This is a persistent project policy with a local Git check, not an immutable ser
 
 Message checks recognize common attribution signatures and links; they cannot classify every possible natural-language credit. The approved identity list provides an exact check for author and committer metadata. Managed/command-line tool settings can override project settings, and instructions alone cannot guarantee every agent's behavior. Do not bypass the policy; resolve a rejected commit by correcting its identity or message. Report conflicts to the user.
 
-The shared settings use the object form supported by earlier Claude Code versions. The newer `attribution: false` shorthand was not used because versions before 2.1.281 reject it. No Claude session was launched to test its live configuration; the settings follow the official reference and the actual Git-hook behavior was tested locally.
+The local settings use the object form supported by earlier Claude Code versions. The newer `attribution: false` shorthand was not used because versions before 2.1.281 reject it. No Claude session was launched to test its live configuration; the settings follow the official reference and the actual Git-hook behavior was tested locally.
 
 ## Configuration sources
 

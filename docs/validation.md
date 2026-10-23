@@ -1,5 +1,20 @@
 # Foundation validation
 
+## Publication review — 23 October 2026
+
+Reviewed task 2.2 at `8e29e53`, including ownership checks, serialization, HMAC signing and verification, bounded request reading, strict schemas, duplicate/cancellation handling, setup and private networking. No blocking implementation defect was found. Corrected the server comment and handoff to describe the actual authentication order: header checks precede the bounded body read; signature verification precedes JSON parsing. Clarified that engine admission exists while Laravel run admission and message-write idempotency remain future work. No runtime behavior changed.
+
+| Check | Observed result |
+| --- | --- |
+| `docker compose exec --user sail laravel.test composer ci:check` | Passed: formatting (87 files), lint (64 files), TypeScript, Pint (91 files), PHPStan (70 files), and 116 Laravel tests / 561 assertions |
+| `docker compose exec agent npm test` | TypeScript build and all 22 engine tests passed |
+| `docker compose exec --user sail laravel.test php artisan agent:check` | Passed against the running services: signed probe accepted for validation, unsigned probe rejected; no run admitted |
+| Contributor review | Complete-history attribution audit passed. All nine existing commits use the approved human author and committer. No co-author trailer or prohibited contributor credit was found in the task 2.2 changes; attribution settings, approved identities and hooks remain unchanged |
+| Tracked-file review | No `.env`, downloaded dependencies or generated build output is tracked; the local request-signing secret is absent from the changed tracked files |
+| Publication | `main` fast-forwarded to `development`; both remote branches accepted all four pending commits through `8e29e53` in one atomic push. No history rewrite |
+
+Remote CI results were not inspected. Earlier mutation, dependency-audit and live run-admission results below remain dated implementation evidence; they were not repeated in this review. Tasks 2.3–2.4 remain unimplemented. Admission is still process-local and no provider/model execution exists.
+
 ## Task 2.2 — 23 October 2026
 
 Implemented versioned private engine contracts and signed Laravel-to-engine calls; the contract is documented in [contracts/README.md](../contracts/README.md). The engine now declares `typebox` 1.3.27 directly. It was already installed through Pi, and the lockfile's resolved tree is unchanged apart from that root entry. No PHP dependency or migration changed.

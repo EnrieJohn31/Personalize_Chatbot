@@ -77,7 +77,7 @@ export function createServer(config: ServerConfig = loadConfig()) {
         }
     }
 
-    /** Authenticates before reading the body, then parses and validates it against `contract`. */
+    /** Checks headers before reading the bounded body, verifies its signature, then parses and validates it. */
     async function readContract<T>(request: IncomingMessage, contract: ContractName): Promise<T> {
         if (config.requestSigningKey === null) {
             throw new HttpError(503, 'request_auth_not_configured', 'The engine has no request signing key configured.');

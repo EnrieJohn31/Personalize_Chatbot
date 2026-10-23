@@ -175,7 +175,7 @@ Keep a short progress record here as implementation proceeds:
 | Current task | Ready for 2.3 — chat page; 2.4 then connects the simulated stream |
 | Last completed task | 2.2 — versioned contracts and signed private Laravel/Pi admission |
 | Actual checks run on the application | Task 2.2: `composer ci:check` with 116 Laravel tests / 561 assertions; 22 engine tests; live cross-container signed admission, duplicate, conflict, cancel and wrong-key checks; agent npm audit — see docs/validation.md for dated results and earlier checks |
-| Git checkpoint and branches | `2e8b62d` — task 2.2, local on `development`; `4484b3a`/`8671079` — task 2.1; `c4b8b24` — published foundation on both remote branches. No new push requested |
+| Git checkpoint and branches | `2e8b62d`/`8e29e53` — task 2.2; `4484b3a`/`8671079` — task 2.1. Reviewed and published to both `main` and `development` on 23 October 2026; see handoff.md for the review checkpoint |
 | Known prerequisite for live tests | Supported provider authentication entered through the intended runtime |
 | Next checkpoint | Task 2.3: desktop/mobile chat layout with correct Enter, Shift+Enter and IME behavior |
 
@@ -200,6 +200,7 @@ For each completed task, append: `ID — result — verification/evidence — re
 
 - 2.1 — Added owned history/connection metadata, policies, validated session routes, explicit public resources, bounded pagination and transactional user-message appends — ownership/forgery/pagination/rollback tests and separate MySQL checks are recorded in `docs/validation.md`; existing users were preserved and Laravel/Pi health still works — changes are committed locally on `development`; task 2.2 is next, with no chat UI or live provider execution yet.
 - 2.2 — Added strict v1 schemas and examples in `contracts/`, HMAC-signed `AgentGateway`/`PiGateway` calls, an ownership-checked `RunRequestFactory`, engine-side authentication/validation/idempotent admission/cancellation and `php artisan agent:check` — 58 new Laravel tests and 22 engine tests pass; a live probe between real containers accepted a signed fake run, reported a duplicate, rejected a conflicting reuse, an unverified provider and a wrong key, and acknowledged cancellation — no model executes yet, the admission record is process-local, and callbacks/key rotation remain for Phase 4.
+- Publication review — Reviewed task 2.2 with no blocking findings; reran the full application checks, 22 engine tests, live signature verification and the complete-history attribution audit. Corrected authentication-order documentation and clarified the pending Laravel admission work. Published tasks 2.1–2.2 to `main` and `development` with their existing history preserved; task 2.3 remains next.
 
 ## Completion boundaries
 

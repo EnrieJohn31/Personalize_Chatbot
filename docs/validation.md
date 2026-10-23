@@ -16,8 +16,9 @@ Implemented versioned private engine contracts and signed Laravel-to-engine call
 | Engine npm audit | 0 vulnerabilities |
 | Compose configuration | `docker compose config` valid; engine receives the key/simulation variables, a read-only `/contracts` mount and the `contracts` build context; still no published port |
 | Setup key generation | The `setup.ps1` replacement logic, run on a scratch copy of `.env.example`, produced one 64-character key and preserved it on a rerun |
+| Running development services | After `2e8b62d` reached `development`: a generated 64-character key was added to the ignored `.env` without printing it. `docker compose up -d --build agent` became healthy with `PortBindings` `{}`. `agent:check` passed, the engine's 22 tests passed in the running `agent` container, and 116 Laravel tests / 561 assertions passed in `laravel.test` |
 
-The checks above ran against the task branch worktree in disposable containers, without changing the running development services. The live probe used a temporary key and a temporary engine container that was stopped afterwards. No model or provider was called, and nothing persists between engine restarts. Remote CI was not triggered.
+The checks above the last row ran against the task branch worktree in disposable containers, without changing the running development services. The live probe used a temporary key and a temporary engine container that was stopped afterwards. No model or provider was called, and nothing persists between engine restarts. Remote CI was not triggered.
 
 Not verified: overlapping-key rotation, behavior under concurrent admission load, and any engine-to-Laravel callback (none exists). The Windows filesystem optimization noted below still applies. Next are tasks 2.3 (chat page) and 2.4 (simulated stream).
 

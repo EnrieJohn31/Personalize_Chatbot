@@ -175,7 +175,7 @@ Keep a short progress record here as implementation proceeds:
 | Current task | Ready for 2.3 — chat page; 2.4 then connects the simulated stream |
 | Last completed task | 2.2 — versioned contracts and signed private Laravel/Pi admission |
 | Actual checks run on the application | Task 2.2: `composer ci:check` with 116 Laravel tests / 561 assertions; 22 engine tests; live cross-container signed admission, duplicate, conflict, cancel and wrong-key checks; agent npm audit — see docs/validation.md for dated results and earlier checks |
-| Git checkpoint and branches | Task 2.2 commit on `task/2.2-agent-gateway`, fast-forwarded to local `development`; `8671079` — task 2.1 handoff; `c4b8b24` — published foundation. No new push requested |
+| Git checkpoint and branches | `2e8b62d` — task 2.2, local on `development`; `4484b3a`/`8671079` — task 2.1; `c4b8b24` — published foundation on both remote branches. No new push requested |
 | Known prerequisite for live tests | Supported provider authentication entered through the intended runtime |
 | Next checkpoint | Task 2.3: desktop/mobile chat layout with correct Enter, Shift+Enter and IME behavior |
 

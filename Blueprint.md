@@ -1,12 +1,12 @@
 # Blueprint: Laravel Chatbot Foundation
 
 Updated: 23 October 2026\
-Revision: 9 — Owned history storage implemented; execution architecture unchanged\
-Status: Laravel/React, MySQL, private Pi health and owned history/connection-metadata endpoints run locally. Task 2.1 is implemented; authenticated execution, the chat UI and provider integration remain. No provider or throughput benchmark has been produced.
+Revision: 10 — Signed private engine contract implemented; execution architecture unchanged\
+Status: Laravel/React, MySQL, owned history/connection-metadata endpoints and a signed, schema-validated private Pi admission boundary run locally. Tasks 2.1–2.2 are implemented; the chat UI, streaming, model execution and provider integration remain. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
 
-Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 2.2. Refresh it alongside the build plan after each implementation session.
+Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume tasks 2.3–2.4. Refresh it alongside the build plan after each implementation session.
 
 ## 1. Goal and agreed foundation
 
@@ -166,6 +166,8 @@ Suggested Node endpoints:
 The request carries a run ID, server-owned profile/model references, user identity, an immutable permitted-capability snapshot, message/history context and limits. Credentials are server-managed references rather than browser-supplied tokens.
 
 Authenticate service calls and restrict them to a private network/interface. Validate contract versions, run ownership and bounds; reject mismatched duplicate payloads. Cross-host transport needs appropriate encryption. Browser-selected roles, endpoints and arbitrary tool lists are not authorization.
+
+Implementation record, 23 October 2026 (task 2.2): [contracts/](contracts/README.md) holds strict v1 JSON Schemas for run admission, cancellation, acknowledgements, errors and normalized run events, plus shared examples. Laravel signs requests with `AGENT-HMAC-SHA256-V1` (HMAC-SHA256 over timestamp, method, path and body hash) using `AGENT_REQUEST_SIGNING_KEY`. The engine authenticates before reading the body, compiles the schemas at runtime and checks semantic rules. It admits runs idempotently in a bounded process-local record. `RunRequestFactory` builds the snapshot only from the acting user's owned conversation and connection. Until tasks 3.1–3.3, the engine admits only the deterministic `simulated` provider, and only when simulation is explicitly enabled; it refuses every capability. Engine-to-Laravel callbacks will use a separate key in Phase 4.
 
 Use only Pi as the primary agent engine for this path. The Laravel AI SDK can be revisited if a future requirement changes; do not wrap one complete agent loop inside another.
 

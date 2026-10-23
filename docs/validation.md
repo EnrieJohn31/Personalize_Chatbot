@@ -1,5 +1,26 @@
 # Foundation validation
 
+## Task 2.2 — 23 October 2026
+
+Implemented versioned private engine contracts and signed Laravel-to-engine calls; the contract is documented in [contracts/README.md](../contracts/README.md). The engine now declares `typebox` 1.3.27 directly. It was already installed through Pi, and the lockfile's resolved tree is unchanged apart from that root entry. No PHP dependency or migration changed.
+
+| Check | Observed result |
+| --- | --- |
+| `composer ci:check` | Passed: frontend formatting/lint (64 files) and types, Pint (91 PHP files), PHPStan level 7 (70 files), and 116 Laravel tests / 561 assertions |
+| New Laravel tests | 58 tests / 125 assertions: shared signing vector; snapshot serialization identical to the shared example; PHP bounds compared with the schema; 16 invalid-snapshot cases; signed payload, headers and target; engine error codes and details; 7 out-of-contract responses; transport and bare-5xx failures; missing/short key sending nothing; cancel path signing; owned-history snapshots, history bounds, cross-user conversation (404) and forged connection refusal; `not_configured` connections refused for live models; no private fields sent; `agent:check` outcomes |
+| Engine `npm test` | Passed: 22 tests covering shared examples, signing vector, schema strictness, health, missing/wrong-key/expired/future/malformed signatures, cross-endpoint and body tampering, content type, JSON, contract version, bounded details, semantic rules, model/capability refusal, body limit, bounded registry expiry, idempotent admission, conflicting reuse and cancellation |
+| Signing vector | Computed independently with OpenSSL and Node before either implementation existed; both runtimes reproduce it in tests |
+| Mutation check | Making engine signature comparison always succeed failed the two signature tests |
+| Live cross-container probe | A temporary engine built from this commit joined the Compose network with no host port. Laravel's `PiGateway` received: 202 accepted; 202 duplicate on identical resubmission; 409 `conflicting_duplicate`; 422 `model_unavailable` for an unverified provider; 422 `unsupported_capability`; 202 `cancel_requested`, then duplicate; 404 `run_not_found` |
+| `php artisan agent:check` | Passed with the matching key (signed probe reached validation, unsigned probe got 401). Failed with exit 1 and `authentication_failed` for a different key; the engine logged `missing` and `mismatch` reasons only |
+| Engine npm audit | 0 vulnerabilities |
+| Compose configuration | `docker compose config` valid; engine receives the key/simulation variables, a read-only `/contracts` mount and the `contracts` build context; still no published port |
+| Setup key generation | The `setup.ps1` replacement logic, run on a scratch copy of `.env.example`, produced one 64-character key and preserved it on a rerun |
+
+The checks above ran against the task branch worktree in disposable containers, without changing the running development services. The live probe used a temporary key and a temporary engine container that was stopped afterwards. No model or provider was called, and nothing persists between engine restarts. Remote CI was not triggered.
+
+Not verified: overlapping-key rotation, behavior under concurrent admission load, and any engine-to-Laravel callback (none exists). The Windows filesystem optimization noted below still applies. Next are tasks 2.3 (chat page) and 2.4 (simulated stream).
+
 ## Task 2.1 — 23 October 2026
 
 Implemented owned conversations/messages and non-secret provider connection metadata; the public endpoint contract is in [chat-history.md](chat-history.md). No runtime dependency or lockfile changed.

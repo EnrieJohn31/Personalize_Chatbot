@@ -1,0 +1,108 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:run-event",
+    "title": "Engine run event",
+    "description": "One normalized engine event. Provider-specific frames are mapped to these types before they leave the engine. Tool and source events are added with the first tool (task 3.3).",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["contractVersion", "runId", "sequence", "type", "data"],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "runId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "sequence": {
+            "description": "Monotonic per-run engine sequence starting at 1.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+        },
+        "type": {
+            "enum": [
+                "run.started",
+                "run.progress",
+                "assistant.delta",
+                "assistant.final",
+                "run.completed",
+                "run.failed",
+                "run.cancelled"
+            ]
+        },
+        "data": { "type": "object" }
+    },
+    "allOf": [
+        {
+            "if": {
+                "properties": {
+                    "type": {
+                        "enum": [
+                            "run.started",
+                            "run.completed",
+                            "run.cancelled"
+                        ]
+                    }
+                }
+            },
+            "then": { "properties": { "data": { "$ref": "#/$defs/empty" } } }
+        },
+        {
+            "if": { "properties": { "type": { "const": "run.progress" } } },
+            "then": { "properties": { "data": { "$ref": "#/$defs/progress" } } }
+        },
+        {
+            "if": { "properties": { "type": { "const": "assistant.delta" } } },
+            "then": { "properties": { "data": { "$ref": "#/$defs/delta" } } }
+        },
+        {
+            "if": { "properties": { "type": { "const": "assistant.final" } } },
+            "then": { "properties": { "data": { "$ref": "#/$defs/final" } } }
+        },
+        {
+            "if": { "properties": { "type": { "const": "run.failed" } } },
+            "then": { "properties": { "data": { "$ref": "#/$defs/failure" } } }
+        }
+    ],
+    "$defs": {
+        "empty": { "type": "object", "additionalProperties": false },
+        "progress": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stage"],
+            "properties": {
+                "stage": { "enum": ["preparing", "retrieving", "answering"] }
+            }
+        },
+        "delta": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text"],
+            "properties": {
+                "text": { "type": "string", "minLength": 1, "maxLength": 16384 }
+            }
+        },
+        "final": {
+            "description": "Complete answer text. It replaces any accumulated deltas; it is never appended to them.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text"],
+            "properties": { "text": { "type": "string", "maxLength": 200000 } }
+        },
+        "failure": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message"],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                },
+                "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                }
+            }
+        }
+    }
+}

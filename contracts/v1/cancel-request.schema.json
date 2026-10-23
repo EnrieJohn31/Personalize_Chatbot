@@ -1,0 +1,16 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:cancel-request",
+    "title": "Run cancellation request",
+    "description": "Laravel to engine: POST /internal/runs/{runId}/cancel. The body runId must equal the path runId.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["contractVersion", "runId"],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "runId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        }
+    }
+}

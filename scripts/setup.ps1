@@ -31,7 +31,7 @@ try {
 
     $environmentPath = Join-Path $projectRoot '.env'
     $environment = [System.IO.File]::ReadAllText($environmentPath)
-    foreach ($key in 'DB_PASSWORD', 'DB_ROOT_PASSWORD') {
+    foreach ($key in 'DB_PASSWORD', 'DB_ROOT_PASSWORD', 'AGENT_REQUEST_SIGNING_KEY') {
         $pattern = '(?m)^' + $key + '=([^\r\n]*)'
         $match = [regex]::Match($environment, $pattern)
         if (-not $match.Success) {

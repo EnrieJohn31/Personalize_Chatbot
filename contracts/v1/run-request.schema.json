@@ -1,0 +1,116 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:run-request",
+    "title": "Run admission request",
+    "description": "Laravel to engine: POST /internal/runs. A server-created, immutable execution snapshot; never forwarded from a browser.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "contractVersion",
+        "runId",
+        "conversationId",
+        "userId",
+        "profile",
+        "model",
+        "connectionId",
+        "capabilities",
+        "messages",
+        "limits"
+    ],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "runId": { "$ref": "#/$defs/uuid" },
+        "conversationId": { "$ref": "#/$defs/uuid" },
+        "userId": {
+            "description": "Laravel user ID as a decimal string.",
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,19}$"
+        },
+        "profile": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "version"],
+            "properties": {
+                "id": { "$ref": "#/$defs/slug" },
+                "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000
+                }
+            }
+        },
+        "model": {
+            "description": "Server-owned model reference. The engine admits only providers it has verified.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["provider", "id"],
+            "properties": {
+                "provider": { "$ref": "#/$defs/slug" },
+                "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+                }
+            }
+        },
+        "connectionId": {
+            "description": "Non-secret provider connection reference, or null when the model needs none. Never a credential.",
+            "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/uuid" }]
+        },
+        "capabilities": {
+            "description": "Permitted capability snapshot. The engine rejects any capability it cannot enforce.",
+            "type": "array",
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" }
+        },
+        "messages": {
+            "description": "Owned history in ascending order. The final message must have role user.",
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "role", "content"],
+                "properties": {
+                    "id": { "$ref": "#/$defs/uuid" },
+                    "role": { "enum": ["user", "assistant"] },
+                    "content": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64000
+                    }
+                }
+            }
+        },
+        "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["maxModelRounds", "maxToolCalls", "runDeadlineMs"],
+            "properties": {
+                "maxModelRounds": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 16
+                },
+                "maxToolCalls": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 32
+                },
+                "runDeadlineMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 600000
+                }
+            }
+        }
+    },
+    "$defs": {
+        "uuid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "slug": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
+    }
+}

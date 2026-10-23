@@ -1,0 +1,32 @@
+{
+    "contractVersion": 1,
+    "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0e",
+    "conversationId": "0199f29f-1b2c-7d3e-8f40-516273849506",
+    "userId": "42",
+    "profile": { "id": "default", "version": 1 },
+    "model": { "provider": "simulated", "id": "simulated-echo" },
+    "connectionId": null,
+    "capabilities": [],
+    "messages": [
+        {
+            "id": "0199f29f-2a00-7000-8000-000000000001",
+            "role": "user",
+            "content": "What is the reference code for the sample office?"
+        },
+        {
+            "id": "0199f29f-2a00-7000-8000-000000000002",
+            "role": "assistant",
+            "content": "The sample office reference code is SAMPLE-001."
+        },
+        {
+            "id": "0199f29f-2a00-7000-8000-000000000003",
+            "role": "user",
+            "content": "Thanks. Summarize that in one line."
+        }
+    ],
+    "limits": {
+        "maxModelRounds": 4,
+        "maxToolCalls": 6,
+        "runDeadlineMs": 180000
+    }
+}

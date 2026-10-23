@@ -8,6 +8,8 @@ RUN npm ci --no-fund
 COPY --chown=node:node tsconfig.json ./
 COPY --chown=node:node src ./src
 COPY --chown=node:node tests ./tests
+# Shared request/event schemas from the repository's contracts/ directory (a named build context).
+COPY --from=contracts --chown=node:node . /contracts
 RUN npm run build
 
 EXPOSE 3101

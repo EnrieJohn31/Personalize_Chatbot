@@ -44,16 +44,23 @@ services:
         build:
             context: ./agent-service
             dockerfile: Dockerfile.dev
+            additional_contexts:
+                contracts: ./contracts
         image: assistant-foundation-agent:dev
         init: true
         environment:
             PORT: 3101
             CHOKIDAR_USEPOLLING: '${VITE_USE_POLLING:-true}'
+            # Without a key the run endpoints stay closed (503); setup.ps1 generates one in .env.
+            AGENT_REQUEST_SIGNING_KEY: '${AGENT_REQUEST_SIGNING_KEY:-}'
+            # Development only: admits the deterministic simulated provider.
+            AGENT_SIMULATION_ENABLED: '${AGENT_SIMULATION_ENABLED:-true}'
         expose:
             - '3101'
         volumes:
             - './agent-service/src:/app/src:ro'
             - './agent-service/tests:/app/tests:ro'
+            - './contracts:/contracts:ro'
         networks:
             - sail
         healthcheck:

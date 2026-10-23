@@ -1,15 +1,15 @@
 # Build Plan: Laravel + Pi Chatbot
 
 Updated: 23 October 2026\
-Version: 6\
-Companion: [Blueprint.md](Blueprint.md), revision 9; [handoff.md](handoff.md) for the continuation record\
-Status: Phases 0–1 and task 2.1 complete. Owned history and non-secret connection metadata are implemented alongside the existing Laravel/React, MySQL and private Pi foundation. See [history endpoints](docs/chat-history.md) and [validation](docs/validation.md).
+Version: 7\
+Companion: [Blueprint.md](Blueprint.md), revision 10; [handoff.md](handoff.md) for the continuation record\
+Status: Phases 0–1 and tasks 2.1–2.2 complete. Owned history, non-secret connection metadata and a signed, versioned Laravel-to-Pi admission boundary are implemented. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md) and [validation](docs/validation.md).
 
 ## Start here
 
 Build a reusable chatbot foundation with Laravel, React/Inertia, TypeScript, shadcn/ui, Lucide, MySQL and a private Node/Pi engine. Use Docker Compose/Sail for development. Keep Pi as the engine throughout this plan.
 
-**Next task: 2.2, versioned contracts and authenticated private Laravel/Pi calls.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
+**Next tasks: 2.3, the chat page, then 2.4, the simulated stream through Laravel.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
 
 Use **Blueprint.md for design decisions** and **this file for work order and progress**. Update both when a decision changes. Read the relevant blueprint sections before each phase; there is no need to reproduce the entire architecture in every task.
 
@@ -64,7 +64,7 @@ Phases 0–3 deliver **Stage A: the connectivity prototype**. Phases 4–6 deliv
 | Done | Task | Small piece of work | Done when |
 | --- | --- | --- | --- |
 | [x] | 2.1 | Add owned conversations/messages and non-secret provider connection records. | An authenticated user can save/load their sample history; another user cannot read it. |
-| [ ] | 2.2 | Define versioned request/event schemas in `contracts/` and implement private service authentication through `AgentGateway`/`PiGateway`. | A fake request crosses the boundary; invalid authentication and invalid payloads are rejected. |
+| [x] | 2.2 | Define versioned request/event schemas in `contracts/` and implement private service authentication through `AgentGateway`/`PiGateway`. | A fake request crosses the boundary; invalid authentication and invalid payloads are rejected. |
 | [ ] | 2.3 | Build the chat page: sidebar, transcript, composer, theme and labelled Lucide actions. | Desktop/mobile layout works; Enter, Shift+Enter and IME input behave correctly. |
 | [ ] | 2.4 | Connect a simulated text stream through Laravel and one React hook. | Text arrives incrementally, safe Markdown renders, and the final event replaces draft text without duplication. |
 
@@ -172,12 +172,12 @@ Keep a short progress record here as implementation proceeds:
 
 | Field | Current value |
 | --- | --- |
-| Current task | Ready for 2.2 — versioned contracts and authenticated private Laravel/Pi calls |
-| Last completed task | 2.1 — owned conversations/messages and non-secret provider connection metadata |
-| Actual checks run on the application | Task 2.1: 58 Laravel tests / 436 assertions; PHP static analysis/formatting; frontend lint/types and generated route types; additive MySQL migrations and rolled-back storage/cascade probe; private Pi connectivity — see docs/validation.md for dated results and earlier Phase 1 checks |
-| Git checkpoint and branches | `4484b3a` — task 2.1 implementation, local on `development`; `c4b8b24` — published foundation on both remote branches. No new push requested |
+| Current task | Ready for 2.3 — chat page; 2.4 then connects the simulated stream |
+| Last completed task | 2.2 — versioned contracts and signed private Laravel/Pi admission |
+| Actual checks run on the application | Task 2.2: `composer ci:check` with 116 Laravel tests / 561 assertions; 22 engine tests; live cross-container signed admission, duplicate, conflict, cancel and wrong-key checks; agent npm audit — see docs/validation.md for dated results and earlier checks |
+| Git checkpoint and branches | Task 2.2 commit on `task/2.2-agent-gateway`, fast-forwarded to local `development`; `8671079` — task 2.1 handoff; `c4b8b24` — published foundation. No new push requested |
 | Known prerequisite for live tests | Supported provider authentication entered through the intended runtime |
-| Next checkpoint | Task 2.2: a valid fake execution request crosses the private boundary; bad authentication and payloads are rejected |
+| Next checkpoint | Task 2.3: desktop/mobile chat layout with correct Enter, Shift+Enter and IME behavior |
 
 For each completed task, append: `ID — result — verification/evidence — remaining issue, if any`. Record a commit reference when working in Git. Checkboxes remain open for partially implemented or unverified behavior.
 
@@ -199,6 +199,7 @@ For each completed task, append: `ID — result — verification/evidence — re
 ### Progress — 23 October 2026
 
 - 2.1 — Added owned history/connection metadata, policies, validated session routes, explicit public resources, bounded pagination and transactional user-message appends — ownership/forgery/pagination/rollback tests and separate MySQL checks are recorded in `docs/validation.md`; existing users were preserved and Laravel/Pi health still works — changes are committed locally on `development`; task 2.2 is next, with no chat UI or live provider execution yet.
+- 2.2 — Added strict v1 schemas and examples in `contracts/`, HMAC-signed `AgentGateway`/`PiGateway` calls, an ownership-checked `RunRequestFactory`, engine-side authentication/validation/idempotent admission/cancellation and `php artisan agent:check` — 58 new Laravel tests and 22 engine tests pass; a live probe between real containers accepted a signed fake run, reported a duplicate, rejected a conflicting reuse, an unverified provider and a wrong key, and acknowledged cancellation — no model executes yet, the admission record is process-local, and callbacks/key rotation remain for Phase 4.
 
 ## Completion boundaries
 

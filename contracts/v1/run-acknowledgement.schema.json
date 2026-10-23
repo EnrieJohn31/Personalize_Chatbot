@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:run-acknowledgement",
+    "title": "Run acknowledgement",
+    "description": "Engine to Laravel: 202 response to admission or cancellation. Accepted means admitted, not completed.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["contractVersion", "runId", "status", "duplicate"],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "runId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "status": { "enum": ["accepted", "cancel_requested"] },
+        "duplicate": {
+            "description": "True when this repeats an earlier identical admission or cancellation of the same run.",
+            "type": "boolean"
+        }
+    }
+}

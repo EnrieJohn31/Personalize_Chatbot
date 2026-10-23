@@ -1,0 +1,11 @@
+{
+    "description": "Fixed AGENT-HMAC-SHA256-V1 test vector, computed independently with OpenSSL and Node. The key is public test data, not a secret.",
+    "key": "contract-test-vector-key-not-a-secret-0000",
+    "timestamp": "1792713600",
+    "method": "POST",
+    "target": "/internal/runs/0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0e/cancel",
+    "body": "{\"contractVersion\":1,\"runId\":\"0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0e\"}",
+    "bodySha256": "a7130d99b5f5b78834670f636fcf14a5df7667a4938be01ae675daa55483ccb9",
+    "canonicalRequest": "AGENT-HMAC-SHA256-V1\n1792713600\nPOST\n/internal/runs/0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0e/cancel\na7130d99b5f5b78834670f636fcf14a5df7667a4938be01ae675daa55483ccb9",
+    "signature": "v1=f9099217f1ceeedc81f9d5129284ba7476585f2966c93a294da21c76d7c66a9f"
+}

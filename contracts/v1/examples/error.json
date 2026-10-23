@@ -1,0 +1,12 @@
+{
+    "error": {
+        "code": "invalid_payload",
+        "message": "The request does not match contract version 1.",
+        "details": [
+            {
+                "path": "/messages/0/role",
+                "message": "must be equal to one of the allowed values"
+            }
+        ]
+    }
+}

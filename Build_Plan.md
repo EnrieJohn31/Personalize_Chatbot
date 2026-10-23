@@ -175,7 +175,7 @@ Keep a short progress record here as implementation proceeds:
 | Current task | Ready for 2.2 — versioned contracts and authenticated private Laravel/Pi calls |
 | Last completed task | 2.1 — owned conversations/messages and non-secret provider connection metadata |
 | Actual checks run on the application | Task 2.1: 58 Laravel tests / 436 assertions; PHP static analysis/formatting; frontend lint/types and generated route types; additive MySQL migrations and rolled-back storage/cascade probe; private Pi connectivity — see docs/validation.md for dated results and earlier Phase 1 checks |
-| Git checkpoint and branches | `c4b8b24` — published foundation on both remote branches. Task 2.1 is local on `development`; see handoff.md for the implementation checkpoint. No new push requested |
+| Git checkpoint and branches | `4484b3a` — task 2.1 implementation, local on `development`; `c4b8b24` — published foundation on both remote branches. No new push requested |
 | Known prerequisite for live tests | Supported provider authentication entered through the intended runtime |
 | Next checkpoint | Task 2.2: a valid fake execution request crosses the private boundary; bad authentication and payloads are rejected |
 

@@ -96,6 +96,8 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 ## Git branches and contributor requirements
 
+Current implementation checkpoint: **`4484b3a` — Add owned chat history and provider connection records**. Task 2.1 is complete in this local `development` commit; 58 tests / 436 assertions and the checks listed above passed. Its author/committer identity and the complete-history attribution audit were verified. The remote branches remain at the published foundation checkpoint `c4b8b24`; no push was requested for task 2.1.
+
 The initial snapshot is **`6736ac6` — Set up Laravel React development foundation**, with checkpoint documentation in `59fcdab`, contributor-policy enforcement in `804a379` and remote configuration documentation in `e4b9c7f`. It includes the application, all three lockfiles, setup/validation documents and this handoff. On 22 October 2026, the user explicitly authorized publication to [the GitHub repository](https://github.com/EnrieJohn31/Personalize_Chatbot). All four existing commits were pushed successfully to both `main` and the new `development` branch with their messages and history preserved. `origin` points to `https://github.com/EnrieJohn31/Personalize_Chatbot.git`; both branches track their matching remote branches.
 
 Continue application work on `development`; `main` retains the published foundation checkpoint. This publication update also enables the same CI checks for both branches. Use `git branch -vv`, `git log --oneline` and `git remote -v` to inspect the current state. Branch protection is not configured, and remote CI results have not yet been verified.

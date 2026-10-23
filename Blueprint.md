@@ -1,12 +1,12 @@
 # Blueprint: Laravel Chatbot Foundation
 
-Updated: 22 October 2026  
-Revision: 8 — Continuation handoff added; architecture unchanged  
-Status: Laravel/React, MySQL and the private Pi health service run locally. Chat functionality and provider integration remain in Phases 2–3. No provider or throughput benchmark has been produced.
+Updated: 23 October 2026\
+Revision: 9 — Owned history storage implemented; execution architecture unchanged\
+Status: Laravel/React, MySQL, private Pi health and owned history/connection-metadata endpoints run locally. Task 2.1 is implemented; authenticated execution, the chat UI and provider integration remain. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
 
-Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 2.1. Refresh it alongside the build plan after each implementation session.
+Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 2.2. Refresh it alongside the build plan after each implementation session.
 
 ## 1. Goal and agreed foundation
 
@@ -367,6 +367,8 @@ Pi's Agent/session ID and in-memory run state are execution context, not a secon
 Keep provider-required transcript metadata separate from browser display content. Never reconstruct tool history from rendered Markdown. Restrict internal traces and redact secrets.
 
 Index conversations by owner/update time and events by run/sequence. Batch deltas rather than writing a row per token. Give event history and completed conversations separate retention policies.
+
+Task 2.1 implements UUID conversation/message/connection records, owner-scoped JSON routes, nullable conversation-to-connection selection, bounded history reads and serialized user-message appends. The public write path assigns role `user`; private canonical content and credential references are excluded from browser resources. Connections start `not_configured`. See [the implemented history contract](docs/chat-history.md) for endpoints and limits. Trusted assistant/tool writes, idempotent run admission and atomic final-message/run completion remain future work.
 
 Use versioned configuration for assistant profiles initially. Database profile editors and normalized evidence tables can wait for a concrete requirement.
 

@@ -1,6 +1,6 @@
 # Assistant Foundation
 
-Laravel 13 with the official React/Inertia starter, MySQL 8.4 and a private Node/Pi service. This checkout implements Build Plan Phase 1: authentication, the development environment and engine health. Chat history, streaming and provider authentication follow in Phases 2–3.
+Laravel 13 with the official React/Inertia starter, MySQL 8.4 and a private Node/Pi service. Phases 0–1 and task 2.1 are complete: authentication, the development environment, engine health and owned history/connection-metadata endpoints. The chat UI, execution boundary, streaming and provider authentication remain in Phases 2–3.
 
 ## Start locally
 
@@ -18,7 +18,7 @@ After setup, normal startup is:
 docker compose up -d --wait
 ```
 
-See [handoff and next task](handoff.md), [setup and commands](docs/setup.md), [verification results](docs/validation.md), [runtime versions](docs/runtime-versions.md), [build plan](Build_Plan.md) and [blueprint](Blueprint.md).
+See [handoff and next task](handoff.md), [history endpoints](docs/chat-history.md), [setup and commands](docs/setup.md), [verification results](docs/validation.md), [runtime versions](docs/runtime-versions.md), [build plan](Build_Plan.md) and [blueprint](Blueprint.md).
 
 ## Development
 

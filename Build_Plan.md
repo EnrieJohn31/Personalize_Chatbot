@@ -1,15 +1,15 @@
 # Build Plan: Laravel + Pi Chatbot
 
-Updated: 22 October 2026  
-Version: 5\
-Companion: [Blueprint.md](Blueprint.md), revision 8; [handoff.md](handoff.md) for the continuation record  
-Status: Phases 0–1 complete. Laravel's React starter, MySQL persistence and the private Pi health service run locally through Docker Desktop/PowerShell. See [setup](docs/setup.md) and [validation](docs/validation.md).
+Updated: 23 October 2026\
+Version: 6\
+Companion: [Blueprint.md](Blueprint.md), revision 9; [handoff.md](handoff.md) for the continuation record\
+Status: Phases 0–1 and task 2.1 complete. Owned history and non-secret connection metadata are implemented alongside the existing Laravel/React, MySQL and private Pi foundation. See [history endpoints](docs/chat-history.md) and [validation](docs/validation.md).
 
 ## Start here
 
 Build a reusable chatbot foundation with Laravel, React/Inertia, TypeScript, shadcn/ui, Lucide, MySQL and a private Node/Pi engine. Use Docker Compose/Sail for development. Keep Pi as the engine throughout this plan.
 
-**Next task: 2.1, owned conversations/messages and non-secret connection records.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
+**Next task: 2.2, versioned contracts and authenticated private Laravel/Pi calls.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
 
 Use **Blueprint.md for design decisions** and **this file for work order and progress**. Update both when a decision changes. Read the relevant blueprint sections before each phase; there is no need to reproduce the entire architecture in every task.
 
@@ -63,7 +63,7 @@ Phases 0–3 deliver **Stage A: the connectivity prototype**. Phases 4–6 deliv
 
 | Done | Task | Small piece of work | Done when |
 | --- | --- | --- | --- |
-| [ ] | 2.1 | Add owned conversations/messages and non-secret provider connection records. | An authenticated user can save/load their sample history; another user cannot read it. |
+| [x] | 2.1 | Add owned conversations/messages and non-secret provider connection records. | An authenticated user can save/load their sample history; another user cannot read it. |
 | [ ] | 2.2 | Define versioned request/event schemas in `contracts/` and implement private service authentication through `AgentGateway`/`PiGateway`. | A fake request crosses the boundary; invalid authentication and invalid payloads are rejected. |
 | [ ] | 2.3 | Build the chat page: sidebar, transcript, composer, theme and labelled Lucide actions. | Desktop/mobile layout works; Enter, Shift+Enter and IME input behave correctly. |
 | [ ] | 2.4 | Connect a simulated text stream through Laravel and one React hook. | Text arrives incrementally, safe Markdown renders, and the final event replaces draft text without duplication. |
@@ -172,12 +172,12 @@ Keep a short progress record here as implementation proceeds:
 
 | Field | Current value |
 | --- | --- |
-| Current task | Ready for 2.1 — owned conversations/messages and non-secret provider connection records |
-| Last completed task | 1.3 — private Pi health service and Laravel connectivity verified |
-| Actual checks run on the application | 40 Laravel tests / 138 assertions; PHP static analysis/formatting; frontend build/types/lint; 3 agent tests; MySQL restart persistence; private connectivity; browser login — see docs/validation.md |
-| Git checkpoint and branches | `6736ac6` — foundation; `804a379` — contributor policy; `e4b9c7f` — remote record. Existing history published to `origin/main` and `origin/development`; continue on `development` |
+| Current task | Ready for 2.2 — versioned contracts and authenticated private Laravel/Pi calls |
+| Last completed task | 2.1 — owned conversations/messages and non-secret provider connection metadata |
+| Actual checks run on the application | Task 2.1: 58 Laravel tests / 436 assertions; PHP static analysis/formatting; frontend lint/types and generated route types; additive MySQL migrations and rolled-back storage/cascade probe; private Pi connectivity — see docs/validation.md for dated results and earlier Phase 1 checks |
+| Git checkpoint and branches | `c4b8b24` — published foundation on both remote branches. Task 2.1 is local on `development`; see handoff.md for the implementation checkpoint. No new push requested |
 | Known prerequisite for live tests | Supported provider authentication entered through the intended runtime |
-| Next checkpoint | Task 2.1: user-owned sample history and connection records |
+| Next checkpoint | Task 2.2: a valid fake execution request crosses the private boundary; bad authentication and payloads are rejected |
 
 For each completed task, append: `ID — result — verification/evidence — remaining issue, if any`. Record a commit reference when working in Git. Checkboxes remain open for partially implemented or unverified behavior.
 
@@ -195,6 +195,10 @@ For each completed task, append: `ID — result — verification/evidence — re
 - Contributor policy — Added tracked repository/tool instructions, disabled automatic attribution, enabled a local Git hook and added a CI history audit — ten real-commit fixture cases and the existing-history audit passed; see `docs/commit-policy.md` — task 2.1 remains next; remote branch protection is not configured.
 - Repository connection — Configured `origin` from the user's supplied `EnrieJohn31/Personalize_Chatbot` GitHub URL — read access verified and no published references returned at connection time — publication was deferred until the user's later explicit request.
 - Repository publication — Pushed all four existing commits and their messages to `main` and the new `development` branch at the user's request; both track their matching origin branches — the existing-history attribution audit passed and ignored credentials/dependencies were excluded — enabled CI for development pushes and updated the handoff; remote CI results remain unverified, branch protection is not configured, and task 2.1 remains next.
+
+### Progress — 23 October 2026
+
+- 2.1 — Added owned history/connection metadata, policies, validated session routes, explicit public resources, bounded pagination and transactional user-message appends — ownership/forgery/pagination/rollback tests and separate MySQL checks are recorded in `docs/validation.md`; existing users were preserved and Laravel/Pi health still works — changes are committed locally on `development`; task 2.2 is next, with no chat UI or live provider execution yet.
 
 ## Completion boundaries
 

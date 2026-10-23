@@ -1,5 +1,25 @@
 # Foundation validation
 
+## Task 2.4 — 23 October 2026
+
+Implemented the simulated reply stream: engine execution and event stream, the Stage A Laravel relay, server-side saving, Stop and the browser hook with safe Markdown. Behavior and protocol are described in [chat-ui.md](chat-ui.md) and [contracts/README.md](../contracts/README.md). Added `react-markdown` ^10.1.0 and `remark-gfm` ^4.0.1. The lockfile gained 99 packages and lost none, with no version changes; `@types/estree` and `dequal` are now also production dependencies. No migration changed.
+
+| Check | Observed result |
+| --- | --- |
+| `composer ci:check` | Passed: formatting (103 files), lint (81 files, no warnings), TypeScript, 18 frontend unit tests, Pint (100 PHP files), PHPStan level 7 (74 files), and 157 Laravel tests / 756 assertions |
+| New Laravel tests | 35: strict event parsing (15 cases); the signed NDJSON reader (query in the signed target, heartbeats, terminal stop, resume cursor, malformed and out-of-order events, early end, engine errors); relay admission, one reply per user, ownership, SSE output with IDs, single idempotent save, resume, cancelled/failed runs saving nothing, resumable interruption, contract violation freeing the slot, Stop, and `active_run` on the page |
+| Engine `npm test` | 34 tests passed (12 new): deterministic Markdown answer, lossless chunks, contract-valid events whose deltas equal the final text, cancellation, deadline, event limit, replay and resume, live following, Stop during a stream, no second execution for a duplicate admission, signed and validated stream requests |
+| Frontend unit tests | 8 new reply-reducer tests: delta accumulation, final text replacing the draft, replayed events applied once, resumable and final stream errors, Stop confirmation, a late Stop not reopening a completed reply, following the same or a new run |
+| npm audit | 0 vulnerabilities for the application and the engine |
+| `npm run build` | Passed; the chat page chunk is now 191 kB (58 kB gzip), up from 25 kB (8.8 kB gzip) because of the Markdown parser |
+| Stream timing | Laravel's gateway received engine events as paced (about every 60 ms), not buffered. In the browser, Chrome DevTools recorded each relayed SSE delta about 250 ms apart, matching the engine pace, with about 37 ms between the final text and the saved completion |
+| Browser probe | 11/11 passed against a worktree engine (250 ms simulated chunks) and server with SQLite data: incremental draft (13 growth steps); final reply shown once with bold, list, quote and code block; saved and not duplicated after reload; an `<img onerror>` and a `javascript:` link in a message neither ran nor rendered; Stop showing "Stopped" and saving nothing; reload mid-reply resuming and saving once; closing the tab mid-reply still saving the reply; a new chat streaming its first reply on its own page; 390px mobile with a code block not overflowing; dark mode; no console errors |
+| Visual review | Screenshots of a reply, a stopped reply, mobile and dark mode were inspected. Two issues were fixed and re-checked: the "Stopped" label had stayed below the visible area, and a removed unsafe link still rendered as an empty link |
+
+The first browser run passed 8/11 and appeared to show buffered streaming. Timing showed that every request to the probe server took about 3.6 seconds, even `GET /up`, so a 1-second simulated reply had finished before its stream opened. The relay then correctly replayed it. With OPcache enabled for PHP's CLI server, warm requests took 220–440 ms, and the paced reply streamed live. The running development container uses the same CLI server with `opcache.enable_cli=0`; its `GET /up` took 3.0 s, 1.0 s and 0.12 s on three tries. Enabling OPcache there is an optimization suggestion and was not changed in this task.
+
+Not verified: real provider replies, physical phone keyboards and IMEs, screen-reader output, several concurrent users, a proxy in front of the event stream (Laravel sends no heartbeats to the browser yet), and an engine restart during a reply. Replies longer than MySQL's `TEXT` limit (65,535 bytes) would fail to save. The simulated replies are far shorter, but real models may not be, so the `messages.content` column needs widening before task 3.2. Remote CI was not inspected.
+
 ## Task 2.3 — 23 October 2026
 
 Implemented the chat page; behavior and files are described in [chat-ui.md](chat-ui.md). No dependency, lockfile or migration changed. `composer ci:check` now also runs the frontend unit tests (Vitest bundled with Vite+).

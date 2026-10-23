@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Resources\ConversationResource;
 use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
+use App\Models\User;
+use App\Services\Chat\ActiveRuns;
 use App\Services\Chat\ConversationRepository;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,10 +15,14 @@ use Inertia\Response;
 /**
  * Initial data for the chat page. Later reads and writes use the /api/chat endpoints, so the
  * props reuse their resources and the next-page link points at the JSON conversation list.
+ * `active_run` lets a reloaded or newly opened page resume a reply that is still streaming.
  */
 class ChatPageController extends Controller
 {
-    public function __construct(private readonly ConversationRepository $repository) {}
+    public function __construct(
+        private readonly ConversationRepository $repository,
+        private readonly ActiveRuns $runs,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -30,7 +36,9 @@ class ChatPageController extends Controller
 
     private function render(Request $request, ?Conversation $conversation): Response
     {
-        $conversations = $this->repository->recentConversations($request->user())
+        /** @var User $user */
+        $user = $request->user();
+        $conversations = $this->repository->recentConversations($user)
             ->withPath(route('chat.conversations.index', absolute: false));
         $history = $conversation === null ? null : $this->repository->historyPage($conversation);
 
@@ -45,6 +53,7 @@ class ChatPageController extends Controller
                 'next_before_sequence' => $history['next_before_sequence'],
                 'per_page' => $history['per_page'],
             ],
+            'active_run' => $this->runs->activeRun($user),
         ]);
     }
 }

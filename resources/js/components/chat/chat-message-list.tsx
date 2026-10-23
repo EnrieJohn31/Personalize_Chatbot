@@ -28,7 +28,10 @@ export function ChatMessageList({
     const distanceFromBottom = useRef<number | null>(null);
     const firstKey = messages[0]?.key;
     const lastKey = messages.at(-1)?.key;
-    const lastIsPending = messages.at(-1)?.pending ?? false;
+    const justSent = messages.at(-1)?.status === 'sending';
+    // A streaming reply grows in place and changes its status label, so both trigger following.
+    const lastLength = messages.at(-1)?.content.length ?? 0;
+    const lastStatus = messages.at(-1)?.status ?? null;
 
     // Keep the reader's place when older messages are inserted above.
     useLayoutEffect(() => {
@@ -45,10 +48,10 @@ export function ChatMessageList({
     useLayoutEffect(() => {
         const element = scroller.current;
 
-        if (element && (following.current || lastIsPending)) {
+        if (element && (following.current || justSent)) {
             element.scrollTop = element.scrollHeight;
         }
-    }, [lastKey, lastIsPending]);
+    }, [lastKey, justSent, lastLength, lastStatus]);
 
     const loadOlder = async (): Promise<void> => {
         const element = scroller.current;

@@ -1,7 +1,13 @@
 import { http } from '@inertiajs/react';
+import ChatRunController from '@/actions/App/Http/Controllers/ChatRunController';
 import ConversationController from '@/actions/App/Http/Controllers/ConversationController';
 import MessageController from '@/actions/App/Http/Controllers/MessageController';
-import type { ChatMessage, Conversation, MessageHistory } from '@/types';
+import type {
+    ChatMessage,
+    ChatRun,
+    Conversation,
+    MessageHistory,
+} from '@/types';
 
 // JSON calls to the session-authenticated /api/chat endpoints. Inertia's HTTP client
 // sends the XSRF cookie as X-XSRF-TOKEN for same-origin URLs.
@@ -75,8 +81,22 @@ export async function appendMessage(
     return response.data;
 }
 
+/** Asks for a reply to the conversation's latest user message. */
+export async function startRun(conversationId: string): Promise<ChatRun> {
+    const response = await request<{ data: ChatRun }>(
+        'post',
+        ChatRunController.store.url(conversationId),
+    );
+
+    return response.data;
+}
+
+export async function stopRun(runId: string): Promise<void> {
+    await request('delete', ChatRunController.destroy.url(runId));
+}
+
 async function request<T>(
-    method: 'get' | 'post' | 'patch',
+    method: 'get' | 'post' | 'patch' | 'delete',
     url: string,
     data?: Record<string, unknown>,
 ): Promise<T> {
@@ -133,7 +153,24 @@ function messageForStatus(status: number, body: string): string {
         case 429:
             return 'Too many requests. Wait a moment and try again.';
         default:
-            return 'Something went wrong on the server. Try again.';
+            // The run endpoints return a user-facing message with 409, 502 and 503.
+            return (
+                serverMessage(body) ??
+                'Something went wrong on the server. Try again.'
+            );
+    }
+}
+
+function serverMessage(body: string): string | null {
+    try {
+        const parsed = JSON.parse(body) as { code?: string; message?: string };
+
+        return typeof parsed.code === 'string' &&
+            typeof parsed.message === 'string'
+            ? parsed.message
+            : null;
+    } catch {
+        return null;
     }
 }
 

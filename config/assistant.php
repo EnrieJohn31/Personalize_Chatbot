@@ -9,6 +9,10 @@ return [
     'agent_request_signing_key' => env('AGENT_REQUEST_SIGNING_KEY'),
     'agent_connect_timeout_seconds' => (float) env('AGENT_CONNECT_TIMEOUT_SECONDS', 2),
     'agent_timeout_seconds' => (float) env('AGENT_TIMEOUT_SECONDS', 5),
+    // Event streams outlive ordinary calls: the whole stream is bounded by the run deadline
+    // plus a margin, and each read by the engine's 15-second heartbeat plus a margin.
+    'agent_stream_timeout_seconds' => (float) env('AGENT_STREAM_TIMEOUT_SECONDS', 240),
+    'agent_stream_read_timeout_seconds' => (float) env('AGENT_STREAM_READ_TIMEOUT_SECONDS', 30),
 
     // Versioned default profile copied into each server-created run snapshot. The simulated
     // provider needs no connection and is only admitted when the engine enables simulation.

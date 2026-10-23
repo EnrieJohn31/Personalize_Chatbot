@@ -1,4 +1,4 @@
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, Square } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,16 +22,27 @@ type Props = {
     /** Resolves true once the message is saved; false restores the draft. */
     onSend: (content: string) => Promise<boolean>;
     sending: boolean;
+    /** A reply is in progress: the send button becomes Stop. */
+    responding: boolean;
+    stopping: boolean;
+    onStop: () => void;
     error: string | null;
 };
 
-export function ChatComposer({ onSend, sending, error }: Props) {
+export function ChatComposer({
+    onSend,
+    sending,
+    responding,
+    stopping,
+    onStop,
+    error,
+}: Props) {
     const [draft, setDraft] = useState('');
     const textarea = useRef<HTMLTextAreaElement>(null);
     const composing = useRef(false);
     const count = characterCount(draft);
     const tooLong = count > MAX_MESSAGE_LENGTH;
-    const ready = canSend(draft) && !sending;
+    const ready = canSend(draft) && !sending && !responding;
 
     useLayoutEffect(() => {
         const element = textarea.current;
@@ -113,28 +124,54 @@ export function ChatComposer({ onSend, sending, error }: Props) {
                             {MAX_MESSAGE_LENGTH.toLocaleString()}
                         </span>
                     )}
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                type="submit"
-                                size="icon"
-                                className="size-8 rounded-full"
-                                disabled={!ready}
-                                aria-label="Send message"
-                            >
-                                <ArrowUp />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Send (Enter)</TooltipContent>
-                    </Tooltip>
+                    {stopping ? (
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            disabled
+                        >
+                            Stopping…
+                        </Button>
+                    ) : responding ? (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="secondary"
+                                    className="size-8 rounded-full"
+                                    aria-label="Stop response"
+                                    onClick={onStop}
+                                >
+                                    <Square className="fill-current" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Stop</TooltipContent>
+                        </Tooltip>
+                    ) : (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    type="submit"
+                                    size="icon"
+                                    className="size-8 rounded-full"
+                                    disabled={!ready}
+                                    aria-label="Send message"
+                                >
+                                    <ArrowUp />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Send (Enter)</TooltipContent>
+                        </Tooltip>
+                    )}
                 </div>
             </div>
             <p
                 id="chat-composer-hint"
                 className="px-1 text-center text-xs text-muted-foreground"
             >
-                Enter sends, Shift+Enter adds a line. Messages are saved;
-                assistant replies are not connected yet.
+                Enter sends, Shift+Enter adds a line.
             </p>
             {error && (
                 <p

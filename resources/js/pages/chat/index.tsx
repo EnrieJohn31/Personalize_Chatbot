@@ -1,15 +1,20 @@
 import { Head, router } from '@inertiajs/react';
-import { MessageSquare } from 'lucide-react';
-import { useState } from 'react';
+import { MessageSquare, RotateCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import ChatPageController from '@/actions/App/Http/Controllers/ChatPageController';
 import { AppShell } from '@/components/app-shell';
 import { ChatComposer } from '@/components/chat/chat-composer';
 import { ChatHeader } from '@/components/chat/chat-header';
-import type { DisplayMessage } from '@/components/chat/chat-message';
+import type {
+    DisplayMessage,
+    MessageStatus,
+} from '@/components/chat/chat-message';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { RenameConversationDialog } from '@/components/chat/rename-conversation-dialog';
+import { Button } from '@/components/ui/button';
 import { SidebarInset } from '@/components/ui/sidebar';
+import { useChatRun } from '@/hooks/use-chat-run';
 import { useConversations } from '@/hooks/use-conversations';
 import {
     ChatApiError,
@@ -18,6 +23,8 @@ import {
     fetchMessagesBefore,
 } from '@/lib/chat-api';
 import { titleFromMessage } from '@/lib/chat-composer';
+import type { RunStatus } from '@/lib/chat-run-state';
+import { isResponding } from '@/lib/chat-run-state';
 import type { ChatMessage, ChatPageProps, Conversation } from '@/types';
 
 const errorMessage = (caught: unknown): string =>
@@ -25,10 +32,29 @@ const errorMessage = (caught: unknown): string =>
         ? caught.message
         : 'Something went wrong. Try again.';
 
+/** How an unsaved reply is labelled in the transcript, by run status. */
+const draftStatus: Partial<Record<RunStatus, MessageStatus>> = {
+    starting: 'preparing',
+    streaming: 'streaming',
+    stopping: 'streaming',
+    cancelled: 'stopped',
+    failed: 'incomplete',
+};
+
+/** Screen-reader announcements for reply progress; never the reply text itself. */
+const runAnnouncements: Partial<Record<RunStatus, string>> = {
+    starting: 'Starting a reply.',
+    streaming: 'The assistant is replying.',
+    stopping: 'Stopping the reply.',
+    completed: 'Reply complete.',
+    cancelled: 'Reply stopped.',
+};
+
 export default function ChatPage({
     conversations,
     conversation,
     messages,
+    active_run: activeRun,
 }: ChatPageProps) {
     const sidebar = useConversations(conversations);
     // A conversation created on this page stays here until its first message is saved.
@@ -43,12 +69,47 @@ export default function ChatPage({
     const [announcement, setAnnouncement] = useState('');
     const [renaming, setRenaming] = useState<Conversation | null>(null);
 
+    const reply = useChatRun((saved) => {
+        // The saved reply replaces the streamed draft in one render.
+        setHistory((list) =>
+            list.some((message) => message.id === saved.id)
+                ? list
+                : [...list, saved],
+        );
+        if (current !== null) {
+            sidebar.moveToTop({ ...current, updated_at: saved.created_at });
+        }
+    });
+    const { status } = reply.state;
+    const responding = isResponding(status);
+
+    // Resume a reply that is still being written, after a reload or a new conversation's first message.
+    const resumableRunId =
+        activeRun !== null && activeRun.conversation_id === conversation?.id
+            ? activeRun.id
+            : null;
+    useEffect(() => {
+        if (resumableRunId !== null && activeRun !== null) {
+            reply.follow(activeRun);
+        }
+        // Only the run's identity matters; the page remounts on navigation.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [resumableRunId]);
+
     const fail = (caught: unknown): false => {
         const message = errorMessage(caught);
         setError(message);
         setAnnouncement(message);
 
         return false;
+    };
+
+    const requestReply = async (conversationId: string): Promise<void> => {
+        const run = await reply.start(conversationId);
+
+        if (run !== null) {
+            reply.follow(run);
+        }
     };
 
     const send = async (content: string): Promise<boolean> => {
@@ -67,7 +128,9 @@ export default function ChatPage({
             const saved = await appendMessage(target.id, content);
 
             if (conversation === null) {
-                // Open the new conversation's own address so reloads and links work.
+                // Start the reply, then open the conversation's own address, which resumes the
+                // stream. If starting fails, that page offers "Get a reply" for the saved message.
+                await reply.start(target.id);
                 router.visit(ChatPageController.show.url(target.id));
 
                 return true;
@@ -76,12 +139,24 @@ export default function ChatPage({
             setHistory((list) => [...list, saved]);
             sidebar.moveToTop({ ...target, updated_at: saved.created_at });
             setAnnouncement('Message sent.');
+            setPending(null);
+            await requestReply(target.id);
 
             return true;
         } catch (caught) {
             return fail(caught);
         } finally {
             setPending(null);
+        }
+    };
+
+    const retry = (): void => {
+        setError(null);
+
+        if (reply.state.resumable && reply.state.run !== null) {
+            reply.follow(reply.state.run);
+        } else if (current !== null) {
+            void requestReply(current.id);
         }
     };
 
@@ -129,12 +204,21 @@ export default function ChatPage({
         }
     };
 
+    const draft = draftStatus[status];
+    // Only a reply for this conversation is shown, and a stopped or failed one only if text arrived.
+    const replyHere =
+        reply.state.run === null ||
+        reply.state.run.conversation_id === current?.id;
+    const showDraft =
+        draft !== undefined &&
+        replyHere &&
+        (responding || reply.state.draft !== '');
     const displayed: DisplayMessage[] = [
         ...history.map((message) => ({
             key: message.id,
             role: message.role,
             content: message.content,
-            pending: false,
+            status: null,
         })),
         ...(pending === null
             ? []
@@ -143,10 +227,27 @@ export default function ChatPage({
                       key: 'pending',
                       role: 'user' as const,
                       content: pending,
-                      pending: true,
+                      status: 'sending' as const,
                   },
               ]),
+        ...(showDraft && draft !== undefined
+            ? [
+                  {
+                      key: 'draft',
+                      role: 'assistant' as const,
+                      content: reply.state.draft,
+                      status: draft,
+                  },
+              ]
+            : []),
     ];
+    // A saved user message without a reply can always ask for one again.
+    const awaitingReply =
+        current !== null &&
+        !responding &&
+        pending === null &&
+        history.at(-1)?.role === 'user';
+    const replyError = status === 'failed' ? reply.state.error : null;
     const title = current?.title ?? 'New chat';
 
     return (
@@ -176,21 +277,47 @@ export default function ChatPage({
                                     : 'Start a conversation'}
                             </h2>
                             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                                Your messages are saved to this conversation.
-                                Assistant replies arrive in a later update.
+                                Messages are saved to this conversation, and
+                                replies appear as they are written.
                             </p>
                         </>
                     }
                 />
-                <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-4">
+                <div className="mx-auto flex w-full max-w-3xl shrink-0 flex-col gap-2 px-4 pb-4">
+                    {reply.state.reconnecting && (
+                        <p className="text-center text-xs text-muted-foreground">
+                            Connection interrupted. Reconnecting…
+                        </p>
+                    )}
+                    {awaitingReply && (
+                        <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+                            {replyError && (
+                                <span role="alert" className="text-destructive">
+                                    {replyError}
+                                </span>
+                            )}
+                            <Button variant="outline" size="sm" onClick={retry}>
+                                <RotateCw />
+                                {replyError ? 'Retry reply' : 'Get a reply'}
+                            </Button>
+                        </div>
+                    )}
                     <ChatComposer
                         onSend={send}
                         sending={pending !== null}
-                        error={error}
+                        responding={responding}
+                        stopping={status === 'stopping'}
+                        onStop={() => void reply.stop()}
+                        error={
+                            error ??
+                            (status === 'stopping' || status === 'streaming'
+                                ? reply.state.error
+                                : null)
+                        }
                     />
                 </div>
                 <div role="status" aria-live="polite" className="sr-only">
-                    {announcement}
+                    {runAnnouncements[status] ?? announcement}
                 </div>
             </SidebarInset>
             <RenameConversationDialog

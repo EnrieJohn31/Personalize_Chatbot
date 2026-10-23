@@ -20,6 +20,7 @@ async function start(overrides = {}) {
     const server = createServer({
         ...loadConfig({ AGENT_REQUEST_SIGNING_KEY: KEY, AGENT_SIMULATION_ENABLED: 'true' }),
         maxRequestBytes: 8192,
+        simulationChunkDelayMs: 0,
         now: () => clock,
         log: (message) => logs.push(message),
         ...overrides,
@@ -60,7 +61,7 @@ async function post(path, payload, options = {}) {
 
 const cancelPath = (runId) => `/internal/runs/${runId}/cancel`;
 
-test('a valid signed fake run crosses the boundary and is acknowledged, not executed', async () => {
+test('a valid signed fake run crosses the boundary and is acknowledged on admission', async () => {
     const run = newRun();
     const response = await post('/internal/runs', run);
     assert.equal(response.status, 202);
@@ -208,4 +209,77 @@ test('cancellation rejects unknown runs, mismatched IDs and malformed paths', as
     assert.equal(mismatch.body.error.code, 'run_id_mismatch');
 
     assert.equal((await post('/internal/runs/not-a-uuid/cancel', { contractVersion: 1 })).status, 404);
+});
+
+async function getEvents(runId, { baseUrl = engine, after, signed = true } = {}) {
+    const path = `/internal/runs/${runId}/events${after === undefined ? '' : `?after=${after}`}`;
+    const timestamp = String(Math.floor(clock / 1000));
+    const headers = signed
+        ? { 'x-agent-timestamp': timestamp, 'x-agent-signature': signRequest(KEY, timestamp, 'GET', path, '') }
+        : {};
+    const response = await fetch(`${baseUrl}${path}`, { headers });
+    const text = await response.text();
+    if (!(response.headers.get('content-type') ?? '').startsWith('application/x-ndjson')) {
+        return { status: response.status, body: JSON.parse(text) };
+    }
+
+    return { status: response.status, events: text.split('\n').filter(Boolean).map((line) => JSON.parse(line)) };
+}
+
+test('an admitted run streams contract-valid events until it completes', async () => {
+    const run = newRun();
+    await post('/internal/runs', run);
+    const { status, events } = await getEvents(run.runId);
+    assert.equal(status, 200);
+    assert.equal(events.at(-1).type, 'run.completed');
+    assert.deepEqual(events.map((event) => event.sequence), events.map((_, index) => index + 1));
+    assert.ok(events.every((event) => event.runId === run.runId && validate('runEvent', event).length === 0));
+    const deltas = events.filter((event) => event.type === 'assistant.delta').map((event) => event.data.text).join('');
+    assert.equal(deltas, events.find((event) => event.type === 'assistant.final').data.text);
+});
+
+test('a reader resuming after an event receives only later events', async () => {
+    const run = newRun();
+    await post('/internal/runs', run);
+    const all = (await getEvents(run.runId)).events;
+    const resumed = (await getEvents(run.runId, { after: 5 })).events;
+    assert.deepEqual(resumed, all.slice(5));
+    assert.deepEqual((await getEvents(run.runId, { after: all.length })).events, []);
+});
+
+test('a duplicate admission does not start a second execution', async () => {
+    const run = newRun();
+    await post('/internal/runs', run);
+    await post('/internal/runs', run);
+    const { events } = await getEvents(run.runId);
+    assert.equal(events.filter((event) => event.type === 'run.started').length, 1);
+    assert.equal(events.filter((event) => event.type === 'run.completed').length, 1);
+});
+
+test('a reader that joins a paced run follows it live, and Stop ends it as cancelled', async () => {
+    const paced = await start({ simulationChunkDelayMs: 15 });
+    const live = newRun();
+    await post('/internal/runs', live, { baseUrl: paced });
+    const followed = (await getEvents(live.runId, { baseUrl: paced })).events;
+    assert.equal(followed.at(-1).type, 'run.completed');
+
+    const stopped = newRun();
+    await post('/internal/runs', stopped, { baseUrl: paced });
+    const reading = getEvents(stopped.runId, { baseUrl: paced });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    assert.equal((await post(cancelPath(stopped.runId), { contractVersion: 1, runId: stopped.runId }, { baseUrl: paced })).status, 202);
+    const events = (await reading).events;
+    assert.equal(events.at(-1).type, 'run.cancelled');
+    assert.ok(!events.some((event) => event.type === 'assistant.final'));
+    assert.ok(events.some((event) => event.type === 'assistant.delta'), 'some text streamed before Stop');
+});
+
+test('event streams require a signature, a tracked run and a valid cursor', async () => {
+    const run = newRun();
+    await post('/internal/runs', run);
+    assert.equal((await getEvents(run.runId, { signed: false })).status, 401);
+    assert.equal((await getEvents(randomUUID())).body.error.code, 'run_not_found');
+    const cursor = await getEvents(run.runId, { after: -1 });
+    assert.equal(cursor.status, 422);
+    assert.equal(cursor.body.error.details[0].path, '/after');
 });

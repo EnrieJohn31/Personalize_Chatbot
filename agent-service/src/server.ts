@@ -6,17 +6,24 @@ import {
     CONTRACT_VERSION,
     MAX_REPORTED_ISSUES,
     fingerprint,
+    isTerminal,
     validate,
     type CancelRequest,
     type ContractName,
     type Issue,
+    type RunEvent,
     type RunRequest,
 } from './contracts.js';
 import { readBoundedBody } from './http/body.js';
 import { readSignatureHeaders, signatureMatches, type SignatureFailure } from './http/service-auth.js';
+import type { RunExecution } from './runtime/run-execution.js';
 import { RunRegistry, type TrackedStatus } from './runtime/run-registry.js';
+import { runSimulation } from './simulation/simulated-run.js';
 
-const CANCEL_PATH = /^\/internal\/runs\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/cancel$/;
+const RUN_ID = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
+const CANCEL_PATH = new RegExp(`^/internal/runs/${RUN_ID}/cancel$`);
+const EVENTS_PATH = new RegExp(`^/internal/runs/${RUN_ID}/events$`);
+const SEQUENCE = /^(0|[1-9][0-9]{0,6})$/;
 const JSON_CONTENT_TYPE = /^application\/json\s*(;\s*charset=utf-8\s*)?$/i;
 
 // No provider login or tool registry exists yet (tasks 3.1–3.3). Until then only the
@@ -36,13 +43,14 @@ class HttpError extends Error {
 }
 
 // Loading both libraries proves the selected Pi packages work in this runtime. Run admission
-// is authenticated and validated here; model execution is intentionally added in Phase 3.
+// is authenticated and validated here; admitted runs execute the deterministic simulation
+// until real Pi model execution is added in Phase 3.
 export function createServer(config: ServerConfig = loadConfig()) {
     if (typeof Agent !== 'function' || typeof createModels !== 'function') {
         throw new Error('The installed Pi packages do not expose the expected API.');
     }
 
-    const registry = new RunRegistry(config.maxTrackedRuns, config.trackedRunTtlMs, config.now);
+    const registry = new RunRegistry(config.maxTrackedRuns, config.trackedRunTtlMs, config.now, config.maxEventsPerRun);
 
     async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
         response.setHeader('Content-Type', 'application/json');
@@ -60,12 +68,17 @@ export function createServer(config: ServerConfig = loadConfig()) {
             return;
         }
 
+        const url = new URL(target, 'http://engine.internal');
         const cancelPath = request.method === 'POST' ? CANCEL_PATH.exec(target) : null;
+        const eventsPath = request.method === 'GET' ? EVENTS_PATH.exec(url.pathname) : null;
         try {
             if (request.method === 'POST' && target === '/internal/runs') {
                 admitRun(response, await readContract<RunRequest>(request, 'runRequest'));
             } else if (cancelPath !== null) {
                 cancelRun(response, cancelPath[1]!, await readContract<CancelRequest>(request, 'cancelRequest'));
+            } else if (eventsPath !== null) {
+                await authenticate(request);
+                streamEvents(response, eventsPath[1]!, url.searchParams);
             } else {
                 throw new HttpError(404, 'not_found', 'Not found');
             }
@@ -77,8 +90,8 @@ export function createServer(config: ServerConfig = loadConfig()) {
         }
     }
 
-    /** Checks headers before reading the bounded body, verifies its signature, then parses and validates it. */
-    async function readContract<T>(request: IncomingMessage, contract: ContractName): Promise<T> {
+    /** Checks headers before reading the bounded body, then verifies the signature over its exact bytes. */
+    async function authenticate(request: IncomingMessage): Promise<Buffer> {
         if (config.requestSigningKey === null) {
             throw new HttpError(503, 'request_auth_not_configured', 'The engine has no request signing key configured.');
         }
@@ -95,6 +108,13 @@ export function createServer(config: ServerConfig = loadConfig()) {
         if (!signatureMatches(config.requestSigningKey, signature, request.method ?? '', request.url ?? '', body)) {
             throw authenticationFailed('mismatch');
         }
+
+        return body;
+    }
+
+    /** Authenticates, then parses the body and validates it against `contract`. */
+    async function readContract<T>(request: IncomingMessage, contract: ContractName): Promise<T> {
+        const body = await authenticate(request);
         if (!JSON_CONTENT_TYPE.test(request.headers['content-type'] ?? '')) {
             throw new HttpError(415, 'unsupported_media_type', 'Send the request as application/json.');
         }
@@ -146,8 +166,63 @@ export function createServer(config: ServerConfig = loadConfig()) {
         if (admission.outcome === 'full') {
             throw new HttpError(503, 'capacity_exhausted', 'The engine is tracking its maximum number of runs.');
         }
+        if (admission.outcome === 'accepted') {
+            // Execution continues without a subscriber; readers replay its events later.
+            execute(run, admission.execution);
+        }
 
         sendAcknowledgement(response, run.runId, admission.status, admission.outcome === 'duplicate');
+    }
+
+    function execute(run: RunRequest, execution: RunExecution): void {
+        runSimulation(run, execution, { chunkDelayMs: config.simulationChunkDelayMs, now: config.now }).catch(
+            (error: unknown) => {
+                config.log(`Run ${run.runId} failed: ${error instanceof Error ? error.message : String(error)}`);
+                execution.emit('run.failed', { code: 'internal_error', message: 'The engine could not complete the run.' });
+            },
+        );
+    }
+
+    /** Replays events after `after`, then follows the run until its terminal event (NDJSON). */
+    function streamEvents(response: ServerResponse, runId: string, query: URLSearchParams): void {
+        const after = query.get('after') ?? '0';
+        if (!SEQUENCE.test(after)) {
+            throw invalidPayload([{ path: '/after', message: 'must be a non-negative event sequence' }]);
+        }
+
+        const execution = registry.execution(runId);
+        if (execution === null) {
+            throw new HttpError(404, 'run_not_found', 'The engine is not tracking this run.');
+        }
+
+        response.setHeader('Content-Type', 'application/x-ndjson');
+        response.writeHead(200);
+        const write = (event: RunEvent): void => {
+            response.write(`${JSON.stringify(event)}\n`);
+        };
+
+        for (const event of execution.after(Number(after))) {
+            write(event);
+        }
+        if (execution.terminal) {
+            response.end();
+            return;
+        }
+
+        const heartbeat = setInterval(() => response.write('\n'), config.streamHeartbeatMs);
+        const unsubscribe = execution.subscribe((event) => {
+            write(event);
+            if (isTerminal(event.type)) {
+                stop();
+                response.end();
+            }
+        });
+        function stop(): void {
+            clearInterval(heartbeat);
+            unsubscribe();
+        }
+        // The request has already been read; only the response reports a disconnecting reader.
+        response.on('close', stop);
     }
 
     function cancelRun(response: ServerResponse, pathRunId: string, cancel: CancelRequest): void {

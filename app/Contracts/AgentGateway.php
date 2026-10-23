@@ -3,6 +3,7 @@
 namespace App\Contracts;
 
 use App\Data\Agent\RunAcknowledgement;
+use App\Data\Agent\RunEvent;
 use App\Data\Agent\RunRequest;
 use App\Services\Ai\AgentGatewayException;
 use App\Services\Ai\PiGateway;
@@ -29,6 +30,16 @@ interface AgentGateway
      * @throws AgentGatewayException
      */
     public function cancel(string $runId): RunAcknowledgement;
+
+    /**
+     * Read a run's events after `$after`, replaying retained ones and then following the run
+     * until its terminal event. Reading never starts or repeats work in the engine.
+     *
+     * @return iterable<int, RunEvent>
+     *
+     * @throws AgentGatewayException
+     */
+    public function events(string $runId, int $after = 0): iterable;
 
     /**
      * Process readiness without a billable model call.

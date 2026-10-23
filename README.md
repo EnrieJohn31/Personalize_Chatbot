@@ -1,6 +1,6 @@
 # Assistant Foundation
 
-Laravel 13 with the official React/Inertia starter, MySQL 8.4 and a private Node/Pi service. Phases 0–1 and tasks 2.1–2.3 are complete: authentication, the development environment, owned history/connection-metadata endpoints, a signed, versioned Laravel-to-engine admission boundary and the chat page at `/chat`. Streaming, assistant replies, model execution and provider authentication remain in Phases 2–3.
+Laravel 13 with the official React/Inertia starter, MySQL 8.4 and a private Node/Pi service. Phases 0–2 are complete: authentication, the development environment, owned history/connection-metadata endpoints, a signed, versioned Laravel-to-engine boundary and the chat page at `/chat`, where replies stream from the engine's deterministic simulation. Provider login, real model replies and tools come next in Phase 3.
 
 ## Start locally
 
@@ -39,4 +39,4 @@ docker compose exec --user sail laravel.test npm run build
 docker compose down
 ```
 
-Keep `.env` private. The browser connects to Laravel on loopback port 8080; only the frontend development server uses 5173. MySQL and the Pi service have no host port mapping. The private engine accepts only signed, schema-validated run requests from Laravel (`AGENT_REQUEST_SIGNING_KEY`; check with `php artisan agent:check`). It acknowledges them but does not yet execute prompts or use provider credentials.
+Keep `.env` private. The browser connects to Laravel on loopback port 8080; only the frontend development server uses 5173. MySQL and the Pi service have no host port mapping. The private engine accepts only signed, schema-validated run requests from Laravel (`AGENT_REQUEST_SIGNING_KEY`; check with `php artisan agent:check`). In development it answers with a deterministic simulation; it does not yet call a model or use provider credentials.

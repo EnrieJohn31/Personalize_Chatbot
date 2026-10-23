@@ -47,9 +47,15 @@ final class AgentGatewayException extends RuntimeException
         return new self('invalid_response', "The engine response does not match the contract: $problem", $status);
     }
 
-    /** Whether resubmitting the same run ID later is a reasonable next step. */
+    /** The event stream ended or stalled before the run's terminal event; reading again resumes it. */
+    public static function streamInterrupted(?Throwable $previous = null): self
+    {
+        return new self('stream_interrupted', 'The engine event stream ended before the run finished.', previous: $previous);
+    }
+
+    /** Whether resubmitting the same run ID, or reading its events again, is a reasonable next step. */
     public function isRetryable(): bool
     {
-        return in_array($this->reason, ['unavailable', 'capacity_exhausted'], true);
+        return in_array($this->reason, ['unavailable', 'capacity_exhausted', 'stream_interrupted'], true);
     }
 }

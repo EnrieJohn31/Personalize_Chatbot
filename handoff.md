@@ -4,19 +4,19 @@ Updated: 23 October 2026. Read this file first when resuming work.
 
 ## Where we stopped
 
-**Tasks 2.1–2.3 are implemented. The next implementation task is 2.4.** The application provides the Laravel React authentication starter, MySQL persistence, owned history/connection-metadata endpoints, a signed, schema-validated Laravel-to-Pi admission boundary and the chat page at `/chat`. Assistant replies, streaming, model execution and provider login are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md) and [the chat page](docs/chat-ui.md).
+**Phase 2 (tasks 2.1–2.4) is implemented. The next implementation task is 3.1, which needs the operator's eligible provider account.** The application provides the Laravel React authentication starter, MySQL persistence, owned history/connection-metadata endpoints, a signed, schema-validated Laravel-to-Pi boundary and the chat page at `/chat`. Replies stream from the engine's deterministic simulation through a Stage A Laravel relay. Provider login, real model execution, tools and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md) and [the chat page and replies](docs/chat-ui.md).
 
-| Document                                             | Use it for                                                                |
-| ---------------------------------------------------- | ------------------------------------------------------------------------- |
-| [Blueprint.md](Blueprint.md)                         | Architecture, ownership, security boundaries and acceptance requirements  |
-| [Build_Plan.md](Build_Plan.md)                       | Numbered tasks, completion checkboxes and progress                        |
-| [docs/setup.md](docs/setup.md)                       | Installation, daily commands and troubleshooting                          |
-| [docs/validation.md](docs/validation.md)             | Dated checks for Phase 1 and tasks 2.1–2.3, with their limits             |
-| [docs/chat-history.md](docs/chat-history.md)         | Task 2.1 endpoints, ownership, storage, pagination and limits             |
-| [docs/chat-ui.md](docs/chat-ui.md)                   | Task 2.3 chat page routes, behavior, files and checks                     |
-| [contracts/README.md](contracts/README.md)           | Task 2.2 engine schemas, request signing, admission order and error codes |
-| [docs/runtime-versions.md](docs/runtime-versions.md) | Installed versions, image identities and compatibility sources            |
-| [docs/provider-matrix.md](docs/provider-matrix.md)   | Intended provider path, ownership and unverified live-access status       |
+| Document                                             | Use it for                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Blueprint.md](Blueprint.md)                         | Architecture, ownership, security boundaries and acceptance requirements |
+| [Build_Plan.md](Build_Plan.md)                       | Numbered tasks, completion checkboxes and progress                       |
+| [docs/setup.md](docs/setup.md)                       | Installation, daily commands and troubleshooting                         |
+| [docs/validation.md](docs/validation.md)             | Dated checks for Phase 1 and tasks 2.1–2.4, with their limits            |
+| [docs/chat-history.md](docs/chat-history.md)         | Task 2.1 endpoints, ownership, storage, pagination and limits            |
+| [docs/chat-ui.md](docs/chat-ui.md)                   | Tasks 2.3–2.4 chat page, Stage A reply relay, events and checks          |
+| [contracts/README.md](contracts/README.md)           | Engine schemas, request signing, admission, event stream and error codes |
+| [docs/runtime-versions.md](docs/runtime-versions.md) | Installed versions, image identities and compatibility sources           |
+| [docs/provider-matrix.md](docs/provider-matrix.md)   | Intended provider path, ownership and unverified live-access status      |
 
 ## Completed and checked
 
@@ -32,6 +32,8 @@ Updated: 23 October 2026. Read this file first when resuming work.
 - Publication review on 23 October 2026: reviewed the task 2.2 implementation and reran `composer ci:check` (116 tests / 561 assertions plus formatting, lint, types, Pint and PHPStan), all 22 engine tests and live `agent:check`; all passed. No blocking defect or prohibited contributor attribution was found. Corrected documentation of the authentication order and the remaining Laravel admission work; runtime behavior is unchanged. Tasks 2.1–2.2 were fast-forwarded to `main` and pushed to both remote branches with their original commits and messages preserved.
 - Task 2.3: `/chat` and `/chat/{conversation}` render the Inertia page `chat/index`, with an off-canvas conversation sidebar (a Sheet on mobile), a transcript with "Load earlier messages", a bottom composer, rename, copy and a theme menu. Initial props come from `ChatPageController`; later reads and writes use `/api/chat` through Inertia's XSRF-aware client. The JSON history controller now shares its list and paging queries through `ConversationRepository`. `composer ci:check` now also runs the frontend unit tests (`npm run test`, Vitest bundled with Vite+). No dependency, lockfile or migration changed.
 - Task 2.3 verification: `composer ci:check` passed with 122 Laravel tests / 636 assertions (6 new page tests), 10 frontend unit tests, Pint (93 files), PHPStan level 7 and frontend format/lint/types; the production build passed. A 31-check Playwright probe passed against a built worktree server with its own SQLite data. It covered desktop and 390px mobile layouts, Enter, Shift+Enter and IME composition in Chromium, Firefox and WebKit, failure and length handling, scroll preservation, rename, copy, theme, sidebar and accessible names. Screenshots were reviewed and a spacing defect fixed. Physical-device keyboards and real IMEs remain unverified. See [docs/validation.md](docs/validation.md).
+- Task 2.4: the engine runs admitted runs as a deterministic simulation and streams contract events from `GET /internal/runs/{id}/events` (replay, then follow; NDJSON with heartbeats). The labelled Stage A `ChatRunController` admits one reply per user (`ActiveRuns`, cache-backed) and relays server-sent events with the engine sequence as the event ID. It saves the final reply once per run through `ConversationRepository::appendAssistantMessage`, also after the browser disconnects, and forwards Stop. The page streams through `hooks/use-chat-run.ts` and a tested reducer, renders replies with safe Markdown, resumes an active reply after a reload, and offers "Get a reply" for an unanswered message without saving it again. Added `react-markdown` and `remark-gfm`; no migration changed.
+- Task 2.4 verification: `composer ci:check` passed with 157 Laravel tests / 756 assertions (35 new), 18 frontend unit tests, Pint (100 files) and PHPStan level 7 (74 files); 34 engine tests passed and both npm audits found 0 vulnerabilities. Timing traces showed events arriving in the browser at the engine's pace. An 11-check full-stack browser probe passed: incremental text, safe Markdown with an injection attempt neutralized, one final reply, reload-resume, Stop, saving after the tab closed, the new-chat flow and mobile. See [docs/validation.md](docs/validation.md).
 
 ## Resume this checkout
 
@@ -45,6 +47,14 @@ docker compose exec --user sail laravel.test php artisan agent:check
 ```
 
 **Once per existing checkout after task 2.2:** `.env` needs `AGENT_REQUEST_SIGNING_KEY` (at least 32 characters; `./scripts/setup.ps1` generates one), and the engine needs `docker compose up -d --build agent` to pick up the key, the `contracts/` mount and its updated image. Until then, health reports `requestAuth: not_configured` and run endpoints return 503.
+
+**Once per existing checkout after task 2.4:** install the new frontend packages and rebuild, then rebuild the engine so it runs simulations and serves event streams:
+
+```powershell
+docker compose exec --user sail laravel.test npm ci
+docker compose exec --user sail laravel.test npm run build
+docker compose up -d --build agent
+```
 
 Open [the login page](http://localhost:8080/login), then [the chat page](http://localhost:8080/chat). Register your own local account if needed. Email is not delivered: the verification link is written MIME-encoded to `storage/logs/laravel.log`; [setup](docs/setup.md#service-boundary-and-state) explains how to read it and that it must be opened on the same host you signed in on. For first-time installation or a missing dependency tree, use `./scripts/setup.ps1`; normal continuation does not require reinstalling dependencies.
 
@@ -63,30 +73,24 @@ docker compose down
 
 Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal at `mysql:3306`; the engine is internal at `http://agent:3101`. Health reports `providerAuth: not_configured`, `requestAuth` and `simulation`. Existing local secrets stay in ignored `.env`; preserve the application key and MySQL volume. Do not use `docker compose down -v` for routine shutdown.
 
-## Next task: 2.4
+## Next task: 3.1
 
-Read Blueprint sections 7, 8 (browser replay) and 13.5, [docs/chat-ui.md](docs/chat-ui.md), [contracts/README.md](contracts/README.md) and the build plan's task 2.4. Connect a simulated text stream through Laravel and one React hook (`hooks/use-chat-run.ts` in the blueprint):
+Task 3.1 implements the chosen provider's supported login and credential store inside the engine container. **It needs the operator to sign in with an eligible account**; nothing in the repository can substitute for that. Read Blueprint section 5, [docs/provider-matrix.md](docs/provider-matrix.md) and the provider documentation for the installed Pi release (1.4.0), which describes Sign in with ChatGPT on its OpenAI provider. Keep credentials in a dedicated private engine volume, encrypted and scoped per connection, never in Laravel, events, logs or the browser. Record login, persistence, refresh and re-authentication results in the provider matrix as verified or untested, and never fall back silently to paid API credentials.
 
-- Build the run with `RunRequestFactory::forConversation()` and submit it through `AgentGateway`. The engine already admits the `simulated` provider when Compose enables simulation.
-- Emit events that match `contracts/v1/run-event.schema.json`, mapped to the browser through Laravel. A temporary relay must be labelled as a Stage A prototype.
-- `assistant.final` replaces the draft; it never appends to it. Render Markdown safely with raw HTML disabled.
-- Coordinate user-message persistence with run submission, so a retry does not save the same input twice (see `docs/chat-history.md`).
-- Any engine-to-Laravel callback needs its own `AGENT_CALLBACK_SIGNING_KEY` using the same signing scheme; never reuse the request key.
-- UI entry points: `send()` in `resources/js/pages/chat/index.tsx` saves the user message today; `DisplayMessage` already supports a pending entry, so an assistant draft can follow the same pattern. Messages render as plain text in `components/chat/chat-message.tsx`. Announce run status through the page's polite status region rather than reading every delta, and add Stop (Lucide `Square`) to the composer only when a run can be cancelled.
+**Acceptance (3.1):** a live request succeeds; credential persistence and expiry/re-authentication behavior are checked.
 
-**Acceptance (2.4):** text arrives incrementally, safe Markdown renders, and the final event replaces the draft text without duplication. Existing authentication, history, chat page and engine checks continue to pass.
+Before task 3.2 sends real replies, widen `messages.content` (currently MySQL `TEXT`, 65,535 bytes) with an additive migration; the event contract allows final answers of 200,000 characters. Task 3.2 then replaces the simulation in `agent-service/src/server.ts` (`execute()`) with a fresh Pi Agent per run that emits the same contract events; the relay, page and tests stay as they are.
 
 ## Remaining work in order
 
-| Tasks   | Remaining result                                                                                           |
-| ------- | ---------------------------------------------------------------------------------------------------------- |
-| 2.4     | Explicitly configured simulated streaming through Laravel and one React hook — start here                  |
-| 3.1–3.5 | Verify supported provider login, real Pi streaming, sample lookup tool, bounded history and prototype Stop |
-| 4.1–4.4 | Durable runs/events, claims, idempotency and transactional final saves                                     |
-| 5.1–5.4 | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                           |
-| 6.1–6.3 | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation         |
-| 7.1–7.3 | First purpose and authorized connector, after the purpose is selected                                      |
-| 8.1–8.4 | Production images, serving/supervision, backup/restore and deployment acceptance                           |
+| Tasks   | Remaining result                                                                                              |
+| ------- | ------------------------------------------------------------------------------------------------------------- |
+| 3.1–3.5 | Verify supported provider login, real Pi streaming, sample lookup tool, bounded history and Stop — start here |
+| 4.1–4.4 | Durable runs/events, claims, idempotency and transactional final saves                                        |
+| 5.1–5.4 | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                              |
+| 6.1–6.3 | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation            |
+| 7.1–7.3 | First purpose and authorized connector, after the purpose is selected                                         |
+| 8.1–8.4 | Production images, serving/supervision, backup/restore and deployment acceptance                              |
 
 Use the build plan's individual acceptance checks; this table does not replace them. Phase 3 requires supported, authorized provider access. The selected path and model eligibility are still unverified; do not infer that a healthy engine can make a live request or silently substitute another billing/authentication path.
 
@@ -94,10 +98,13 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 - Laravel owns users, permissions and durable MySQL state. Node/Pi owns active model/tool execution; it does not write the application database directly. Browser application requests go through Laravel.
 - Preserve the agreed Pi architecture. Redis, another agent framework, vector storage, WebSockets and a queue worker are not Phase 2 prerequisites.
-- History APIs currently save user text only. No assistant/tool write path, UI, Laravel run admission or message-write idempotency exists yet; a repeated successful message POST appends again. Future Laravel run admission must coordinate persistence to avoid duplicate user messages. Concurrent append load testing remains unverified.
-- The engine acknowledges admitted runs but executes nothing yet. Its admission record is process-local (256 runs, 15 minutes) and is lost on restart; Laravel's durable claim in task 4.2 becomes the authority. Signed requests could be replayed within the 60-second window; that is tolerated because admission and cancellation are idempotent. Overlapping-key rotation is not implemented.
+- User-message writes are not idempotent: a repeated successful message POST appends again. Replies avoid duplicates differently: a run starts only for an unanswered user message, and each run's reply is saved once. Concurrent append load testing remains unverified.
+- The engine executes admitted runs as simulations; its admission record and events are process-local (256 runs, 2,000 events each, 15 minutes) and are lost on restart. Laravel's durable claims and event store in tasks 4.2–4.3 become the authority. Signed requests could be replayed within the 60-second window; that is tolerated because admission, cancellation and reading are idempotent. Overlapping-key rotation is not implemented.
 - Until tasks 3.1–3.3, the engine admits only the `simulated` provider, and only with `AGENT_SIMULATION_ENABLED=true`, which development Compose sets explicitly. It refuses every capability. Only a connection with status `connected` may back a live model, and no code path sets that status yet.
-- The chat page saves user messages only and shows that replies are not connected yet. Messages are plain text until 2.4 adds Markdown. Physical iOS/Android keyboards, real IMEs and screen readers have not been checked; the browser probe that covered the layout and keyboard rules is not part of CI yet (a candidate for task 6.1). The `interactive-widget=resizes-content` viewport hint helps Chrome on Android keep the composer above the keyboard; Safari ignores it with a console note.
+- The Stage A relay saves a reply only while some reader follows its stream; opening the conversation within about four minutes resumes and saves a run whose stream was never opened. Each open stream occupies one PHP CLI server worker (four in development). Laravel sends no heartbeats to the browser yet, which matters behind proxies. An engine restart mid-reply surfaces as a failed reply rather than a detected interruption. Phases 4–5 replace these limits.
+- `messages.content` is MySQL `TEXT` (65,535 bytes); widen it before real replies (see the next task).
+- Physical iOS/Android keyboards, real IMEs and screen readers have not been checked; the browser probes are not part of CI yet (a candidate for task 6.1) and are kept in ignored `.setup/`. The `interactive-widget=resizes-content` viewport hint helps Chrome on Android keep the composer above the keyboard; Safari ignores it with a console note.
+- Development requests are slow because PHP's CLI server runs with `opcache.enable_cli=0` on the Windows bind mount. Enabling OPcache in a probe server cut warm requests from about 3.6 s to 220–440 ms. Consider enabling it for development in `docker/php/php.ini`; it was not changed. The chat page bundle is 58 kB gzip, mostly Markdown parsing; measure before splitting it.
 - Windows bind mounts were slow: the frontend build took about 156 seconds. A future move of the single authoritative checkout to Ubuntu's Linux filesystem is the main optimization suggestion. Ubuntu's initial user/Docker integration setup remains separate from the working PowerShell/Compose path.
 - The optional `fontaine` warning is non-fatal; fonts build and render. No new dependency was added just to silence it.
 - CI is configured for pushes to `main` and `development`, and for pull requests. Remote CI results have not yet been verified. A pristine-checkout run of the complete setup script, live provider tests, real mail delivery, physical passkey enrollment, production deployment and backup/restore are not verified.
@@ -107,7 +114,7 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 Current implementation checkpoint: **`2e8b62d` — Add signed private engine contract and gateway** (task 2.2), with environment/checkpoint documentation in `8e29e53`. It was developed on a temporary `task/2.2-agent-gateway` worktree, then fast-forwarded into local `development`; that worktree and branch were removed afterwards. Its author/committer identity and the complete-history attribution audit were verified. The previous checkpoint is **`4484b3a` — Add owned chat history and provider connection records** (task 2.1), recorded in `8671079`. On 23 October 2026, the user authorized review and publication: both remote branches received all four commits through `8e29e53`, preserving history. The following review documentation commit records that publication; use `git log -1` for its reference.
 
-Task 2.3 was developed on a temporary `task/2.3-chat-page` worktree from `97ab480` and fast-forwarded into local `development`; use `git log` for its commit reference. It has not been pushed.
+Tasks 2.3 (`89ff7a1`) and 2.4 were developed on temporary worktrees and fast-forwarded into local `development`; use `git log` for the 2.4 commit reference. Neither has been pushed.
 
 This checkout's ignored `.env` already received a generated `AGENT_REQUEST_SIGNING_KEY`, and the engine image was rebuilt. On the running services, `php artisan agent:check` passes, and the engine and Laravel suites pass inside their containers.
 
@@ -117,7 +124,7 @@ Continue application work on `development`; `main` now includes tasks 2.1–2.2.
 
 Use descriptive commit messages and the configured human Git identity, `EnrieJohn31`. Do not add AI names, product/brand identities, generated-by attribution or co-author trailers to contributor metadata. The current push is explicitly authorized; subsequent work should remain in local commits unless the user requests publication. Do not change remotes without a user instruction.
 
-This policy is tracked in `AGENTS.md` and imported by `CLAUDE.md`; local, ignored `.claude/settings.json` disables automatic attribution and session links. The active `.githooks/commit-msg` hook requires an approved human author/committer and rejects co-authors/common AI signatures. On a fresh checkout, run `./scripts/install-git-hooks.ps1` before committing and recreate the local attribution settings as documented in [commit policy](docs/commit-policy.md), which also covers tests, CI auditing and enforcement limits. Ten local hook cases passed during policy setup; the complete-history audit passed again during publication review. Task 2.4 is the next application task; tasks 2.1–2.2 are published and task 2.3 is local until publication is requested.
+This policy is tracked in `AGENTS.md` and imported by `CLAUDE.md`; local, ignored `.claude/settings.json` disables automatic attribution and session links. The active `.githooks/commit-msg` hook requires an approved human author/committer and rejects co-authors/common AI signatures. On a fresh checkout, run `./scripts/install-git-hooks.ps1` before committing and recreate the local attribution settings as documented in [commit policy](docs/commit-policy.md), which also covers tests, CI auditing and enforcement limits. Ten local hook cases passed during policy setup; the complete-history audit passed again during publication review. Task 3.1 is the next application task; tasks 2.1–2.2 are published and tasks 2.3–2.4 are local until publication is requested.
 
 Repository housekeeping on 23 October 2026: at the owner's request, `.gitignore` now excludes the entire `.claude/` directory, including its previously tracked settings file. The settings file remains on this machine with attribution disabled; it is removed only from Git tracking. Verified the ignore rule, empty tracked-directory listing, preserved local settings and staged diff. Application tests were not rerun for this configuration/documentation change. Publication review remains recorded in `c19321c`; this follow-up does not change the next implementation task.
 
@@ -129,9 +136,9 @@ Before future commits, review `git status` and the staged file list. Keep `.env`
 Read handoff.md, Blueprint.md and Build_Plan.md in this repository.
 Confirm the current Git and Docker state; preserve the existing local history.
 Continue on development, which tracks origin/development.
-Implement task 2.4: a simulated text stream through Laravel and one React hook.
-Use RunRequestFactory and AgentGateway; label any temporary relay as Stage A.
-Verify incremental text, safe Markdown and final-event replacement without duplication.
+Implement task 3.1: the supported provider login and credential store in the engine container.
+The operator signs in with an eligible account; never copy host credentials or fall back to API keys.
+Record login, persistence, refresh and re-authentication results in docs/provider-matrix.md.
 Run the relevant checks, document actual results and update the build plan and handoff.
 Commit locally with descriptive messages using the configured human identity;
 do not add AI/brand contributor attribution or push to a remote.

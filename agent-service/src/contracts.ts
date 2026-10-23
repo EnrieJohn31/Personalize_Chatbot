@@ -48,6 +48,27 @@ export interface CancelRequest {
     runId: string;
 }
 
+export const TERMINAL_EVENT_TYPES = ['run.completed', 'run.failed', 'run.cancelled'] as const;
+
+export type RunEventType =
+    | 'run.started'
+    | 'run.progress'
+    | 'assistant.delta'
+    | 'assistant.final'
+    | (typeof TERMINAL_EVENT_TYPES)[number];
+
+export interface RunEvent {
+    contractVersion: typeof CONTRACT_VERSION;
+    runId: string;
+    sequence: number;
+    type: RunEventType;
+    data: Record<string, unknown>;
+}
+
+export function isTerminal(type: RunEventType): boolean {
+    return (TERMINAL_EVENT_TYPES as readonly string[]).includes(type);
+}
+
 /** Returns bounded, de-duplicated schema violations; an empty list means the value is valid. */
 export function validate(contract: ContractName, value: unknown): Issue[] {
     const [valid, errors] = validators[contract].Errors(value);

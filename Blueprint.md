@@ -1,12 +1,12 @@
 # Blueprint: Laravel Chatbot Foundation
 
 Updated: 23 October 2026\
-Revision: 11 — Chat page implemented; execution architecture unchanged\
-Status: Laravel/React, MySQL, owned history endpoints, a signed private Pi admission boundary and the chat page run locally. Tasks 2.1–2.3 are implemented; streaming, model execution and provider integration remain. No provider or throughput benchmark has been produced.
+Revision: 12 — Stage A simulated stream implemented; execution architecture unchanged\
+Status: Laravel/React, MySQL, owned history, a signed private Pi boundary, the chat page and simulated replies streamed through a Stage A Laravel relay run locally. Phase 2 is complete; provider login, real model execution and durable runs remain. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
 
-Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 2.4. Refresh it alongside the build plan after each implementation session.
+Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 3.1. Refresh it alongside the build plan after each implementation session.
 
 ## 1. Goal and agreed foundation
 
@@ -320,6 +320,8 @@ A final-answer event replaces draft text if needed; it must not append the whole
 Use heartbeats, `text/event-stream`, cache suppression and appropriate proxy buffering settings. Check Laravel's stream helper against this chosen protocol. See [Laravel responses](https://laravel.com/docs/responses).
 
 Closing a subscription only removes that reader. A persisted Stop request triggers the separate engine cancellation route.
+
+Implementation record, 23 October 2026 (task 2.4, Stage A): the engine executes an admitted run immediately and keeps its events in memory (at most 2,000 per run, 15 minutes). A signed `GET /internal/runs/{id}/events?after=n` replays them and then follows the run as NDJSON. Laravel's `ChatRunController` is a labelled prototype relay: `POST /api/chat/conversations/{id}/runs` admits one reply per user (cache-backed `ActiveRuns`), and `GET /api/chat/runs/{id}/events` relays SSE with the engine sequence as the event ID. The relay saves the final answer idempotently per run when it sees completion, continuing after the browser disconnects. `DELETE /api/chat/runs/{id}` requests cancellation. Engine sequences stand in for Laravel-assigned IDs, retention is process-local, and a reply is saved only while a reader follows its stream. The `chat_runs`/`chat_run_events` store, claims, callbacks and interruption detection in Phases 4–5 replace these Stage A limits. See [chat page and replies](docs/chat-ui.md).
 
 ## 9. Cancellation, tools and evidence
 

@@ -30,8 +30,30 @@ export type MessageHistory = {
     per_page: number;
 };
 
+/** A run being streamed (Stage A relay, docs/chat-ui.md). */
+export type ChatRun = {
+    id: string;
+    conversation_id: string;
+    events_url: string;
+};
+
+/** Engine events relayed with an SSE id, plus the relay's own `stream.error`. */
+export type RunEventType =
+    | 'run.started'
+    | 'run.progress'
+    | 'assistant.delta'
+    | 'assistant.final'
+    | 'run.completed'
+    | 'run.failed'
+    | 'run.cancelled'
+    | 'stream.error';
+
+export type ProgressStage = 'preparing' | 'retrieving' | 'answering';
+
 export type ChatPageProps = {
     conversations: ConversationList;
     conversation: Conversation | null;
     messages: MessageHistory | null;
+    /** The user's unfinished reply, if any, so the page can resume its stream. */
+    active_run: ChatRun | null;
 };

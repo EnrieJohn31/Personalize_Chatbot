@@ -55,6 +55,7 @@ services:
             AGENT_REQUEST_SIGNING_KEY: '${AGENT_REQUEST_SIGNING_KEY:-}'
             # Development only: admits the deterministic simulated provider.
             AGENT_SIMULATION_ENABLED: '${AGENT_SIMULATION_ENABLED:-true}'
+            AGENT_SIMULATION_CHUNK_DELAY_MS: '${AGENT_SIMULATION_CHUNK_DELAY_MS:-35}'
         expose:
             - '3101'
         volumes:

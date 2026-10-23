@@ -4,7 +4,9 @@ namespace App\Services\Ai;
 
 use App\Contracts\AgentGateway;
 use App\Data\Agent\RunAcknowledgement;
+use App\Data\Agent\RunEvent;
 use App\Data\Agent\RunRequest;
+use Generator;
 use Illuminate\Container\Attributes\Config;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
@@ -12,6 +14,8 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use JsonException;
+use RuntimeException;
 use SensitiveParameter;
 
 /**
@@ -21,11 +25,16 @@ use SensitiveParameter;
  */
 final class PiGateway implements AgentGateway
 {
+    /** An event line is far smaller; anything longer is not a contract event. */
+    private const MAX_EVENT_LINE_BYTES = 1_048_576;
+
     public function __construct(
         #[Config('assistant.agent_url')] private readonly string $baseUrl,
         #[Config('assistant.agent_request_signing_key'), SensitiveParameter] private readonly ?string $signingKey,
         #[Config('assistant.agent_connect_timeout_seconds')] private readonly float $connectTimeout,
         #[Config('assistant.agent_timeout_seconds')] private readonly float $timeout,
+        #[Config('assistant.agent_stream_timeout_seconds')] private readonly float $streamTimeout = 240,
+        #[Config('assistant.agent_stream_read_timeout_seconds')] private readonly float $streamReadTimeout = 30,
     ) {}
 
     public function submit(RunRequest $request): RunAcknowledgement
@@ -44,6 +53,62 @@ final class PiGateway implements AgentGateway
         $body = json_encode(['contractVersion' => RunRequest::CONTRACT_VERSION, 'runId' => $runId], JSON_THROW_ON_ERROR);
 
         return $this->acknowledgement($this->send('POST', "/internal/runs/$runId/cancel", $body), $runId, ['cancel_requested']);
+    }
+
+    /** @return Generator<int, RunEvent> */
+    public function events(string $runId, int $after = 0): Generator
+    {
+        if (! RunRequest::isUuid($runId) || $after < 0) {
+            throw new InvalidArgumentException('Event streams need a lowercase run UUID and a non-negative cursor.');
+        }
+
+        $response = $this->send('GET', "/internal/runs/$runId/events?after=$after", null, stream: true);
+        if ($response->status() !== 200) {
+            throw $this->failure($response);
+        }
+
+        $body = $response->toPsrResponse()->getBody();
+        $buffer = '';
+        $previous = $after;
+
+        try {
+            while (! $body->eof()) {
+                $buffer .= $body->read(8192);
+
+                while (($end = strpos($buffer, "\n")) !== false) {
+                    $line = trim(substr($buffer, 0, $end));
+                    $buffer = substr($buffer, $end + 1);
+
+                    // Blank lines are the engine's heartbeat.
+                    if ($line === '') {
+                        continue;
+                    }
+
+                    $event = RunEvent::fromPayload(json_decode($line, true, 64, JSON_THROW_ON_ERROR), $runId, $previous)
+                        ?? throw AgentGatewayException::invalidResponse(200, 'an event is malformed or out of order.');
+                    $previous = $event->sequence;
+
+                    yield $event;
+
+                    if ($event->isTerminal()) {
+                        return;
+                    }
+                }
+
+                if (strlen($buffer) > self::MAX_EVENT_LINE_BYTES) {
+                    throw AgentGatewayException::invalidResponse(200, 'an event line exceeds the size limit.');
+                }
+            }
+        } catch (JsonException) {
+            throw AgentGatewayException::invalidResponse(200, 'an event line is not JSON.');
+        } catch (AgentGatewayException $exception) {
+            throw $exception;
+        } catch (RuntimeException $exception) {
+            // Read timeouts and dropped connections surface from the PSR stream.
+            throw AgentGatewayException::streamInterrupted($exception);
+        }
+
+        throw AgentGatewayException::streamInterrupted();
     }
 
     public function health(): array
@@ -92,18 +157,25 @@ final class PiGateway implements AgentGateway
         }
     }
 
-    private function send(string $method, string $path, string $body): Response
+    /** Signs the exact request target (path and query) and body bytes; a null body sends none. */
+    private function send(string $method, string $path, ?string $body, bool $stream = false): Response
     {
         if ($this->signingKey === null || strlen($this->signingKey) < ServiceRequestSigner::MIN_KEY_LENGTH) {
             throw AgentGatewayException::notConfigured();
         }
 
         $url = $this->url($path);
-        $headers = (new ServiceRequestSigner($this->signingKey))
-            ->headers($method, (string) parse_url($url, PHP_URL_PATH), $body, now()->getTimestamp());
+        $query = parse_url($url, PHP_URL_QUERY);
+        $target = parse_url($url, PHP_URL_PATH).(is_string($query) ? "?$query" : '');
+        $headers = (new ServiceRequestSigner($this->signingKey))->headers($method, (string) $target, $body ?? '', now()->getTimestamp());
+
+        $request = ($stream ? $this->streamClient() : $this->client())->withHeaders($headers);
+        if ($body !== null) {
+            $request = $request->withBody($body, 'application/json');
+        }
 
         try {
-            return $this->client()->withHeaders($headers)->withBody($body, 'application/json')->send($method, $url);
+            return $request->send($method, $url);
         } catch (ConnectionException $exception) {
             throw AgentGatewayException::unavailable($exception);
         }
@@ -154,6 +226,14 @@ final class PiGateway implements AgentGateway
     private function client(): PendingRequest
     {
         return Http::acceptJson()->connectTimeout($this->connectTimeout)->timeout($this->timeout);
+    }
+
+    private function streamClient(): PendingRequest
+    {
+        return Http::accept('application/x-ndjson')
+            ->connectTimeout($this->connectTimeout)
+            ->timeout($this->streamTimeout)
+            ->withOptions(['stream' => true, 'read_timeout' => $this->streamReadTimeout]);
     }
 
     private function url(string $path): string

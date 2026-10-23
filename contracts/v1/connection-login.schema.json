@@ -1,0 +1,54 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:connection-login",
+    "title": "Provider sign-in state",
+    "description": "Engine to Laravel: answer to starting, reading, completing or cancelling a sign-in. Never contains a credential.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "contractVersion",
+        "connectionId",
+        "provider",
+        "state",
+        "authUrl",
+        "error",
+        "expiresAt"
+    ],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "connectionId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "provider": { "enum": ["openai"] },
+        "state": {
+            "enum": [
+                "starting",
+                "waiting_for_user",
+                "exchanging",
+                "connected",
+                "failed",
+                "cancelled"
+            ]
+        },
+        "authUrl": {
+            "description": "The provider's sign-in page for the user to open. Present only in state waiting_for_user.",
+            "anyOf": [
+                { "type": "null" },
+                { "type": "string", "pattern": "^https://", "maxLength": 4096 }
+            ]
+        },
+        "error": {
+            "description": "Why the sign-in failed or was cancelled; shown to the user.",
+            "anyOf": [
+                { "type": "null" },
+                { "type": "string", "maxLength": 500 }
+            ]
+        },
+        "expiresAt": {
+            "description": "Unix time in milliseconds when an unfinished sign-in is cancelled.",
+            "type": "integer",
+            "minimum": 0
+        }
+    }
+}

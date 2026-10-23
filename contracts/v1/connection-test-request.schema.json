@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:connection-test-request",
+    "title": "Connection test request",
+    "description": "Laravel to engine: POST /internal/connections/{connectionId}/test. Sends one short message with the stored sign-in, so it counts against the user's plan. Sent only when the user asks.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["contractVersion", "provider", "modelId"],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "provider": { "enum": ["openai"] },
+        "modelId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+        }
+    }
+}

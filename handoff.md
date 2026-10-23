@@ -1,22 +1,33 @@
 # Development handoff
 
-Updated: 23 October 2026. Read this file first when resuming work.
+Updated: 24 October 2026. Read this file first when resuming work.
 
 ## Where we stopped
 
-**Phase 2 (tasks 2.1–2.4) is implemented. The next implementation task is 3.1, which needs the operator's eligible provider account.** The application provides the Laravel React authentication starter, MySQL persistence, owned history/connection-metadata endpoints, a signed, schema-validated Laravel-to-Pi boundary and the chat page at `/chat`. Replies stream from the engine's deterministic simulation through a Stage A Laravel relay. Provider login, real model execution, tools and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md) and [the chat page and replies](docs/chat-ui.md).
+**Phase 2 (tasks 2.1–2.4) is implemented, and task 3.1's ChatGPT sign-in is implemented and checked without a real account. Task 3.1 is finished when the operator signs in under Settings → Connections with an eligible ChatGPT account and a test message succeeds.**
 
-| Document                                             | Use it for                                                               |
-| ---------------------------------------------------- | ------------------------------------------------------------------------ |
-| [Blueprint.md](Blueprint.md)                         | Architecture, ownership, security boundaries and acceptance requirements |
-| [Build_Plan.md](Build_Plan.md)                       | Numbered tasks, completion checkboxes and progress                       |
-| [docs/setup.md](docs/setup.md)                       | Installation, daily commands and troubleshooting                         |
-| [docs/validation.md](docs/validation.md)             | Dated checks for Phase 1 and tasks 2.1–2.4, with their limits            |
-| [docs/chat-history.md](docs/chat-history.md)         | Task 2.1 endpoints, ownership, storage, pagination and limits            |
-| [docs/chat-ui.md](docs/chat-ui.md)                   | Tasks 2.3–2.4 chat page, Stage A reply relay, events and checks          |
-| [contracts/README.md](contracts/README.md)           | Engine schemas, request signing, admission, event stream and error codes |
-| [docs/runtime-versions.md](docs/runtime-versions.md) | Installed versions, image identities and compatibility sources           |
-| [docs/provider-matrix.md](docs/provider-matrix.md)   | Intended provider path, ownership and unverified live-access status      |
+The application provides:
+
+- The Laravel React authentication starter and MySQL persistence.
+- Owned history/connection-metadata endpoints.
+- A signed, schema-validated Laravel-to-Pi boundary.
+- The chat page at `/chat`.
+- Per-user ChatGPT sign-in, with tokens encrypted inside the engine.
+
+Replies still stream from the engine's deterministic simulation through a Stage A Laravel relay. Real model execution (task 3.2), tools and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the ChatGPT connection](docs/chatgpt-connection.md).
+
+| Document                                                 | Use it for                                                               |
+| -------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Blueprint.md](Blueprint.md)                             | Architecture, ownership, security boundaries and acceptance requirements |
+| [Build_Plan.md](Build_Plan.md)                           | Numbered tasks, completion checkboxes and progress                       |
+| [docs/setup.md](docs/setup.md)                           | Installation, daily commands and troubleshooting                         |
+| [docs/validation.md](docs/validation.md)                 | Dated checks for Phase 1 and tasks 2.1–3.1, with their limits            |
+| [docs/chatgpt-connection.md](docs/chatgpt-connection.md) | Task 3.1 ChatGPT sign-in: use, flow, storage, setup and limits           |
+| [docs/chat-history.md](docs/chat-history.md)             | Task 2.1 endpoints, ownership, storage, pagination and limits            |
+| [docs/chat-ui.md](docs/chat-ui.md)                       | Tasks 2.3–2.4 chat page, Stage A reply relay, events and checks          |
+| [contracts/README.md](contracts/README.md)               | Engine schemas, request signing, admission, event stream and error codes |
+| [docs/runtime-versions.md](docs/runtime-versions.md)     | Installed versions, image identities and compatibility sources           |
+| [docs/provider-matrix.md](docs/provider-matrix.md)       | Provider path, ownership and what is verified or still untested          |
 
 ## Completed and checked
 
@@ -34,6 +45,22 @@ Updated: 23 October 2026. Read this file first when resuming work.
 - Task 2.3 verification: `composer ci:check` passed with 122 Laravel tests / 636 assertions (6 new page tests), 10 frontend unit tests, Pint (93 files), PHPStan level 7 and frontend format/lint/types; the production build passed. A 31-check Playwright probe passed against a built worktree server with its own SQLite data. It covered desktop and 390px mobile layouts, Enter, Shift+Enter and IME composition in Chromium, Firefox and WebKit, failure and length handling, scroll preservation, rename, copy, theme, sidebar and accessible names. Screenshots were reviewed and a spacing defect fixed. Physical-device keyboards and real IMEs remain unverified. See [docs/validation.md](docs/validation.md).
 - Task 2.4: the engine runs admitted runs as a deterministic simulation and streams contract events from `GET /internal/runs/{id}/events` (replay, then follow; NDJSON with heartbeats). The labelled Stage A `ChatRunController` admits one reply per user (`ActiveRuns`, cache-backed) and relays server-sent events with the engine sequence as the event ID. It saves the final reply once per run through `ConversationRepository::appendAssistantMessage`, also after the browser disconnects, and forwards Stop. The page streams through `hooks/use-chat-run.ts` and a tested reducer, renders replies with safe Markdown, resumes an active reply after a reload, and offers "Get a reply" for an unanswered message without saving it again. Added `react-markdown` and `remark-gfm`; no migration changed.
 - Task 2.4 verification: `composer ci:check` passed with 157 Laravel tests / 756 assertions (35 new), 18 frontend unit tests, Pint (100 files) and PHPStan level 7 (74 files); 34 engine tests passed and both npm audits found 0 vulnerabilities. Timing traces showed events arriving in the browser at the engine's pace. An 11-check full-stack browser probe passed: incremental text, safe Markdown with an injection attempt neutralized, one final reply, reload-resume, Stop, saving after the tab closed, the new-chat flow and mobile. See [docs/validation.md](docs/validation.md).
+- Task 3.1 (implementation): **Settings → Connections** lets each user connect their own ChatGPT account through Pi 1.4.0's OpenAI "Sign in with ChatGPT".
+    - **Engine.**
+        - `ConnectionManager` runs the sign-in, one at a time with a 10-minute limit. It pre-checks a pasted redirect, runs a user-triggered test message and disconnects.
+        - `CredentialVault` stores one AES-256-GCM file per connection in the private `agent-data` volume. The key comes from `AGENT_CREDENTIAL_KEY`, and the connection ID is authenticated data.
+        - A stable installation ID identifies the engine to OpenAI.
+        - Pi gets no ambient environment, so `OPENAI_API_KEY` can never be used.
+    - **Laravel.**
+        - `ConnectionGateway` on `PiGateway` has longer timeouts and strict DTOs.
+        - `SubscriptionConnections` mirrors the non-secret status `connected`/`not_configured`/`reauth_required` into the connection record.
+        - `Settings\ConnectionsController` serves the page, and its sign-in routes take the session lock.
+    - **Compose.** It publishes only `127.0.0.1:1455` (OpenAI's fixed callback). There are six new contract schemas with examples.
+- Task 3.1 verification:
+    - `composer ci:check` passed with 198 Laravel tests / 971 assertions (41 new), 18 frontend unit tests, Pint (112 files) and PHPStan level 7 (82 files).
+    - 53 engine tests passed (19 new), and both npm audits found 0 vulnerabilities. Two mutation checks failed exactly their target tests.
+    - A 12-check browser probe and a callback-listener probe ran against the real task image on a network without internet access. They found and fixed a poll/session race that hid inline errors.
+    - **Not yet done:** the live sign-in with a real account, a real test reply, persistence across a restart and a refresh after expiry. The 3.1 checkbox stays open until then. See [docs/validation.md](docs/validation.md) and [docs/provider-matrix.md](docs/provider-matrix.md).
 
 ## Resume this checkout
 
@@ -56,7 +83,15 @@ docker compose exec --user sail laravel.test npm run build
 docker compose up -d --build agent
 ```
 
-Open [the login page](http://localhost:8080/login), then [the chat page](http://localhost:8080/chat). Register your own local account if needed. Email is not delivered: the verification link is written MIME-encoded to `storage/logs/laravel.log`; [setup](docs/setup.md#service-boundary-and-state) explains how to read it and that it must be opened on the same host you signed in on. For first-time installation or a missing dependency tree, use `./scripts/setup.ps1`; normal continuation does not require reinstalling dependencies.
+**Once per existing checkout after task 3.1:** add `AGENT_CREDENTIAL_KEY` to `.env`; `./scripts/setup.ps1` generates it, or use at least 32 random characters, and keep it stable. Then recreate the engine, which publishes `127.0.0.1:1455` and creates the `agent-data` volume, and rebuild the frontend:
+
+```powershell
+docker compose up -d --build agent
+docker compose exec --user sail laravel.test npm run build
+docker compose exec --user sail laravel.test php artisan agent:check   # providerAuth: configured
+```
+
+Open [the login page](http://localhost:8080/login), then [the chat page](http://localhost:8080/chat) or [Settings → Connections](http://localhost:8080/settings/connections). Register your own local account if needed. Email is not delivered: the verification link is written MIME-encoded to `storage/logs/laravel.log`; [setup](docs/setup.md#service-boundary-and-state) explains how to read it and that it must be opened on the same host you signed in on. For first-time installation or a missing dependency tree, use `./scripts/setup.ps1`; normal continuation does not require reinstalling dependencies.
 
 ```powershell
 # Optional frontend hot reload; keep this terminal open.
@@ -71,28 +106,34 @@ docker compose exec agent npm test
 docker compose down
 ```
 
-Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal at `mysql:3306`; the engine is internal at `http://agent:3101`. Health reports `providerAuth: not_configured`, `requestAuth` and `simulation`. Existing local secrets stay in ignored `.env`; preserve the application key and MySQL volume. Do not use `docker compose down -v` for routine shutdown.
+Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal at `mysql:3306`; the engine is internal at `http://agent:3101`, and only its sign-in callback is published, on `127.0.0.1:1455`. Health reports `providerAuth` (`configured` once the engine has its credential key), `requestAuth` and `simulation`. Existing local secrets stay in ignored `.env`; preserve the application key and MySQL volume. Do not use `docker compose down -v` for routine shutdown.
 
-## Next task: 3.1
+## Next: finish 3.1, then 3.2
 
-Task 3.1 implements the chosen provider's supported login and credential store inside the engine container. **It needs the operator to sign in with an eligible account**; nothing in the repository can substitute for that. Read Blueprint section 5, [docs/provider-matrix.md](docs/provider-matrix.md) and the provider documentation for the installed Pi release (1.4.0), which describes Sign in with ChatGPT on its OpenAI provider. Keep credentials in a dedicated private engine volume, encrypted and scoped per connection, never in Laravel, events, logs or the browser. Record login, persistence, refresh and re-authentication results in the provider matrix as verified or untested, and never fall back silently to paid API credentials.
+The remaining 3.1 step needs the operator; nothing in the repository can substitute for it.
+
+1. Sign in at [Settings → Connections](http://localhost:8080/settings/connections) with an eligible ChatGPT account.
+2. Choose **Send test message**. The default model is `gpt-5.4-mini`; try another if OpenAI refuses it for the plan.
+3. Run `docker compose restart agent` and confirm the page still shows **Connected**, which proves persistence.
+4. After the access token's expiry time, shown on the page, send another test message. A successful reply means the refresh works.
+5. Record the dates and outcomes, but no tokens or personal data, in [docs/provider-matrix.md](docs/provider-matrix.md). Then check 3.1 in the Build Plan.
 
 **Acceptance (3.1):** a live request succeeds; credential persistence and expiry/re-authentication behavior are checked.
 
-Before task 3.2 sends real replies, widen `messages.content` (currently MySQL `TEXT`, 65,535 bytes) with an additive migration; the event contract allows final answers of 200,000 characters. Task 3.2 then replaces the simulation in `agent-service/src/server.ts` (`execute()`) with a fresh Pi Agent per run that emits the same contract events; the relay, page and tests stay as they are.
+Before task 3.2 sends real replies, widen `messages.content` (currently MySQL `TEXT`, 65,535 bytes) with an additive migration; the event contract allows final answers of 200,000 characters. Task 3.2 then replaces the simulation in `agent-service/src/server.ts` (`execute()`) with a fresh Pi Agent per run that emits the same contract events; the relay, page and tests stay as they are. Its model access comes from the run's `connectionId` through `ConnectionManager`'s per-connection `Models` (the same vault, so refreshes stay serialized). It also needs a way to choose the user's connection for a conversation; Laravel's `RunRequestFactory` already requires an owned connection with status `connected`.
 
 ## Remaining work in order
 
-| Tasks   | Remaining result                                                                                              |
-| ------- | ------------------------------------------------------------------------------------------------------------- |
-| 3.1–3.5 | Verify supported provider login, real Pi streaming, sample lookup tool, bounded history and Stop — start here |
-| 4.1–4.4 | Durable runs/events, claims, idempotency and transactional final saves                                        |
-| 5.1–5.4 | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                              |
-| 6.1–6.3 | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation            |
-| 7.1–7.3 | First purpose and authorized connector, after the purpose is selected                                         |
-| 8.1–8.4 | Production images, serving/supervision, backup/restore and deployment acceptance                              |
+| Tasks   | Remaining result                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------------------ |
+| 3.1–3.5 | Live-check the ChatGPT sign-in (start here), real Pi streaming, sample lookup tool, bounded history and Stop |
+| 4.1–4.4 | Durable runs/events, claims, idempotency and transactional final saves                                       |
+| 5.1–5.4 | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                             |
+| 6.1–6.3 | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation           |
+| 7.1–7.3 | First purpose and authorized connector, after the purpose is selected                                        |
+| 8.1–8.4 | Production images, serving/supervision, backup/restore and deployment acceptance                             |
 
-Use the build plan's individual acceptance checks; this table does not replace them. Phase 3 requires supported, authorized provider access. The selected path and model eligibility are still unverified; do not infer that a healthy engine can make a live request or silently substitute another billing/authentication path.
+Use the build plan's individual acceptance checks; this table does not replace them. Phase 3 requires supported, authorized provider access. Account and model eligibility are still unverified; do not infer that a healthy engine or a "Connected" badge can make a live request, and never silently substitute another billing/authentication path.
 
 ## Boundaries and open items
 
@@ -100,7 +141,14 @@ Use the build plan's individual acceptance checks; this table does not replace t
 - Preserve the agreed Pi architecture. Redis, another agent framework, vector storage, WebSockets and a queue worker are not Phase 2 prerequisites.
 - User-message writes are not idempotent: a repeated successful message POST appends again. Replies avoid duplicates differently: a run starts only for an unanswered user message, and each run's reply is saved once. Concurrent append load testing remains unverified.
 - The engine executes admitted runs as simulations; its admission record and events are process-local (256 runs, 2,000 events each, 15 minutes) and are lost on restart. Laravel's durable claims and event store in tasks 4.2–4.3 become the authority. Signed requests could be replayed within the 60-second window; that is tolerated because admission, cancellation and reading are idempotent. Overlapping-key rotation is not implemented.
-- Until tasks 3.1–3.3, the engine admits only the `simulated` provider, and only with `AGENT_SIMULATION_ENABLED=true`, which development Compose sets explicitly. It refuses every capability. Only a connection with status `connected` may back a live model, and no code path sets that status yet.
+- Until tasks 3.2–3.3, the engine admits only the `simulated` provider, and only with `AGENT_SIMULATION_ENABLED=true`, which development Compose sets explicitly. It refuses every capability. Only a connection with status `connected` may back a live model. Since task 3.1, a successful sign-in sets that status, and disconnecting or a failed refresh clears it.
+- ChatGPT sign-in limits:
+    - One sign-in runs at a time engine-wide, because OpenAI fixes the callback port. Sign-ins in progress are lost on an engine restart; stored ones survive.
+    - Port 1455 must be free on the host, or the engine container cannot start. The Codex CLI also uses it during its own login.
+    - Disconnecting removes the tokens from the engine only; revoking at OpenAI is the user's step.
+    - Changing `AGENT_CREDENTIAL_KEY` makes stored sign-ins unreadable. `docker compose down -v` deletes them.
+    - Within the Compose network, other containers can reach the callback listener during a sign-in.
+    - See [docs/chatgpt-connection.md](docs/chatgpt-connection.md).
 - The Stage A relay saves a reply only while some reader follows its stream; opening the conversation within about four minutes resumes and saves a run whose stream was never opened. Each open stream occupies one PHP CLI server worker (four in development). Laravel sends no heartbeats to the browser yet, which matters behind proxies. An engine restart mid-reply surfaces as a failed reply rather than a detected interruption. Phases 4–5 replace these limits.
 - `messages.content` is MySQL `TEXT` (65,535 bytes); widen it before real replies (see the next task).
 - Physical iOS/Android keyboards, real IMEs and screen readers have not been checked; the browser probes are not part of CI yet (a candidate for task 6.1) and are kept in ignored `.setup/`. The `interactive-widget=resizes-content` viewport hint helps Chrome on Android keep the composer above the keyboard; Safari ignores it with a console note.
@@ -112,19 +160,21 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 ## Git branches and contributor requirements
 
-Current implementation checkpoint: **`82497ae` — Stream simulated replies through a Stage A Laravel relay** (task 2.4). Task 2.3 is **`89ff7a1` — Add the chat page with conversation sidebar and composer**. These tasks were developed on temporary worktrees and fast-forwarded into local `development`. On 23 October 2026, the user authorized publication after the attribution review: both remote branches received these commits and the review record `aded851` in one atomic push, preserving their history and messages.
+Latest published implementation checkpoint: **`82497ae` — Stream simulated replies through a Stage A Laravel relay** (task 2.4). Task 2.3 is **`89ff7a1` — Add the chat page with conversation sidebar and composer**. These tasks were developed on temporary worktrees and fast-forwarded into local `development`. On 23 October 2026, the user authorized publication after the attribution review: both remote branches received these commits and the review record `aded851` in one atomic push, preserving their history and messages.
 
 Published implementation checkpoints: **`2e8b62d` — Add signed private engine contract and gateway** (task 2.2), recorded in `8e29e53`, and **`4484b3a` — Add owned chat history and provider connection records** (task 2.1), recorded in `8671079`. Their publication review is `c19321c`; `97ab480` then removed local tool settings from Git tracking. Their original history and messages were preserved.
+
+Task 3.1, **"Connect ChatGPT subscriptions through the engine's sign-in"**, was developed on the temporary `task/3.1-chatgpt-connection` worktree. It was rebased onto the publication records and fast-forwarded into local `development`; use `git log` for its reference. It has not been pushed.
 
 This checkout's ignored `.env` already received a generated `AGENT_REQUEST_SIGNING_KEY`, and the engine image was rebuilt. On the running services, `php artisan agent:check` passes, and the engine and Laravel suites pass inside their containers.
 
 The initial snapshot is **`6736ac6` — Set up Laravel React development foundation**, with checkpoint documentation in `59fcdab`, contributor-policy enforcement in `804a379` and remote configuration documentation in `e4b9c7f`. It includes the application, all three lockfiles, setup/validation documents and this handoff. On 22 October 2026, the user explicitly authorized publication to [the GitHub repository](https://github.com/EnrieJohn31/Personalize_Chatbot). All four existing commits were pushed successfully to both `main` and the new `development` branch with their messages and history preserved. `origin` points to `https://github.com/EnrieJohn31/Personalize_Chatbot.git`; both branches track their matching remote branches.
 
-Continue application work on `development`; `main` now includes all of Phase 2 (tasks 2.1–2.4). Both branches use the same CI checks. Use `git branch -vv`, `git log --oneline` and `git remote -v` to inspect the current state. Branch protection is not configured, and remote CI results have not yet been verified. A separate task 3.1 worktree exists at `C:\Users\e\Documents\Laravel- Projects\Chatbot-task-3.1` on `task/3.1-chatgpt-connection`; check its progress before starting duplicate work.
+Continue application work on `development`; `main` now includes all of Phase 2 (tasks 2.1–2.4). Both branches use the same CI checks. Use `git branch -vv`, `git log --oneline` and `git remote -v` to inspect the current state. Branch protection is not configured, and remote CI results have not yet been verified.
 
 Use descriptive commit messages and the configured human Git identity, `EnrieJohn31`. Do not add AI names, product/brand identities, generated-by attribution or co-author trailers to contributor metadata. Publication of the reviewed tasks 2.3–2.4 and their review documentation was explicitly authorized and completed. Subsequent application work stays in local commits until the user requests another publication. Do not change remotes without a user instruction.
 
-This policy is tracked in `AGENTS.md` and imported by `CLAUDE.md`; local, ignored `.claude/settings.json` disables automatic attribution and session links. The active `.githooks/commit-msg` hook requires an approved human author/committer and rejects co-authors/common AI signatures. On a fresh checkout, run `./scripts/install-git-hooks.ps1` before committing and recreate the local attribution settings as documented in [commit policy](docs/commit-policy.md), which also covers tests, CI auditing and enforcement limits. Ten local hook cases passed during policy setup; the complete-history audit passed again before publication. Task 3.1 is the next application task; tasks 2.1–2.4 are published.
+This policy is tracked in `AGENTS.md` and imported by `CLAUDE.md`; local, ignored `.claude/settings.json` disables automatic attribution and session links. The active `.githooks/commit-msg` hook requires an approved human author/committer and rejects co-authors/common AI signatures. On a fresh checkout, run `./scripts/install-git-hooks.ps1` before committing and recreate the local attribution settings as documented in [commit policy](docs/commit-policy.md), which also covers tests, CI auditing and enforcement limits. Ten local hook cases passed during policy setup; the complete-history audit passed again before publication. Finishing task 3.1's live check is next; tasks 2.1–2.4 are published and task 3.1 is local until publication is requested.
 
 Repository housekeeping on 23 October 2026: at the owner's request, `.gitignore` now excludes the entire `.claude/` directory, including its previously tracked settings file. The settings file remains on this machine with attribution disabled; it is removed only from Git tracking. Verified the ignore rule, empty tracked-directory listing, preserved local settings and staged diff. Application tests were not rerun for this configuration/documentation change. Publication review remains recorded in `c19321c`; this follow-up does not change the next implementation task.
 
@@ -140,9 +190,11 @@ Before future commits, review `git status` and the staged file list. Keep `.env`
 Read handoff.md, Blueprint.md and Build_Plan.md in this repository.
 Confirm the current Git and Docker state; preserve the existing local history.
 Continue on development, which tracks origin/development.
-Implement task 3.1: the supported provider login and credential store in the engine container.
-The operator signs in with an eligible account; never copy host credentials or fall back to API keys.
-Record login, persistence, refresh and re-authentication results in docs/provider-matrix.md.
+Task 3.1's ChatGPT sign-in is implemented; I have signed in under Settings → Connections
+and will report the test-message result. Record login, persistence, refresh and
+re-authentication results in docs/provider-matrix.md (no tokens or personal data), then
+implement task 3.2: real Pi replies through the user's connection, after widening messages.content.
+Never copy host credentials or fall back to API keys.
 Run the relevant checks, document actual results and update the build plan and handoff.
 Commit locally with descriptive messages using the configured human identity;
 do not add AI/brand contributor attribution or push to a remote.

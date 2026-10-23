@@ -14,7 +14,8 @@ server.on('error', (error) => {
 });
 server.listen(port, '0.0.0.0', () => {
     const requestAuth = config.requestSigningKey === null ? 'not configured; run endpoints closed' : 'configured';
-    console.log(`Agent service listening on port ${port} (request signing ${requestAuth})`);
+    const credentials = config.credentialKey === null ? 'not configured; sign-in endpoints closed' : 'configured';
+    console.log(`Agent service listening on port ${port} (request signing ${requestAuth}, credential store ${credentials})`);
 });
 
 function shutdown() {

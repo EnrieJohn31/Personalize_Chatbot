@@ -1,0 +1,5 @@
+{
+    "contractVersion": 1,
+    "provider": "openai",
+    "agentName": "Assistant Foundation"
+}

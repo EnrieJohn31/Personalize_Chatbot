@@ -56,12 +56,23 @@ services:
             # Development only: admits the deterministic simulated provider.
             AGENT_SIMULATION_ENABLED: '${AGENT_SIMULATION_ENABLED:-true}'
             AGENT_SIMULATION_CHUNK_DELAY_MS: '${AGENT_SIMULATION_CHUNK_DELAY_MS:-35}'
+            # Encrypts stored provider sign-ins; without it the sign-in endpoints stay closed (503).
+            AGENT_CREDENTIAL_KEY: '${AGENT_CREDENTIAL_KEY:-}'
+            AGENT_DATA_DIR: /var/lib/agent
+            # Pi's sign-in callback listener must accept the published port below.
+            PI_OAUTH_CALLBACK_HOST: 0.0.0.0
         expose:
             - '3101'
+        ports:
+            # Only the provider's sign-in redirect, http://127.0.0.1:1455/auth/callback, on this
+            # machine's loopback. The provider fixes the port; the listener runs only during a sign-in.
+            - '127.0.0.1:1455:1455'
         volumes:
             - './agent-service/src:/app/src:ro'
             - './agent-service/tests:/app/tests:ro'
             - './contracts:/contracts:ro'
+            # Private engine state: installation ID and encrypted sign-ins. Never mount it elsewhere.
+            - agent-data:/var/lib/agent
         networks:
             - sail
         healthcheck:
@@ -101,3 +112,4 @@ networks:
 
 volumes:
     mysql-data:
+    agent-data:

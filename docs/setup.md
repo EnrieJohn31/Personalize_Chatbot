@@ -16,7 +16,7 @@ The project uses a Sail-compatible custom PHP development image to retain the se
 ./scripts/setup.ps1
 ```
 
-The script first enables the repository's [contributor-policy Git hook](commit-policy.md), then checks Docker, creates `.env` if absent, replaces placeholder database passwords and an empty `AGENT_REQUEST_SIGNING_KEY` with random local values, builds both runtime images, installs `composer.lock` and `package-lock.json`, generates a missing application key, builds browser assets, starts MySQL/Pi, runs migrations and starts Laravel. The agent image installs its separate `agent-service/package-lock.json`. Re-running preserves non-placeholder passwords, the application key and the database volume. No default user is seeded; register through the application.
+The script first enables the repository's [contributor-policy Git hook](commit-policy.md), then checks Docker, creates `.env` if absent, replaces placeholder database passwords and an empty `AGENT_REQUEST_SIGNING_KEY` or `AGENT_CREDENTIAL_KEY` with random local values, builds both runtime images, installs `composer.lock` and `package-lock.json`, generates a missing application key, builds browser assets, starts MySQL/Pi, runs migrations and starts Laravel. The agent image installs its separate `agent-service/package-lock.json`. Re-running preserves non-placeholder passwords, the application key and the database volume. No default user is seeded; register through the application.
 
 Database passwords are applied by MySQL only when its volume is first initialized. If you later edit database passwords, update the existing database credentials as well. Do not delete the volume to resolve a credentials mismatch when it contains data you need.
 
@@ -38,6 +38,7 @@ Run these from the project root:
 | Full PHP/frontend checks (includes the frontend unit tests) | `docker compose exec --user sail laravel.test composer ci:check` |
 | Frontend unit tests only | `docker compose exec --user sail laravel.test npm run test` |
 | Chat page | Open `http://localhost:8080/chat` after signing in |
+| Connect ChatGPT | Open `http://localhost:8080/settings/connections` after signing in |
 | Pi TypeScript check | `docker compose exec agent npm run check` |
 | Pi build and tests | `docker compose exec agent npm test` |
 | Engine signing and reachability | `docker compose exec --user sail laravel.test php artisan agent:check` |
@@ -55,14 +56,16 @@ Stop Vite with Ctrl+C before switching to built assets. If an interrupted develo
 
 - Laravel: `127.0.0.1:8080`, with Vite on loopback `5173` while started separately. `APP_PORT`, `APP_URL` and `VITE_PORT` can be changed together in `.env`; recreate the Laravel container afterward.
 - MySQL: internal `mysql:3306`, database `assistant_foundation`, user `sail`, named volume `assistant-foundation_mysql-data`. No host port is published.
-- Pi: internal `http://agent:3101`. `config/assistant.php` reads `AGENT_URL`. No host port is published. Run admission and cancellation require Laravel's signed requests; see [the engine contracts](../contracts/README.md).
-- Health reports `providerAuth: not_configured`, plus `requestAuth` and `simulation`. A healthy Pi process proves that its selected packages load, not that provider access works. Development Compose enables only the deterministic simulated provider, which writes every chat reply; actual provider login belongs to task 3.1. `AGENT_SIMULATION_CHUNK_DELAY_MS` (default 35) sets how quickly simulated replies stream; raise it to watch streaming, Stop and reconnection more easily, then run `docker compose up -d agent`.
+- Pi: internal `http://agent:3101`. `config/assistant.php` reads `AGENT_URL`. Run admission, cancellation and sign-in calls require Laravel's signed requests; see [the engine contracts](../contracts/README.md). The only published engine port is `127.0.0.1:1455`, the ChatGPT sign-in redirect, which listens only while a sign-in runs. It must be free on the host for the engine to start; see [the ChatGPT connection guide](chatgpt-connection.md).
+- Engine state: the named volume `assistant-foundation_agent-data` holds the installation ID and the encrypted ChatGPT sign-ins.
+- Health reports `providerAuth` (`configured` once `AGENT_CREDENTIAL_KEY` reaches the engine), `requestAuth` and `simulation`. A healthy Pi process proves that its selected packages load, not that provider access works. Development Compose enables only the deterministic simulated provider, which writes every chat reply until task 3.2. `AGENT_SIMULATION_CHUNK_DELAY_MS` (default 35) sets how quickly simulated replies stream; raise it to watch streaming, Stop and reconnection more easily, then run `docker compose up -d agent`.
 - Each open reply stream occupies one of the four PHP CLI server workers until the reply finishes.
 - `AGENT_REQUEST_SIGNING_KEY` in `.env` is shared by Laravel and the engine. After adding or changing it, run `docker compose up -d agent` so the engine container receives the new value, then `php artisan agent:check`. Without a key, the engine's run endpoints return 503 and Laravel sends nothing.
+- `AGENT_CREDENTIAL_KEY` in `.env` is read only by the engine, which encrypts stored sign-ins with it. Keep it stable: changing it makes existing sign-ins unreadable, and users must sign in again. After adding it, run `docker compose up -d agent`.
 - Laravel sessions/cache use MySQL; queued work is synchronous for this phase. Redis and a queue worker are not required.
 - Email uses the log transport in local development: nothing is delivered to an inbox. After registering, find the verification link in `storage/logs/laravel.log`. The message is stored MIME-encoded, so the link is split across lines ending in `=`, and `=3D` stands for `=`; join those lines before opening it. The link expires after 60 minutes; use "Resend verification email" for a fresh one. Open it on the same host you signed in on (`localhost` and `127.0.0.1` have separate session cookies). No real mail service or provider credentials have been configured.
 
-`docker compose down` preserves data. `docker compose down -v` deletes project volumes and must not be used for routine shutdown. Keep `.env`, database backups and future provider credential stores out of Git.
+`docker compose down` preserves data. `docker compose down -v` deletes project volumes, including the database and every stored ChatGPT sign-in, and must not be used for routine shutdown. Keep `.env`, database backups and the engine's credential volume out of Git.
 
 ## Optimization and remaining work
 
@@ -70,4 +73,4 @@ The Windows filesystem was observably slow during Composer extraction and initia
 
 Individual requests can take seconds because PHP's CLI development server runs without OPcache (`opcache.enable_cli=0`) and re-reads the framework from the bind mount. In a probe server, enabling it (`opcache.enable_cli=1`) cut warm requests from about 3.6 s to 220–440 ms; see [validation.md](validation.md). Adding that setting to `docker/php/php.ini` for development is suggested but not yet done; with `opcache.validate_timestamps` left on, code changes still apply immediately.
 
-Phase 2 is complete; the chat page and its simulated replies are described in [chat-ui.md](chat-ui.md). Next is provider login (task 3.1). The starter dashboard remains a placeholder; its sidebar links to Chat. Production images, TLS, durable runs and real provider testing remain in the build plan.
+Phase 2 is complete; the chat page and its simulated replies are described in [chat-ui.md](chat-ui.md). Task 3.1's ChatGPT sign-in is described in [chatgpt-connection.md](chatgpt-connection.md); its live check with a real account and real replies (task 3.2) come next. The starter dashboard remains a placeholder; its sidebar links to Chat. Production images, TLS, durable runs and real provider testing remain in the build plan.

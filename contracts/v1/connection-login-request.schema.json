@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:connection-login-request",
+    "title": "Provider sign-in request",
+    "description": "Laravel to engine: POST /internal/connections/{connectionId}/login. Starts the provider's own browser sign-in for one connection. No credential is ever sent.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["contractVersion", "provider", "agentName"],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "provider": {
+            "description": "Subscription providers with a verified sign-in.",
+            "enum": ["openai"]
+        },
+        "agentName": {
+            "description": "Application name the provider shows on its consent screen.",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$"
+        }
+    }
+}

@@ -13,6 +13,7 @@ final class AgentGatewayException extends RuntimeException
 {
     /**
      * @param  list<array{path: string, message: string}>  $details
+     * @param  string|null  $engineMessage  the engine's own message for a rejection, without this class's prefix
      */
     private function __construct(
         public readonly string $reason,
@@ -20,6 +21,7 @@ final class AgentGatewayException extends RuntimeException
         public readonly ?int $status = null,
         public readonly array $details = [],
         ?Throwable $previous = null,
+        public readonly ?string $engineMessage = null,
     ) {
         parent::__construct($message, 0, $previous);
     }
@@ -39,7 +41,7 @@ final class AgentGatewayException extends RuntimeException
      */
     public static function rejected(int $status, string $code, string $message, array $details = []): self
     {
-        return new self($code, "The engine rejected the request: $message", $status, $details);
+        return new self($code, "The engine rejected the request: $message", $status, $details, engineMessage: $message);
     }
 
     public static function invalidResponse(int $status, string $problem): self

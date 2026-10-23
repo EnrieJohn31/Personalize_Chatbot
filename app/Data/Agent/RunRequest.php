@@ -30,7 +30,7 @@ final readonly class RunRequest
 
     private const USER_ID_PATTERN = '/\A[1-9][0-9]{0,19}\z/';
 
-    private const MODEL_ID_PATTERN = '/\A[A-Za-z0-9][A-Za-z0-9._:\/-]{0,127}\z/';
+    public const MODEL_ID_PATTERN = '/\A[A-Za-z0-9][A-Za-z0-9._:\/-]{0,127}\z/';
 
     private const CAPABILITY_PATTERN = '/\A[a-z][a-z0-9_]{0,63}\z/';
 

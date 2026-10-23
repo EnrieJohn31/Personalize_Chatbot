@@ -13,6 +13,13 @@ return [
     // plus a margin, and each read by the engine's 15-second heartbeat plus a margin.
     'agent_stream_timeout_seconds' => (float) env('AGENT_STREAM_TIMEOUT_SECONDS', 240),
     'agent_stream_read_timeout_seconds' => (float) env('AGENT_STREAM_READ_TIMEOUT_SECONDS', 30),
+    // Sign-in calls wait while the engine moves a sign-in on (it answers within about 5 seconds);
+    // a connection test waits for one model reply, which the engine abandons after 60 seconds.
+    'agent_connection_timeout_seconds' => (float) env('AGENT_CONNECTION_TIMEOUT_SECONDS', 15),
+    'agent_connection_test_timeout_seconds' => (float) env('AGENT_CONNECTION_TEST_TIMEOUT_SECONDS', 75),
+
+    // Settings > Connections sends its test message to this model of the engine's catalog.
+    'connection_test_model' => env('ASSISTANT_CONNECTION_TEST_MODEL', 'gpt-5.4-mini'),
 
     // Versioned default profile copied into each server-created run snapshot. The simulated
     // provider needs no connection and is only admitted when the engine enables simulation.

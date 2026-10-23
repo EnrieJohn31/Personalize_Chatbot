@@ -1,0 +1,41 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:connection-status",
+    "title": "Provider connection status",
+    "description": "Engine to Laravel: answer to GET or DELETE /internal/connections/{connectionId}?provider={provider}. Reads only the engine's stored sign-in and makes no provider call.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "contractVersion",
+        "connectionId",
+        "provider",
+        "status",
+        "expiresAt",
+        "models"
+    ],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "connectionId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "provider": { "enum": ["openai"] },
+        "status": {
+            "description": "unreadable: a sign-in is stored but this engine cannot decrypt it. Signing in again replaces it.",
+            "enum": ["connected", "not_connected", "unreadable"]
+        },
+        "expiresAt": {
+            "description": "Unix time in milliseconds when the current access token expires. The engine renews it automatically.",
+            "anyOf": [{ "type": "null" }, { "type": "integer", "minimum": 0 }]
+        },
+        "models": {
+            "description": "Chat model IDs in the engine's catalog for this provider. Whether a plan may use one is decided by the provider.",
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+            }
+        }
+    }
+}

@@ -15,6 +15,12 @@ const validators = {
     runAcknowledgement: compile('run-acknowledgement.schema.json'),
     runEvent: compile('run-event.schema.json'),
     error: compile('error.schema.json'),
+    connectionLoginRequest: compile('connection-login-request.schema.json'),
+    connectionCallbackRequest: compile('connection-callback-request.schema.json'),
+    connectionTestRequest: compile('connection-test-request.schema.json'),
+    connectionLogin: compile('connection-login.schema.json'),
+    connectionStatus: compile('connection-status.schema.json'),
+    connectionTestResult: compile('connection-test-result.schema.json'),
 };
 
 export type ContractName = keyof typeof validators;
@@ -46,6 +52,23 @@ export interface RunRequest {
 export interface CancelRequest {
     contractVersion: typeof CONTRACT_VERSION;
     runId: string;
+}
+
+export interface ConnectionLoginRequest {
+    contractVersion: typeof CONTRACT_VERSION;
+    provider: 'openai';
+    agentName: string;
+}
+
+export interface ConnectionCallbackRequest {
+    contractVersion: typeof CONTRACT_VERSION;
+    redirectUrl: string;
+}
+
+export interface ConnectionTestRequest {
+    contractVersion: typeof CONTRACT_VERSION;
+    provider: 'openai';
+    modelId: string;
 }
 
 export const TERMINAL_EVENT_TYPES = ['run.completed', 'run.failed', 'run.cancelled'] as const;

@@ -162,12 +162,21 @@ Suggested Node endpoints:
 | `POST /internal/runs` | Admit a server-created run idempotently and acknowledge quickly |
 | `POST /internal/runs/{id}/cancel` | Prompt an abort; Laravel's persisted cancellation remains authoritative |
 | `GET /internal/health` | Check process readiness without billable model calls |
+| `/internal/connections/{id}…` | Provider sign-in, status, disconnect and a user-requested test message; answers are never secret |
 
 The request carries a run ID, server-owned profile/model references, user identity, an immutable permitted-capability snapshot, message/history context and limits. Credentials are server-managed references rather than browser-supplied tokens.
 
 Authenticate service calls and restrict them to a private network/interface. Validate contract versions, run ownership and bounds; reject mismatched duplicate payloads. Cross-host transport needs appropriate encryption. Browser-selected roles, endpoints and arbitrary tool lists are not authorization.
 
 Implementation record, 23 October 2026 (task 2.2): [contracts/](contracts/README.md) holds strict v1 JSON Schemas for run admission, cancellation, acknowledgements, errors and normalized run events, plus shared examples. Laravel signs requests with `AGENT-HMAC-SHA256-V1` (HMAC-SHA256 over timestamp, method, path and body hash) using `AGENT_REQUEST_SIGNING_KEY`. The engine authenticates before reading the body, compiles the schemas at runtime and checks semantic rules. It admits runs idempotently in a bounded process-local record. `RunRequestFactory` builds the snapshot only from the acting user's owned conversation and connection. Until tasks 3.1–3.3, the engine admits only the deterministic `simulated` provider, and only when simulation is explicitly enabled; it refuses every capability. Engine-to-Laravel callbacks will use a separate key in Phase 4.
+
+Implementation record, 24 October 2026 (task 3.1): signed `/internal/connections/{id}` endpoints run Pi's OpenAI "Sign in with ChatGPT" for a Laravel connection record, report its non-secret status, cancel or disconnect it, and send a user-requested test message.
+- **Credentials.** Tokens stay in the engine's private `agent-data` volume, one AES-256-GCM file per connection. They are encrypted with `AGENT_CREDENTIAL_KEY` and bound to the connection ID.
+- **Billing.** Pi receives no ambient environment, so a missing sign-in never falls back to an API key.
+- **Published port.** Only the provider's fixed callback port is published, and only on the host loopback (`127.0.0.1:1455`). A pasted redirect address covers browsers that cannot reach it.
+- **Laravel.** It mirrors `connected`/`not_configured`/`reauth_required` into the record that `RunRequestFactory` checks.
+
+The live check with a real account is still pending; see [docs/chatgpt-connection.md](docs/chatgpt-connection.md).
 
 Use only Pi as the primary agent engine for this path. The Laravel AI SDK can be revisited if a future requirement changes; do not wrap one complete agent loop inside another.
 

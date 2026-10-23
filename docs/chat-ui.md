@@ -1,6 +1,6 @@
 # Chat page and replies — tasks 2.3–2.4
 
-Implemented: 23 October 2026. The signed-in chat interface over the task 2.1 history endpoints (task 2.3), with replies streamed from the engine through Laravel (task 2.4). In development the engine's deterministic simulated provider writes the replies; no model is called until task 3.1.
+Implemented: 23 October 2026. The signed-in chat interface over the task 2.1 history endpoints (task 2.3), with replies streamed from the engine through Laravel (task 2.4). In development the engine's deterministic simulated provider writes the replies; chat calls no model until task 3.2 uses the ChatGPT connection from [task 3.1](chatgpt-connection.md).
 
 ## Routes and data
 

@@ -1,0 +1,70 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:connection-test-result",
+    "title": "Connection test result",
+    "description": "Engine to Laravel: 200 answer to a connection test. A provider refusal is a failed outcome, not an HTTP error.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "contractVersion",
+        "connectionId",
+        "provider",
+        "modelId",
+        "outcome",
+        "latencyMs",
+        "reply",
+        "error"
+    ],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "connectionId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "provider": { "enum": ["openai"] },
+        "modelId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+        },
+        "outcome": { "enum": ["ok", "failed"] },
+        "latencyMs": { "type": "integer", "minimum": 0 },
+        "reply": {
+            "description": "The model's text reply, shortened to 500 characters. Null when the test failed or the reply had no text.",
+            "anyOf": [
+                { "type": "null" },
+                { "type": "string", "maxLength": 500 }
+            ]
+        },
+        "error": {
+            "description": "Null exactly when the outcome is ok.",
+            "anyOf": [
+                { "type": "null" },
+                {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["code", "message"],
+                    "properties": {
+                        "code": {
+                            "enum": [
+                                "not_connected",
+                                "reauth_required",
+                                "credentials_unreadable",
+                                "provider_error",
+                                "timeout"
+                            ]
+                        },
+                        "message": { "type": "string", "maxLength": 500 }
+                    }
+                }
+            ]
+        }
+    },
+    "if": { "properties": { "outcome": { "const": "ok" } } },
+    "then": { "properties": { "error": { "type": "null" } } },
+    "else": {
+        "properties": {
+            "error": { "type": "object" },
+            "reply": { "type": "null" }
+        }
+    }
+}

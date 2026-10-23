@@ -2,16 +2,17 @@
 
 Versioned JSON Schemas (draft 2020-12) for calls between Laravel and the private Node/Pi engine. These files are the runtime source of truth: the engine compiles them directly in `agent-service/src/contracts.ts`. Laravel's `App\Data\Agent\RunRequest` enforces the same bounds before signing, and its tests compare those bounds with the schema.
 
-Introduced by Build Plan task 2.2; the event stream was added in task 2.4. Durable run claims, event callbacks and replay belong to Phases 4–5.
+Introduced by Build Plan task 2.2; the event stream was added in task 2.4 and provider connections in task 3.1. Durable run claims, event callbacks and replay belong to Phases 4–5.
 
 ## Version 1
 
-| Request                                       | Body                          | Success                                                |
-| --------------------------------------------- | ----------------------------- | ------------------------------------------------------ |
-| `POST /internal/runs`                         | `run-request.schema.json`     | `202`, `run-acknowledgement.schema.json`               |
-| `POST /internal/runs/{runId}/cancel`          | `cancel-request.schema.json`  | `202`, status `cancel_requested`                       |
-| `GET /internal/runs/{runId}/events?after={n}` | None; signed, empty body      | `200`, NDJSON lines of `run-event.schema.json` (below) |
-| `GET /internal/health`                        | None; unsigned readiness only | `200`; never makes a model call                        |
+| Request                                       | Body                                              | Success                                                |
+| --------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------ |
+| `POST /internal/runs`                         | `run-request.schema.json`                         | `202`, `run-acknowledgement.schema.json`               |
+| `POST /internal/runs/{runId}/cancel`          | `cancel-request.schema.json`                      | `202`, status `cancel_requested`                       |
+| `GET /internal/runs/{runId}/events?after={n}` | None; signed, empty body                          | `200`, NDJSON lines of `run-event.schema.json` (below) |
+| `GET /internal/health`                        | None; unsigned readiness only                     | `200`; never makes a model call                        |
+| `/internal/connections/{connectionId}…`       | See [provider connections](#provider-connections) | `200`, non-secret sign-in state                        |
 
 Every non-2xx response uses `error.schema.json`. `run-event.schema.json` defines the normalized engine events. The engine streams them from the events endpoint, and Laravel validates each one again (`App\Data\Agent\RunEvent`) before relaying it. Tool and source event types arrive with the first tool in task 3.3.
 
@@ -48,7 +49,7 @@ Network isolation remains required: the engine port is never published, and the 
 6. Bounded admission record: identical resubmission returns `duplicate: true`; the same run ID with a different payload is rejected.
 7. A newly admitted run starts executing immediately, whether or not anyone reads its events. A duplicate admission never starts a second execution.
 
-Until provider login (task 3.1) and the tool registry (task 3.3) exist, the engine admits only the deterministic `simulated` provider. It does that only when `AGENT_SIMULATION_ENABLED=true`, which development Compose sets explicitly. Every capability is refused until tools exist. The admission record is process-local, holds at most 256 runs for 15 minutes and is lost on restart; Laravel's durable claim (task 4.2) becomes the authority.
+Until model execution (task 3.2) and the tool registry (task 3.3) exist, the engine admits only the deterministic `simulated` provider. It does that only when `AGENT_SIMULATION_ENABLED=true`, which development Compose sets explicitly. Every capability is refused until tools exist. The admission record is process-local, holds at most 256 runs for 15 minutes and is lost on restart; Laravel's durable claim (task 4.2) becomes the authority.
 
 ## Event stream
 
@@ -58,26 +59,55 @@ Each run keeps at most 2,000 events in engine memory, with the last slot reserve
 
 The simulated run is deterministic: the same request always yields the same Markdown answer, which quotes the latest question. It emits `run.started`, `run.progress` (`answering`), `assistant.delta` chunks of about three words, `assistant.final` with the complete text, and `run.completed`. The deltas always add up to the final text. `AGENT_SIMULATION_CHUNK_DELAY_MS` (default 35, maximum 1000) sets the pause between chunks. Cancellation ends the run with `run.cancelled` and no final text; passing the run deadline ends it with `run.failed` (`deadline_exceeded`).
 
+## Provider connections
+
+A connection ID is the UUID of Laravel's `provider_connections` record. These endpoints are signed like the run endpoints (a `GET` or `DELETE` hashes the empty body). They return `503 credential_store_not_configured` until the engine has `AGENT_CREDENTIAL_KEY`. They never return, log or accept a token. See [the ChatGPT connection guide](../docs/chatgpt-connection.md) for the flow and storage.
+
+| Request                                             | Body                                      | Success: `200` with                  |
+| --------------------------------------------------- | ----------------------------------------- | ------------------------------------ |
+| `GET /internal/connections/{id}?provider=openai`    | None                                      | `connection-status.schema.json`      |
+| `DELETE /internal/connections/{id}?provider=openai` | None; removes the stored sign-in          | `connection-status.schema.json`      |
+| `POST /internal/connections/{id}/login`             | `connection-login-request.schema.json`    | `connection-login.schema.json`       |
+| `GET /internal/connections/{id}/login`              | None; the connection's latest sign-in     | `connection-login.schema.json`       |
+| `DELETE /internal/connections/{id}/login`           | None; cancels it                          | `connection-login.schema.json`       |
+| `POST /internal/connections/{id}/login/callback`    | `connection-callback-request.schema.json` | `connection-login.schema.json`       |
+| `POST /internal/connections/{id}/test`              | `connection-test-request.schema.json`     | `connection-test-result.schema.json` |
+
+- **Status.** It reads only the engine's encrypted store and never calls the provider. `unreadable` means a stored file cannot be decrypted, for example after the key changed. A new sign-in replaces it.
+- **Login states.** A sign-in moves through `starting` → `waiting_for_user` (with `authUrl`, the provider page the user opens) → `exchanging` → `connected`, `failed` or `cancelled`. Starting answers once the sign-in page is known; a pasted redirect or a cancel answers once the outcome is known. Either waits at most about 5 seconds, and the caller polls after that.
+    - There is one sign-in at a time because the provider fixes the callback port. Starting again for the same connection returns its pending sign-in; another connection gets `409 login_in_progress`.
+    - An unfinished sign-in is cancelled after 10 minutes. Sign-ins in progress are lost on an engine restart; stored credentials are not.
+- **Callback.** The pasted redirect must match the pending sign-in's `redirect_uri` and `state` and carry a `code`. Otherwise it is refused with `422 invalid_redirect` and the sign-in keeps waiting. An address that reports `error=` is passed on and ends the sign-in as `failed`.
+- **Test.** It sends one short message with the stored sign-in, so it counts against the user's plan. It refreshes an expiring token first. Provider problems are a `200` with `outcome: failed` and one of `not_connected`, `reauth_required`, `credentials_unreadable`, `provider_error` or `timeout` (60 seconds). Ambient credentials such as `OPENAI_API_KEY` are never used.
+
 ## Error codes
 
-| HTTP | Code                           | Meaning                                                                          | Resubmit same run?  |
-| ---- | ------------------------------ | -------------------------------------------------------------------------------- | ------------------- |
-| 400  | `invalid_json`                 | Body is not UTF-8 JSON                                                           | No                  |
-| 401  | `authentication_failed`        | Signature missing, malformed, expired or wrong                                   | No                  |
-| 404  | `not_found` / `run_not_found`  | Unknown route, or cancel/events for an untracked run                             | No                  |
-| 409  | `conflicting_duplicate`        | Run ID already admitted with a different payload                                 | No                  |
-| 413  | `payload_too_large`            | Body over 1 MiB                                                                  | No                  |
-| 415  | `unsupported_media_type`       | Not `application/json`                                                           | No                  |
-| 422  | `unsupported_contract_version` | `contractVersion` is not 1                                                       | No                  |
-| 422  | `invalid_payload`              | Schema or semantic violation, or a bad `after` cursor; `details` lists ≤10 paths | No                  |
-| 422  | `run_id_mismatch`              | Cancel body and path run IDs differ                                              | No                  |
-| 422  | `model_unavailable`            | Provider not verified, or simulation disabled                                    | No                  |
-| 422  | `unsupported_capability`       | The engine cannot enforce a requested capability                                 | No                  |
-| 503  | `request_auth_not_configured`  | Engine has no signing key                                                        | After configuration |
-| 503  | `capacity_exhausted`           | Admission record is full                                                         | Yes, later          |
-| 500  | `internal_error`               | Unexpected engine failure                                                        | Investigate first   |
+| HTTP | Code                              | Meaning                                                                          | Resubmit same run?     |
+| ---- | --------------------------------- | -------------------------------------------------------------------------------- | ---------------------- |
+| 400  | `invalid_json`                    | Body is not UTF-8 JSON                                                           | No                     |
+| 401  | `authentication_failed`           | Signature missing, malformed, expired or wrong                                   | No                     |
+| 404  | `not_found` / `run_not_found`     | Unknown route, or cancel/events for an untracked run                             | No                     |
+| 409  | `conflicting_duplicate`           | Run ID already admitted with a different payload                                 | No                     |
+| 413  | `payload_too_large`               | Body over 1 MiB                                                                  | No                     |
+| 415  | `unsupported_media_type`          | Not `application/json`                                                           | No                     |
+| 422  | `unsupported_contract_version`    | `contractVersion` is not 1                                                       | No                     |
+| 422  | `invalid_payload`                 | Schema or semantic violation, or a bad `after` cursor; `details` lists ≤10 paths | No                     |
+| 422  | `run_id_mismatch`                 | Cancel body and path run IDs differ                                              | No                     |
+| 422  | `model_unavailable`               | Provider not verified, or simulation disabled                                    | No                     |
+| 422  | `unsupported_capability`          | The engine cannot enforce a requested capability                                 | No                     |
+| 503  | `request_auth_not_configured`     | Engine has no signing key                                                        | After configuration    |
+| 503  | `capacity_exhausted`              | Admission record is full                                                         | Yes, later             |
+| 500  | `internal_error`                  | Unexpected engine failure                                                        | Investigate first      |
+| 404  | `no_login`                        | Connections: no sign-in is held for this connection                              | Start a sign-in        |
+| 409  | `login_in_progress`               | Connections: another connection's sign-in holds the callback port                | Later                  |
+| 409  | `login_not_waiting`               | Connections: a redirect was pasted after the sign-in moved on                    | No                     |
+| 422  | `invalid_redirect`                | Connections: the pasted address does not belong to the pending sign-in           | With the right address |
+| 422  | `unknown_model`                   | Connections: the test model is not in the engine's catalog                       | No                     |
+| 503  | `credential_store_not_configured` | Connections: engine has no `AGENT_CREDENTIAL_KEY`                                | After configuration    |
 
-`App\Services\Ai\AgentGatewayException` exposes these codes as `reason`. It adds four Laravel-side reasons: `not_configured` (missing or short key; nothing sent), `unavailable` (connection failure, timeout or a bare 5xx; retryable), `stream_interrupted` (an event stream ended or stalled before its terminal event; read again to resume) and `invalid_response` (anything outside this contract, including another contract version or an out-of-order event).
+`App\Services\Ai\AgentGatewayException` exposes these codes as `reason`. It adds four Laravel-side reasons: `not_configured` (missing or short key; nothing sent), `unavailable` (connection failure, timeout or a bare 5xx; retryable), `stream_interrupted` (an event stream ended or stalled before its terminal event; read again to resume) and `invalid_response` (anything outside this contract, including another contract version or an out-of-order event). For an engine rejection, `engineMessage` keeps the engine's own message; the settings page shows it for `invalid_redirect`.
+
+Health's `providerAuth` reports `configured` once the engine has a credential key, which means sign-in endpoints are open. It does not mean any account is connected.
 
 ## Changing a contract
 

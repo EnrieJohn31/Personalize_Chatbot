@@ -3,9 +3,14 @@
 namespace App\Services\Ai;
 
 use App\Contracts\AgentGateway;
+use App\Contracts\ConnectionGateway;
+use App\Data\Agent\ConnectionStatus;
+use App\Data\Agent\ConnectionTestResult;
+use App\Data\Agent\LoginState;
 use App\Data\Agent\RunAcknowledgement;
 use App\Data\Agent\RunEvent;
 use App\Data\Agent\RunRequest;
+use Closure;
 use Generator;
 use Illuminate\Container\Attributes\Config;
 use Illuminate\Http\Client\ConnectionException;
@@ -23,7 +28,7 @@ use SensitiveParameter;
  * engine's answer; it never runs a model loop and never retries on its own, so the caller
  * decides whether to resubmit the same run ID.
  */
-final class PiGateway implements AgentGateway
+final class PiGateway implements AgentGateway, ConnectionGateway
 {
     /** An event line is far smaller; anything longer is not a contract event. */
     private const MAX_EVENT_LINE_BYTES = 1_048_576;
@@ -35,6 +40,8 @@ final class PiGateway implements AgentGateway
         #[Config('assistant.agent_timeout_seconds')] private readonly float $timeout,
         #[Config('assistant.agent_stream_timeout_seconds')] private readonly float $streamTimeout = 240,
         #[Config('assistant.agent_stream_read_timeout_seconds')] private readonly float $streamReadTimeout = 30,
+        #[Config('assistant.agent_connection_timeout_seconds')] private readonly float $connectionTimeout = 15,
+        #[Config('assistant.agent_connection_test_timeout_seconds')] private readonly float $connectionTestTimeout = 75,
     ) {}
 
     public function submit(RunRequest $request): RunAcknowledgement
@@ -134,6 +141,53 @@ final class PiGateway implements AgentGateway
         ];
     }
 
+    public function connectionStatus(string $connectionId, string $provider): ConnectionStatus
+    {
+        $response = $this->send('GET', $this->connectionPath($connectionId, '', $provider), null, timeout: $this->connectionTimeout);
+
+        return $this->answer($response, fn (mixed $payload) => ConnectionStatus::fromPayload($payload, $connectionId, $provider));
+    }
+
+    public function startLogin(string $connectionId, string $provider, string $agentName): LoginState
+    {
+        $body = $this->json(['contractVersion' => RunRequest::CONTRACT_VERSION, 'provider' => $provider, 'agentName' => $agentName]);
+
+        return $this->login($this->send('POST', $this->connectionPath($connectionId, '/login'), $body, timeout: $this->connectionTimeout), $connectionId, $provider);
+    }
+
+    public function loginState(string $connectionId, string $provider): LoginState
+    {
+        return $this->login($this->send('GET', $this->connectionPath($connectionId, '/login'), null, timeout: $this->connectionTimeout), $connectionId, $provider);
+    }
+
+    public function completeLogin(string $connectionId, string $provider, #[SensitiveParameter] string $redirectUrl): LoginState
+    {
+        $body = $this->json(['contractVersion' => RunRequest::CONTRACT_VERSION, 'redirectUrl' => $redirectUrl]);
+        $response = $this->send('POST', $this->connectionPath($connectionId, '/login/callback'), $body, timeout: $this->connectionTimeout);
+
+        return $this->login($response, $connectionId, $provider);
+    }
+
+    public function cancelLogin(string $connectionId, string $provider): LoginState
+    {
+        return $this->login($this->send('DELETE', $this->connectionPath($connectionId, '/login'), null, timeout: $this->connectionTimeout), $connectionId, $provider);
+    }
+
+    public function disconnect(string $connectionId, string $provider): ConnectionStatus
+    {
+        $response = $this->send('DELETE', $this->connectionPath($connectionId, '', $provider), null, timeout: $this->connectionTimeout);
+
+        return $this->answer($response, fn (mixed $payload) => ConnectionStatus::fromPayload($payload, $connectionId, $provider));
+    }
+
+    public function testConnection(string $connectionId, string $provider, string $modelId): ConnectionTestResult
+    {
+        $body = $this->json(['contractVersion' => RunRequest::CONTRACT_VERSION, 'provider' => $provider, 'modelId' => $modelId]);
+        $response = $this->send('POST', $this->connectionPath($connectionId, '/test'), $body, timeout: $this->connectionTestTimeout);
+
+        return $this->answer($response, fn (mixed $payload) => ConnectionTestResult::fromPayload($payload, $connectionId, $provider, $modelId));
+    }
+
     /**
      * Operator diagnostic: proves the engine accepts this application's signature and rejects
      * unsigned requests. The probe payload is deliberately incomplete, so it admits nothing.
@@ -157,8 +211,43 @@ final class PiGateway implements AgentGateway
         }
     }
 
+    private function connectionPath(string $connectionId, string $action, ?string $provider = null): string
+    {
+        if (! RunRequest::isUuid($connectionId)) {
+            throw new InvalidArgumentException('Connection IDs must be lowercase UUIDs.');
+        }
+
+        return "/internal/connections/$connectionId$action".($provider === null ? '' : '?provider='.rawurlencode($provider));
+    }
+
+    private function login(Response $response, string $connectionId, string $provider): LoginState
+    {
+        return $this->answer($response, fn (mixed $payload) => LoginState::fromPayload($payload, $connectionId, $provider));
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param  Closure(mixed): (T|null)  $parse
+     * @return T
+     */
+    private function answer(Response $response, Closure $parse): object
+    {
+        if ($response->status() !== 200) {
+            throw $this->failure($response);
+        }
+
+        return $parse($response->json()) ?? throw AgentGatewayException::invalidResponse(200, 'unexpected fields, contract version or values.');
+    }
+
+    /** @param  array<string, mixed>  $payload */
+    private function json(array $payload): string
+    {
+        return json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
     /** Signs the exact request target (path and query) and body bytes; a null body sends none. */
-    private function send(string $method, string $path, ?string $body, bool $stream = false): Response
+    private function send(string $method, string $path, ?string $body, bool $stream = false, ?float $timeout = null): Response
     {
         if ($this->signingKey === null || strlen($this->signingKey) < ServiceRequestSigner::MIN_KEY_LENGTH) {
             throw AgentGatewayException::notConfigured();
@@ -169,7 +258,7 @@ final class PiGateway implements AgentGateway
         $target = parse_url($url, PHP_URL_PATH).(is_string($query) ? "?$query" : '');
         $headers = (new ServiceRequestSigner($this->signingKey))->headers($method, (string) $target, $body ?? '', now()->getTimestamp());
 
-        $request = ($stream ? $this->streamClient() : $this->client())->withHeaders($headers);
+        $request = ($stream ? $this->streamClient() : $this->client($timeout))->withHeaders($headers);
         if ($body !== null) {
             $request = $request->withBody($body, 'application/json');
         }
@@ -223,9 +312,9 @@ final class PiGateway implements AgentGateway
         return $parsed;
     }
 
-    private function client(): PendingRequest
+    private function client(?float $timeout = null): PendingRequest
     {
-        return Http::acceptJson()->connectTimeout($this->connectTimeout)->timeout($this->timeout);
+        return Http::acceptJson()->connectTimeout($this->connectTimeout)->timeout($timeout ?? $this->timeout);
     }
 
     private function streamClient(): PendingRequest

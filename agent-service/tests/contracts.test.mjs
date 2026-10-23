@@ -60,6 +60,36 @@ test('events accept only known types with type-specific data', () => {
     assert.deepEqual(validate('runEvent', { ...started, type: 'run.failed', data: { code: 'provider_error', message: 'Upstream failed.' } }), []);
 });
 
+test('connection examples satisfy their v1 schemas', () => {
+    const examples = {
+        connectionLoginRequest: 'connection-login-request.json',
+        connectionCallbackRequest: 'connection-callback-request.json',
+        connectionTestRequest: 'connection-test-request.json',
+        connectionLogin: 'connection-login.json',
+        connectionStatus: 'connection-status.json',
+        connectionTestResult: 'connection-test-result.json',
+    };
+    for (const [contract, file] of Object.entries(examples)) {
+        assert.deepEqual(validate(contract, example(file)), [], file);
+    }
+});
+
+test('connection answers reject credential fields and inconsistent outcomes', () => {
+    const status = example('connection-status.json');
+    assert.ok(paths('connectionStatus', { ...status, access: 'token' }).includes('/access'));
+    assert.ok(paths('connectionStatus', { ...status, status: 'expired' }).includes('/status'));
+    assert.ok(paths('connectionLogin', { ...example('connection-login.json'), authUrl: 'http://insecure.example' }).includes('/authUrl'));
+    assert.ok(paths('connectionLoginRequest', { ...example('connection-login-request.json'), apiKey: 'x' }).includes('/apiKey'));
+
+    const ok = example('connection-test-result.json');
+    const failure = { code: 'timeout', message: 'The provider did not answer within 60 seconds.' };
+    assert.ok(validate('connectionTestResult', { ...ok, error: failure }).length > 0, 'ok with an error');
+    assert.ok(validate('connectionTestResult', { ...ok, outcome: 'failed' }).length > 0, 'failed without an error');
+    assert.ok(validate('connectionTestResult', { ...ok, outcome: 'failed', error: failure }).length > 0, 'failed with a reply');
+    assert.ok(validate('connectionTestResult', { ...ok, outcome: 'failed', reply: null, error: { ...failure, code: 'raw' } }).length > 0);
+    assert.deepEqual(validate('connectionTestResult', { ...ok, outcome: 'failed', reply: null, error: failure }), []);
+});
+
 test('fingerprints ignore key order but not values', () => {
     const reordered = Object.fromEntries(Object.entries(runRequest).reverse());
     assert.equal(fingerprint(reordered), fingerprint(runRequest));

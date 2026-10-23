@@ -1,0 +1,4 @@
+{
+    "contractVersion": 1,
+    "redirectUrl": "http://127.0.0.1:1455/auth/callback?code=example-one-time-code&state=example-state&client_id=example-issued-client"
+}

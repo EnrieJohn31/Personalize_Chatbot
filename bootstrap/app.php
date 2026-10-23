@@ -31,4 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        // A pasted ChatGPT sign-in address carries a one-time code; never keep it as old input.
+        $exceptions->dontFlash('redirect_url');
     })->create();

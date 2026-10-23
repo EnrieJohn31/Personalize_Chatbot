@@ -1,0 +1,13 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:connection-callback-request",
+    "title": "Pasted sign-in redirect",
+    "description": "Laravel to engine: POST /internal/connections/{connectionId}/login/callback. Used when the browser's redirect cannot reach the engine's callback listener. The address carries a one-time code that only the engine's pending sign-in can exchange.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["contractVersion", "redirectUrl"],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "redirectUrl": { "type": "string", "minLength": 1, "maxLength": 4096 }
+    }
+}

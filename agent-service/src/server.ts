@@ -1,6 +1,13 @@
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { Agent } from '@earendil-works/pi-agent-core';
 import { createModels } from '@earendil-works/pi-ai';
+import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
+import {
+    ConnectionError,
+    ConnectionManager,
+    SUBSCRIPTION_PROVIDERS,
+    type SubscriptionProvider,
+} from './auth/connection-manager.js';
 import { loadConfig, type ServerConfig } from './config.js';
 import {
     CONTRACT_VERSION,
@@ -9,6 +16,9 @@ import {
     isTerminal,
     validate,
     type CancelRequest,
+    type ConnectionCallbackRequest,
+    type ConnectionLoginRequest,
+    type ConnectionTestRequest,
     type ContractName,
     type Issue,
     type RunEvent,
@@ -20,14 +30,17 @@ import type { RunExecution } from './runtime/run-execution.js';
 import { RunRegistry, type TrackedStatus } from './runtime/run-registry.js';
 import { runSimulation } from './simulation/simulated-run.js';
 
-const RUN_ID = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
-const CANCEL_PATH = new RegExp(`^/internal/runs/${RUN_ID}/cancel$`);
-const EVENTS_PATH = new RegExp(`^/internal/runs/${RUN_ID}/events$`);
+const UUID = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
+const CANCEL_PATH = new RegExp(`^/internal/runs/${UUID}/cancel$`);
+const EVENTS_PATH = new RegExp(`^/internal/runs/${UUID}/events$`);
+const CONNECTION_PATH = new RegExp(`^/internal/connections/${UUID}(/login|/login/callback|/test)?$`);
+const CONNECTION_ROUTES = new Set(['GET /', 'DELETE /', 'POST /login', 'GET /login', 'DELETE /login', 'POST /login/callback', 'POST /test']);
 const SEQUENCE = /^(0|[1-9][0-9]{0,6})$/;
 const JSON_CONTENT_TYPE = /^application\/json\s*(;\s*charset=utf-8\s*)?$/i;
 
-// No provider login or tool registry exists yet (tasks 3.1–3.3). Until then only the
-// deterministic development provider is admitted, and no capability can be enforced.
+// Provider sign-in exists (task 3.1), but runs still execute the simulation until task 3.2 and
+// no tool registry exists until task 3.3. Until then only the deterministic development
+// provider is admitted, and no capability can be enforced.
 const SIMULATED_PROVIDER = 'simulated';
 const SUPPORTED_CAPABILITIES = new Set<string>();
 
@@ -42,15 +55,34 @@ class HttpError extends Error {
     }
 }
 
+export interface ServerDependencies {
+    /** Provider sign-ins; defaults to the real providers when a credential key is configured. */
+    connections?: ConnectionManager | null;
+}
+
 // Loading both libraries proves the selected Pi packages work in this runtime. Run admission
 // is authenticated and validated here; admitted runs execute the deterministic simulation
 // until real Pi model execution is added in Phase 3.
-export function createServer(config: ServerConfig = loadConfig()) {
+export function createServer(config: ServerConfig = loadConfig(), dependencies: ServerDependencies = {}) {
     if (typeof Agent !== 'function' || typeof createModels !== 'function') {
         throw new Error('The installed Pi packages do not expose the expected API.');
     }
 
     const registry = new RunRegistry(config.maxTrackedRuns, config.trackedRunTtlMs, config.now, config.maxEventsPerRun);
+    const connections =
+        dependencies.connections !== undefined
+            ? dependencies.connections
+            : config.credentialKey === null
+              ? null
+              : new ConnectionManager({
+                    dataDirectory: config.dataDirectory,
+                    key: config.credentialKey,
+                    providers: { openai: openaiProvider },
+                    loginTimeoutMs: config.loginTimeoutMs,
+                    testTimeoutMs: config.connectionTestTimeoutMs,
+                    now: config.now,
+                    log: config.log,
+                });
 
     async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
         response.setHeader('Content-Type', 'application/json');
@@ -61,7 +93,7 @@ export function createServer(config: ServerConfig = loadConfig()) {
             sendJson(response, 200, {
                 status: 'ok',
                 service: 'agent',
-                providerAuth: 'not_configured',
+                providerAuth: connections === null ? 'not_configured' : 'configured',
                 requestAuth: config.requestSigningKey === null ? 'not_configured' : 'configured',
                 simulation: config.simulationEnabled ? 'enabled' : 'disabled',
             });
@@ -71,6 +103,7 @@ export function createServer(config: ServerConfig = loadConfig()) {
         const url = new URL(target, 'http://engine.internal');
         const cancelPath = request.method === 'POST' ? CANCEL_PATH.exec(target) : null;
         const eventsPath = request.method === 'GET' ? EVENTS_PATH.exec(url.pathname) : null;
+        const connectionPath = CONNECTION_PATH.exec(url.pathname);
         try {
             if (request.method === 'POST' && target === '/internal/runs') {
                 admitRun(response, await readContract<RunRequest>(request, 'runRequest'));
@@ -79,14 +112,73 @@ export function createServer(config: ServerConfig = loadConfig()) {
             } else if (eventsPath !== null) {
                 await authenticate(request);
                 streamEvents(response, eventsPath[1]!, url.searchParams);
+            } else if (connectionPath !== null) {
+                await routeConnection(request, response, connectionPath[1]!, connectionPath[2] ?? '', url.searchParams);
             } else {
                 throw new HttpError(404, 'not_found', 'Not found');
             }
         } catch (error) {
+            if (error instanceof ConnectionError) {
+                sendError(response, new HttpError(error.status, error.code, error.message));
+                return;
+            }
             if (!(error instanceof HttpError)) {
                 throw error;
             }
             sendError(response, error);
+        }
+    }
+
+    /**
+     * Sign-in endpoints for one Laravel provider connection. Every answer is non-secret state;
+     * tokens stay in the engine's encrypted store.
+     */
+    async function routeConnection(
+        request: IncomingMessage,
+        response: ServerResponse,
+        connectionId: string,
+        action: string,
+        query: URLSearchParams,
+    ): Promise<void> {
+        const route = `${request.method ?? ''} ${action === '' ? '/' : action}`;
+        if (!CONNECTION_ROUTES.has(route)) {
+            throw new HttpError(404, 'not_found', 'Not found');
+        }
+
+        const body = await authenticate(request);
+        if (connections === null) {
+            throw new HttpError(503, 'credential_store_not_configured', 'The engine has no credential key configured.');
+        }
+
+        const reply = (payload: object): void => sendJson(response, 200, { contractVersion: CONTRACT_VERSION, connectionId, ...payload });
+
+        switch (route) {
+            case 'GET /':
+                reply(await connections.status(connectionId, providerParameter(query)));
+                return;
+            case 'DELETE /':
+                reply(await connections.disconnect(connectionId, providerParameter(query)));
+                return;
+            case 'POST /login': {
+                const login = parseContract<ConnectionLoginRequest>(request, body, 'connectionLoginRequest');
+                reply(await connections.startLogin(connectionId, login.provider, login.agentName));
+                return;
+            }
+            case 'GET /login':
+                reply(connections.loginView(connectionId));
+                return;
+            case 'DELETE /login':
+                reply(await connections.cancelLogin(connectionId));
+                return;
+            case 'POST /login/callback': {
+                const callback = parseContract<ConnectionCallbackRequest>(request, body, 'connectionCallbackRequest');
+                reply(await connections.completeLogin(connectionId, callback.redirectUrl));
+                return;
+            }
+            case 'POST /test': {
+                const check = parseContract<ConnectionTestRequest>(request, body, 'connectionTestRequest');
+                reply(await connections.test(connectionId, check.provider, check.modelId));
+            }
         }
     }
 
@@ -114,7 +206,11 @@ export function createServer(config: ServerConfig = loadConfig()) {
 
     /** Authenticates, then parses the body and validates it against `contract`. */
     async function readContract<T>(request: IncomingMessage, contract: ContractName): Promise<T> {
-        const body = await authenticate(request);
+        return parseContract<T>(request, await authenticate(request), contract);
+    }
+
+    /** Parses an authenticated body and validates it against `contract`. */
+    function parseContract<T>(request: IncomingMessage, body: Buffer, contract: ContractName): T {
         if (!JSON_CONTENT_TYPE.test(request.headers['content-type'] ?? '')) {
             throw new HttpError(415, 'unsupported_media_type', 'Send the request as application/json.');
         }
@@ -262,6 +358,16 @@ export function createServer(config: ServerConfig = loadConfig()) {
 
 function invalidPayload(details: Issue[]): HttpError {
     return new HttpError(422, 'invalid_payload', `The request does not match contract version ${CONTRACT_VERSION}.`, details);
+}
+
+function providerParameter(query: URLSearchParams): SubscriptionProvider {
+    const provider = query.get('provider');
+    const known = SUBSCRIPTION_PROVIDERS.find((candidate) => candidate === provider);
+    if (known === undefined) {
+        throw invalidPayload([{ path: '/provider', message: `must be one of ${SUBSCRIPTION_PROVIDERS.join(', ')}` }]);
+    }
+
+    return known;
 }
 
 function sendAcknowledgement(response: ServerResponse, runId: string, status: TrackedStatus, duplicate: boolean): void {

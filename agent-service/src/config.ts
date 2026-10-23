@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 export const MIN_SIGNING_KEY_LENGTH = 32;
 
 export interface ServerConfig {
@@ -15,6 +17,14 @@ export interface ServerConfig {
     /** Blank NDJSON lines keep an idle event stream's read timeout from expiring. */
     streamHeartbeatMs: number;
     signatureToleranceSeconds: number;
+    /** AES-256-GCM key for stored provider sign-ins; null keeps connection endpoints closed. */
+    credentialKey: Buffer | null;
+    /** Private engine volume holding the installation ID and encrypted credentials. */
+    dataDirectory: string;
+    /** A provider sign-in that is not finished within this time is cancelled. */
+    loginTimeoutMs: number;
+    /** Upper bound for a user-requested connection test message. */
+    connectionTestTimeoutMs: number;
     now: () => number;
     log: (message: string) => void;
 }
@@ -23,6 +33,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     const key = env.AGENT_REQUEST_SIGNING_KEY?.trim() ?? '';
     if (key !== '' && key.length < MIN_SIGNING_KEY_LENGTH) {
         throw new Error(`AGENT_REQUEST_SIGNING_KEY must be at least ${MIN_SIGNING_KEY_LENGTH} characters.`);
+    }
+
+    const credentialKey = env.AGENT_CREDENTIAL_KEY?.trim() ?? '';
+    if (credentialKey !== '' && credentialKey.length < MIN_SIGNING_KEY_LENGTH) {
+        throw new Error(`AGENT_CREDENTIAL_KEY must be at least ${MIN_SIGNING_KEY_LENGTH} characters.`);
     }
 
     const chunkDelay = Number(env.AGENT_SIMULATION_CHUNK_DELAY_MS ?? 35);
@@ -41,6 +56,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
         maxEventsPerRun: 2_000,
         streamHeartbeatMs: 15_000,
         signatureToleranceSeconds: 60,
+        // Hashing normalizes any sufficiently long random value to a 32-byte key.
+        credentialKey: credentialKey === '' ? null : createHash('sha256').update(credentialKey).digest(),
+        dataDirectory: env.AGENT_DATA_DIR?.trim() || '/var/lib/agent',
+        loginTimeoutMs: 10 * 60_000,
+        connectionTestTimeoutMs: 60_000,
         now: Date.now,
         log: (message) => console.warn(message),
     };

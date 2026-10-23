@@ -1,5 +1,56 @@
 # Foundation validation
 
+## Task 3.1 — 24 October 2026 (implementation; live sign-in pending)
+
+Implemented ChatGPT subscription sign-in. It consists of the engine's `ConnectionManager`, the encrypted per-connection `CredentialVault` and installation ID, six signed connection endpoints with strict v1 schemas, Laravel's `ConnectionGateway`/`SubscriptionConnections`, and the **Settings → Connections** page. See [chatgpt-connection.md](chatgpt-connection.md) and [the contracts](../contracts/README.md#provider-connections).
+
+Compose now publishes `127.0.0.1:1455` and adds the `agent-data` volume. `.env` gains `AGENT_CREDENTIAL_KEY` and `ASSISTANT_CONNECTION_TEST_MODEL`. No dependency, lockfile or migration changed.
+
+| Check | Observed result |
+| --- | --- |
+| `composer ci:check` | Passed: formatting (117 files), lint (83 files, no warnings), TypeScript, 18 frontend unit tests, Pint (112 PHP files), PHPStan level 7 (82 files, no errors), and 198 Laravel tests / 971 assertions |
+| New Laravel tests | 41 tests across three groups (details below) |
+| Engine `npm test` | 53 tests passed (19 new, details below) |
+| Mutation checks | Giving Pi its default auth context again failed exactly the ambient-key test. Removing the paste pre-check failed exactly the pasting-mistakes test |
+| npm audit | 0 vulnerabilities for the application and the engine |
+| `npm run build` | Passed |
+| Browser probe, sign-in | 8/8 passed against the task's engine image and a worktree server with SQLite data, on an internal Docker network without internet access (details below) |
+| Callback listener | Probed during a sign-in on the engine's port 1455: a forged `state` got 400 and the sign-in kept waiting, a wrong path got 404, and after cancelling the port was closed. Engine logs contained only connection IDs and outcomes |
+| Browser probe, connected | 4/4 passed with an invented credential stored for the probe user (details below) |
+| Visual review | Screenshots of the not-connected, waiting, refused-paste, phone, cancelled, connected and test-failed states were inspected; no defects found |
+
+**New Laravel tests:**
+- DTO parsing against the shared examples (23 cases).
+- The signed connection gateway: signed targets with the query, exact bodies, engine messages and invalid responses (7).
+- The settings page and actions (11): access control, the record created once, engine unavailable or unconfigured, paste sign-in mirroring `connected`, browser-completed sign-in, inline refusals, the pasted address not kept as old input, the cancel window, the test result flash, `reauth_required`, disconnect, and per-user connections.
+
+**New engine tests:**
+- **Vault.** Round trip, encryption and private permissions, a swapped file or another key unreadable, replacement after that, serialized writes, a failed write.
+- **Installation ID.** Stable across concurrent first calls.
+- **Sign-in flows.** A fake Pi provider mirrors Pi's ChatGPT flow: pasted and browser sign-ins, pasting mistakes refused while waiting, one sign-in at a time, failures, expiry, the test message using the stored token, refresh, `reauth_required` without a model call, disconnect, unreadable files, routes and contracts.
+- **No silent API billing.** The real OpenAI provider never uses `OPENAI_API_KEY`; a control showed Pi's default context would.
+
+**Sign-in browser probe:**
+- The settings link and a new user's "Not connected" state.
+- The real sign-in address from Pi: `auth.openai.com/api/accounts/authorize`, `dynamic_agent_client`, `agent_name_hint=Assistant Foundation`, an installation `urn:uuid`, the `127.0.0.1:1455` redirect and PKCE.
+- Polling only the connection prop.
+- A pasted address from another sign-in refused inline, with the error staying while polling continued.
+- 390px phone width without horizontal scroll.
+- Cancel notice and polling stopped.
+- No console errors.
+
+**Connected browser probe:**
+- "Connected" with 42 models and `gpt-5.4-mini` preselected.
+- The test message reported "Connection error." as a failed test, because the network had no internet.
+- Disconnect asked for confirmation, removed the file and showed the toast.
+- The engine data directory was `0700` and the installation ID `0600`.
+
+The first sign-in probe passed 6/8 and found a real defect: the refused-paste error never appeared. A poll reload that ran during the paste either took the action's flashed errors or overwrote the session when it finished. The fix pauses polling while a sign-in form submits, and gives the page and its sign-in actions Laravel's session lock (`->block(15, 15)`). Afterwards 8/8 passed, and the error stayed through later polls. The same run measured about 4 seconds per request on the probe server while its workers warmed up, so polling runs about every 6 seconds there.
+
+A Laravel test also found that a form request's `$dontFlash` is ignored: old input is flashed by the exception handler. `redirect_url` is now registered in `bootstrap/app.php`.
+
+Not verified: the live sign-in with a real ChatGPT account, eligibility, which models a plan may call, the real token lifetime and refresh, a real test reply, and a browser on another host using the paste step against OpenAI. These complete task 3.1 and are recorded in [the provider matrix](provider-matrix.md) when done. Remote CI was not inspected.
+
 ## Task 2.4 — 23 October 2026
 
 Implemented the simulated reply stream: engine execution and event stream, the Stage A Laravel relay, server-side saving, Stop and the browser hook with safe Markdown. Behavior and protocol are described in [chat-ui.md](chat-ui.md) and [contracts/README.md](../contracts/README.md). Added `react-markdown` ^10.1.0 and `remark-gfm` ^4.0.1. The lockfile gained 99 packages and lost none, with no version changes; `@types/estree` and `dequal` are now also production dependencies. No migration changed.

@@ -1,0 +1,9 @@
+{
+    "contractVersion": 1,
+    "connectionId": "0199f2a1-3d4e-7f50-8162-738495a6b7c8",
+    "provider": "openai",
+    "state": "waiting_for_user",
+    "authUrl": "https://auth.openai.com/api/accounts/authorize?client_id=dynamic_agent_client&response_type=code&redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fauth%2Fcallback&state=example-state",
+    "error": null,
+    "expiresAt": 1792771200000
+}

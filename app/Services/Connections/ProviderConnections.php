@@ -125,13 +125,31 @@ final class ProviderConnections
      */
     public function disconnect(User $user, ProviderConnection $connection): ConnectionStatus
     {
-        $status = $this->mirror($connection, $this->gateway->disconnect($connection->id, $connection->provider));
+        $status = $this->gateway->disconnect($connection->id, $connection->provider);
+        if ($status->status !== 'not_connected') {
+            throw AgentGatewayException::invalidResponse(200, 'disconnect did not confirm credential removal.');
+        }
+        $this->mirror($connection, $status);
 
         if ($user->chat_connection_id === $connection->id) {
             $this->useForChat($user, null, null);
         }
 
         return $status;
+    }
+
+    /**
+     * Clear engine credentials before account deletion removes their connection IDs. Include
+     * duplicate records and unfinished sign-ins; their mirrored status may still be unconfigured.
+     * A failed step leaves the account intact, and repeating completed disconnects is safe.
+     *
+     * @throws AgentGatewayException
+     */
+    public function disconnectAll(User $user): void
+    {
+        foreach ($user->providerConnections()->whereIn('provider', array_keys($this->providers))->cursor() as $connection) {
+            $this->disconnect($user, $connection);
+        }
     }
 
     /**

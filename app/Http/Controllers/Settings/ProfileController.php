@@ -5,10 +5,14 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
+use App\Models\User;
+use App\Services\Ai\AgentGatewayException;
+use App\Services\Connections\ProviderConnections;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -46,9 +50,20 @@ class ProfileController extends Controller
     /**
      * Delete the user's profile.
      */
-    public function destroy(ProfileDeleteRequest $request): RedirectResponse
+    public function destroy(ProfileDeleteRequest $request, ProviderConnections $connections): RedirectResponse
     {
+        /** @var User $user */
         $user = $request->user();
+
+        try {
+            $connections->disconnectAll($user);
+        } catch (AgentGatewayException $exception) {
+            Log::warning('Account deletion could not remove provider connections', ['reason' => $exception->reason]);
+
+            return to_route('profile.edit')->withErrors([
+                'password' => __('Your provider connections could not be removed. Your account has not been deleted. Please try again.'),
+            ]);
+        }
 
         Auth::logout();
 

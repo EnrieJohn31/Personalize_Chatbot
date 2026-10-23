@@ -32,6 +32,7 @@ The engine keeps every sign-in and key encrypted. Laravel and the browser only e
   - OpenCode tests default to the free `beam-free` model (`ASSISTANT_OPENCODE_GO_TEST_MODEL`, `ASSISTANT_OPENCODE_ZEN_TEST_MODEL`), so a test costs nothing on Zen.
 - **Use for chat** chooses a connected account and one of its models, or the built-in assistant. Disconnecting the chosen account returns chat to the built-in assistant.
 - **Disconnect** removes the sign-in or key from this engine only. To revoke access completely, also remove it in the ChatGPT account settings or at opencode.ai.
+- **Delete application account** first disconnects all of that user's records for supported providers, including duplicate records and unfinished sign-ins. The database account is deleted only after the engine confirms removal. If cleanup fails, the account stays signed in and the delete dialog shows an error; retry after the engine recovers. Connections already removed by an earlier step stay disconnected. Accounts with no supported-provider records can still be deleted without the engine.
 
 The providers decide which models an account may use. The page lists Pi 1.4.0's catalogs: 42 OpenAI chat models, 29 for OpenCode Go and 83 for OpenCode Zen. A model the account cannot use fails the test with the provider's message.
 

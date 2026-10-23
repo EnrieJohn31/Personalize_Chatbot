@@ -35,7 +35,9 @@ Run these from the project root:
 | Build frontend | `docker compose exec --user sail laravel.test npm run build` |
 | PHP formatting | `docker compose exec --user sail laravel.test composer lint` |
 | Frontend formatting/lint fixes | `docker compose exec --user sail laravel.test npm run check:fix` |
-| Full PHP/frontend checks | `docker compose exec --user sail laravel.test composer ci:check` |
+| Full PHP/frontend checks (includes the frontend unit tests) | `docker compose exec --user sail laravel.test composer ci:check` |
+| Frontend unit tests only | `docker compose exec --user sail laravel.test npm run test` |
+| Chat page | Open `http://localhost:8080/chat` after signing in |
 | Pi TypeScript check | `docker compose exec agent npm run check` |
 | Pi build and tests | `docker compose exec agent npm test` |
 | Engine signing and reachability | `docker compose exec --user sail laravel.test php artisan agent:check` |
@@ -57,7 +59,7 @@ Stop Vite with Ctrl+C before switching to built assets. If an interrupted develo
 - Health reports `providerAuth: not_configured`, plus `requestAuth` and `simulation`. A healthy Pi process proves that its selected packages load, not that provider access works. Development Compose enables only the deterministic simulated provider; actual provider login belongs to task 3.1.
 - `AGENT_REQUEST_SIGNING_KEY` in `.env` is shared by Laravel and the engine. After adding or changing it, run `docker compose up -d agent` so the engine container receives the new value, then `php artisan agent:check`. Without a key, the engine's run endpoints return 503 and Laravel sends nothing.
 - Laravel sessions/cache use MySQL; queued work is synchronous for this phase. Redis and a queue worker are not required.
-- Email uses the log transport in local development. After registering, find the verification link in `storage/logs/laravel.log` to verify your local account. No real mail service or provider credentials have been configured.
+- Email uses the log transport in local development: nothing is delivered to an inbox. After registering, find the verification link in `storage/logs/laravel.log`. The message is stored MIME-encoded, so the link is split across lines ending in `=`, and `=3D` stands for `=`; join those lines before opening it. The link expires after 60 minutes; use "Resend verification email" for a fresh one. Open it on the same host you signed in on (`localhost` and `127.0.0.1` have separate session cookies). No real mail service or provider credentials have been configured.
 
 `docker compose down` preserves data. `docker compose down -v` deletes project volumes and must not be used for routine shutdown. Keep `.env`, database backups and future provider credential stores out of Git.
 
@@ -65,4 +67,4 @@ Stop Vite with Ctrl+C before switching to built assets. If an interrupted develo
 
 The Windows filesystem was observably slow during Composer extraction and initial checks. A future move of this single authoritative checkout into Ubuntu's Linux filesystem should improve bind-mount performance. Complete Ubuntu's user and Docker integration first; avoid maintaining two independently edited copies. Another option is Linux named volumes for dependencies, but that changes IDE indexing and has not been introduced here.
 
-Tasks 2.1–2.2 are complete. Next are the chat page (task 2.3) and the simulated stream through Laravel (task 2.4). The starter dashboard remains the upstream placeholder until the chat shell is implemented. Production images, TLS, streaming, durable runs and real provider testing remain in the build plan.
+Tasks 2.1–2.3 are complete; the chat page is described in [chat-ui.md](chat-ui.md). Next is the simulated stream through Laravel (task 2.4). The starter dashboard remains a placeholder; its sidebar links to Chat. Production images, TLS, streaming, durable runs and real provider testing remain in the build plan.

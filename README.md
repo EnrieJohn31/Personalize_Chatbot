@@ -1,6 +1,6 @@
 # Assistant Foundation
 
-Laravel 13 with the official React/Inertia starter, MySQL 8.4 and a private Node/Pi service. Phases 0–1 and tasks 2.1–2.2 are complete: authentication, the development environment, owned history/connection-metadata endpoints and a signed, versioned Laravel-to-engine admission boundary. The chat UI, streaming, model execution and provider authentication remain in Phases 2–3.
+Laravel 13 with the official React/Inertia starter, MySQL 8.4 and a private Node/Pi service. Phases 0–1 and tasks 2.1–2.3 are complete: authentication, the development environment, owned history/connection-metadata endpoints, a signed, versioned Laravel-to-engine admission boundary and the chat page at `/chat`. Streaming, assistant replies, model execution and provider authentication remain in Phases 2–3.
 
 ## Start locally
 
@@ -10,7 +10,7 @@ Open Docker Desktop with its Linux engine running, then use PowerShell in this d
 ./scripts/setup.ps1
 ```
 
-Open [the application](http://localhost:8080) and register your own local account. No default account is seeded. Setup installs locked dependencies, builds assets, generates missing local secrets and runs migrations. Existing application keys and database data are preserved.
+Open [the application](http://localhost:8080) and register your own local account. No default account is seeded. Email is written to `storage/logs/laravel.log` rather than sent; see [setup](docs/setup.md#service-boundary-and-state) for finding the verification link. Setup installs locked dependencies, builds assets, generates missing local secrets and runs migrations. Existing application keys and database data are preserved.
 
 After setup, normal startup is:
 
@@ -18,7 +18,7 @@ After setup, normal startup is:
 docker compose up -d --wait
 ```
 
-See [handoff and next task](handoff.md), [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [setup and commands](docs/setup.md), [verification results](docs/validation.md), [runtime versions](docs/runtime-versions.md), [build plan](Build_Plan.md) and [blueprint](Blueprint.md).
+See [handoff and next task](handoff.md), [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page](docs/chat-ui.md), [setup and commands](docs/setup.md), [verification results](docs/validation.md), [runtime versions](docs/runtime-versions.md), [build plan](Build_Plan.md) and [blueprint](Blueprint.md).
 
 ## Development
 

@@ -8,16 +8,17 @@ use App\Http\Requests\Chat\ShowConversationRequest;
 use App\Http\Resources\ConversationResource;
 use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
+use App\Services\Chat\ConversationRepository;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ConversationController extends Controller
 {
+    public function __construct(private readonly ConversationRepository $repository) {}
+
     public function index(PaginatedRequest $request): AnonymousResourceCollection
     {
         return ConversationResource::collection(
-            $request->user()->conversations()
-                ->orderByDesc('updated_at')->orderByDesc('id')
-                ->simplePaginate($request->integer('per_page', 25))
+            $this->repository->recentConversations($request->user(), $request->integer('per_page', 25))
                 ->appends($request->safe()->only(['per_page'])),
         );
     }
@@ -29,22 +30,17 @@ class ConversationController extends Controller
 
     public function show(ShowConversationRequest $request, Conversation $conversation): ConversationResource
     {
-        $perPage = $request->integer('per_page', 50);
-        $query = $conversation->messages()->orderByDesc('sequence');
-
-        if ($request->has('before_sequence')) {
-            $query->where('sequence', '<', $request->integer('before_sequence'));
-        }
-
-        $messages = $query->limit($perPage + 1)->get();
-        $hasMore = $messages->count() > $perPage;
-        $page = $messages->take($perPage)->reverse()->values();
+        $history = $this->repository->historyPage(
+            $conversation,
+            $request->integer('per_page', 50),
+            $request->has('before_sequence') ? $request->integer('before_sequence') : null,
+        );
 
         return (new ConversationResource($conversation))->additional([
             'messages' => [
-                'data' => MessageResource::collection($page),
-                'next_before_sequence' => $hasMore ? $page->first()?->sequence : null,
-                'per_page' => $perPage,
+                'data' => MessageResource::collection($history['messages']),
+                'next_before_sequence' => $history['next_before_sequence'],
+                'per_page' => $history['per_page'],
             ],
         ]);
     }

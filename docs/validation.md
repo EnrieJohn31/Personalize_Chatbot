@@ -1,5 +1,23 @@
 # Foundation validation
 
+## Task 2.3 — 23 October 2026
+
+Implemented the chat page; behavior and files are described in [chat-ui.md](chat-ui.md). No dependency, lockfile or migration changed. `composer ci:check` now also runs the frontend unit tests (Vitest bundled with Vite+).
+
+| Check | Observed result |
+| --- | --- |
+| `composer ci:check` | Passed: formatting (99 files), lint (77 files, no warnings), TypeScript, 10 frontend unit tests, Pint (93 PHP files), PHPStan level 7, and 122 Laravel tests / 636 assertions |
+| New Laravel tests | `ChatPageTest`, 6 tests: guest and unverified redirects; owner-only list order; next page through the JSON list; latest 50 messages in order with the cursor and a matching JSON older page; private fields absent; another user's and malformed IDs 404. The existing 18 history tests still pass after their controller moved its queries into `ConversationRepository` |
+| Frontend unit tests | 10 tests: Enter, Shift+Enter, other keys, `isComposing`, composition flag, keyCode 229, blank drafts, code-point limits with emoji, title shortening on grapheme boundaries |
+| `npm run build` | Passed; the chat page chunk is 25.1 kB (8.8 kB gzip) |
+| Browser probe | 31/31 checks passed with Playwright 1.64.1 against a built worktree server backed by its own SQLite file and invented data. Chromium desktop: empty state, first-message conversation creation and navigation, Shift+Enter/Enter, synthetic and CDP IME composition, Safari keyCode 229, failed-save alert with draft restored, over-length limit, opening at the bottom, earlier messages with the anchor moving 0px, indentation and long-token wrapping, 12px message spacing, copy success and the no-clipboard failure state, sidebar rename (no leftover pointer lock), dark/light theme, sidebar collapse, accessible names on every button and link. Chromium mobile (390×844, touch): no horizontal overflow, composer inside the viewport, Sheet navigation closing after selection, Enter sending. Firefox and WebKit: the four keyboard/IME checks |
+| Visual review | Light and dark desktop screenshots and mobile screenshots were inspected. The first probe run showed oversized gaps between messages; actions now sit beside user bubbles, and the probe measures the gap |
+| Console | No unexplained errors. Explained notes: the deliberate simulated 500, a Firefox font download aborted by fast navigation, and WebKit ignoring the `interactive-widget` viewport hint |
+
+The probe used `http://localhost` inside the server's network namespace, so the Clipboard API was available as it is at `http://localhost:8080`. On a plain-HTTP non-localhost origin, copy now reports "Copy failed" instead of doing nothing. The CDP IME simulation also inserted a newline after the composed text; a real IME consumes the confirming Enter, which needs a physical-device check.
+
+Not verified: physical iOS/Android keyboards and real IMEs, screen-reader output, and the running development services (the probe used the task branch worktree). Remote CI was not inspected. Optimization: the page loads 25 conversations and 50 messages initially; measure before adding virtualized lists.
+
 ## Publication review — 23 October 2026
 
 Reviewed task 2.2 at `8e29e53`, including ownership checks, serialization, HMAC signing and verification, bounded request reading, strict schemas, duplicate/cancellation handling, setup and private networking. No blocking implementation defect was found. Corrected the server comment and handoff to describe the actual authentication order: header checks precede the bounded body read; signature verification precedes JSON parsing. Clarified that engine admission exists while Laravel run admission and message-write idempotency remain future work. No runtime behavior changed.

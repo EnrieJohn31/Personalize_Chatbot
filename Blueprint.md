@@ -1,12 +1,12 @@
 # Blueprint: Laravel Chatbot Foundation
 
 Updated: 23 October 2026\
-Revision: 10 — Signed private engine contract implemented; execution architecture unchanged\
-Status: Laravel/React, MySQL, owned history/connection-metadata endpoints and a signed, schema-validated private Pi admission boundary run locally. Tasks 2.1–2.2 are implemented; the chat UI, streaming, model execution and provider integration remain. No provider or throughput benchmark has been produced.
+Revision: 11 — Chat page implemented; execution architecture unchanged\
+Status: Laravel/React, MySQL, owned history endpoints, a signed private Pi admission boundary and the chat page run locally. Tasks 2.1–2.3 are implemented; streaming, model execution and provider integration remain. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
 
-Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume tasks 2.3–2.4. Refresh it alongside the build plan after each implementation session.
+Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 2.4. Refresh it alongside the build plan after each implementation session.
 
 ## 1. Goal and agreed foundation
 
@@ -232,6 +232,8 @@ Interaction requirements:
 - Hide upload controls until file processing exists.
 
 Keep the frontend stream implementation behind one hook. Evaluate existing compatible client helpers before writing a parser. Choose one event protocol deliberately; map Pi events into the application's public replay protocol rather than exposing provider-specific frames directly.
+
+Implementation record, 23 October 2026 (task 2.3): [the chat page](docs/chat-ui.md) at `/chat` and `/chat/{conversation}` uses Inertia props for initial data and the `/api/chat` endpoints for later reads and writes through Inertia's XSRF-aware HTTP client. It has an off-canvas conversation sidebar (a Sheet on mobile), a 48rem message column, a composer that respects IME composition, earlier-message loading that preserves scroll, rename, copy and a theme menu. Messages render as plain text until task 2.4 adds Markdown; no assistant replies or Stop exist yet, and upload controls are absent.
 
 ## 8. Laravel-owned runs and Pi execution
 

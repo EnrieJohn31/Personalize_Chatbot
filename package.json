@@ -9,6 +9,7 @@
         "dev": "vp dev",
         "check": "vp check",
         "check:fix": "vp check --fix",
+        "test": "vp test run",
         "types:check": "tsc --noEmit"
     },
     "dependencies": {

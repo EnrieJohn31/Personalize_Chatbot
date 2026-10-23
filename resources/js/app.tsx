@@ -12,7 +12,9 @@ void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     layout: (name) => {
         switch (true) {
+            // The chat page renders its own conversation sidebar.
             case name === 'welcome':
+            case name.startsWith('chat/'):
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;

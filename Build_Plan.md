@@ -1,8 +1,8 @@
 # Build Plan: Laravel + Pi Chatbot
 
 Updated: 24 October 2026\
-Version: 11\
-Companion: [Blueprint.md](Blueprint.md), revision 13; [handoff.md](handoff.md) for the continuation record\
+Version: 12\
+Companion: [Blueprint.md](Blueprint.md), revision 14; [handoff.md](handoff.md) for the continuation record\
 Status: Phases 0–2 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page and simulated replies streamed through Laravel are implemented. Task 3.1's connections are implemented: ChatGPT sign-in, OpenCode Go/Zen keys, an encrypted credential store and a chat choice. The live check with a real account is pending. The user also asked for chat deletion and date sections, which are implemented. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md) and [validation](docs/validation.md).
 
 ## Start here
@@ -175,7 +175,7 @@ Keep a short progress record here as implementation proceeds:
 | Current task | 3.1 — implemented; waiting for the operator's live sign-in and test message |
 | Last completed task | 2.4 — simulated reply stream through Laravel and one React hook (Phase 2 complete) |
 | Actual checks run on the application | Review on 24 October: baseline `composer ci:check` passed (210 Laravel tests / 1107 assertions, 21 frontend tests, format/lint/types/Pint/PHPStan); 55 engine tests passed. After the account-cleanup fix: 32 targeted tests / 342 assertions, PHPStan and changed-file Pint passed. Live `agent:check` and migration-status checks passed — see docs/validation.md |
-| Git checkpoint and branches | Local on `development`: task 3.1 `d7bad7e`, chat/connection additions `09da496`, account-cleanup fix `ac5a7f9`. Nothing from this review was pushed; published branches remain at the Phase 2 publication record `97f5afc` |
+| Git checkpoint and branches | Published to both `main` and `development` on 24 October: task 3.1 `d7bad7e`, chat/connection additions `09da496`, account-cleanup fix `ac5a7f9`, and review record `5345421`. Original commits and messages are preserved; this documentation records that publication |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key, connected on the Connections page |
 | Next checkpoint | Task 3.1: a live test message succeeds; then record persistence across an engine restart and refresh after the token expires |
 
@@ -219,6 +219,8 @@ For each completed task, append: `ID — result — verification/evidence — re
   - Remaining: real OpenCode keys are untested, and chat starts using the chosen connection in task 3.2.
 
 - Review correction — Found that account deletion left engine credentials behind. `ac5a7f9` disconnects all owned supported-provider records before deleting the account, requires confirmed removal and preserves the account on failure. Four new regression cases pass within the 32-test targeted run. Existing implementation commits and the complete history pass the contributor policy; local settings remain ignored. Task 3.1's live acceptance remains open.
+
+- Publication — At the user's request, fast-forwarded `main` and atomically pushed the four reviewed commits through `5345421` to both remote branches. Fetched tips showed no divergence; the full contributor audit and diff checks passed, `.claude/` remained excluded, and both remote hashes matched. No application code changed or application tests reran during publication; remote CI results remain unverified.
 
 ## Completion boundaries
 

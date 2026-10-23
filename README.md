@@ -1,6 +1,6 @@
 # Assistant Foundation
 
-Laravel 13 with the official React/Inertia starter, MySQL 8.4 and a private Node/Pi service. Phases 0–2 are complete: authentication, the development environment, owned history/connection-metadata endpoints, a signed, versioned Laravel-to-engine boundary and the chat page at `/chat`, where replies stream from the engine's deterministic simulation. Phase 3 has started: users can connect their own ChatGPT subscription under Settings → Connections ([guide](docs/chatgpt-connection.md)); real model replies and tools come next.
+Laravel 13 with the official React/Inertia starter, MySQL 8.4 and a private Node/Pi service. Phases 0–2 are complete: authentication, the development environment, owned history/connection-metadata endpoints, a signed, versioned Laravel-to-engine boundary and the chat page at `/chat`, where replies stream from the engine's deterministic simulation. Phase 3 has started: users can connect their own ChatGPT subscription or OpenCode Go/Zen key on the Connections page and choose which one chat uses ([guide](docs/connections.md)); real model replies and tools come next. Conversations are grouped by date and can be deleted singly or several at once.
 
 ## Start locally
 

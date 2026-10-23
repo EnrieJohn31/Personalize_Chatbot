@@ -8,22 +8,31 @@ use App\Data\Agent\ConnectionTestResult;
 use App\Data\Agent\LoginState;
 use App\Services\Ai\AgentGatewayException;
 
-/** Engine sign-in state for controller tests: one connection's status and latest sign-in, in memory. */
+/** Engine connection state for controller tests: per-provider status and the latest ChatGPT sign-in, in memory. */
 final class FakeConnectionGateway implements ConnectionGateway
 {
     public const AUTH_URL = 'https://auth.openai.com/api/accounts/authorize?state=fake-state';
 
-    /** @var list<array{0: string, 1: string, 2?: string}> method, connection ID and the call's argument */
+    /** @var list<array{0: string, 1: string, 2?: string}> method, connection ID and the call's argument (never a key) */
     public array $calls = [];
 
-    public string $status = 'not_connected';
+    /** @var array<string, string> engine status by provider; missing means not_connected */
+    public array $statuses = [];
 
-    public ?int $expiresAt = null;
+    /** @var array<string, int> access token expiry by provider */
+    public array $expiresAt = [];
 
-    /** @var list<string> */
-    public array $models = ['gpt-5.5', 'gpt-5.4-mini', 'gpt-5.4'];
+    /** @var array<string, list<string>> */
+    public array $models = [
+        'openai' => ['gpt-5.5', 'gpt-5.4-mini', 'gpt-5.4'],
+        'opencode-go' => ['glm-5.3', 'beam-free'],
+        'opencode' => ['claude-sonnet-5', 'beam-free'],
+    ];
 
-    /** State of the latest sign-in; null when the engine holds none. */
+    /** @var array<string, string> keys received, to prove they pass through unchanged */
+    public array $keys = [];
+
+    /** State of the latest ChatGPT sign-in; null when the engine holds none. */
     public ?string $loginState = null;
 
     public ?string $loginError = null;
@@ -37,9 +46,9 @@ final class FakeConnectionGateway implements ConnectionGateway
 
     public function connectionStatus(string $connectionId, string $provider): ConnectionStatus
     {
-        $this->call(__FUNCTION__, $connectionId);
+        $this->call(__FUNCTION__, $connectionId, $provider);
 
-        return new ConnectionStatus($connectionId, $provider, $this->status, $this->expiresAt, $this->models);
+        return $this->status($connectionId, $provider);
     }
 
     public function startLogin(string $connectionId, string $provider, string $agentName): LoginState
@@ -76,13 +85,21 @@ final class FakeConnectionGateway implements ConnectionGateway
         return $this->login($connectionId, $provider);
     }
 
+    public function saveKey(string $connectionId, string $provider, string $apiKey): ConnectionStatus
+    {
+        $this->call(__FUNCTION__, $connectionId, $provider);
+        $this->keys[$provider] = $apiKey;
+        $this->statuses[$provider] = 'connected';
+
+        return $this->status($connectionId, $provider);
+    }
+
     public function disconnect(string $connectionId, string $provider): ConnectionStatus
     {
-        $this->call(__FUNCTION__, $connectionId);
-        $this->status = 'not_connected';
-        $this->expiresAt = null;
+        $this->call(__FUNCTION__, $connectionId, $provider);
+        unset($this->statuses[$provider], $this->expiresAt[$provider], $this->keys[$provider]);
 
-        return $this->connectionStatus($connectionId, $provider);
+        return $this->status($connectionId, $provider);
     }
 
     public function testConnection(string $connectionId, string $provider, string $modelId): ConnectionTestResult
@@ -92,19 +109,33 @@ final class FakeConnectionGateway implements ConnectionGateway
         return $this->testResult ?? new ConnectionTestResult($connectionId, $provider, $modelId, true, 1840, 'Connected', null, null);
     }
 
-    /** What the engine holds after a sign-in finished, through the browser or a pasted address. */
-    public function connect(): void
+    /** What the engine holds after a provider connected: a finished ChatGPT sign-in or a saved key. */
+    public function connect(string $provider = 'openai'): void
     {
-        $this->loginState = 'connected';
-        $this->loginError = null;
-        $this->status = 'connected';
-        $this->expiresAt = now()->addHour()->getTimestampMs();
+        $this->statuses[$provider] = 'connected';
+
+        if ($provider === 'openai') {
+            $this->loginState = 'connected';
+            $this->loginError = null;
+            $this->expiresAt[$provider] = now()->addHour()->getTimestampMs();
+        }
     }
 
     /** @return list<string> */
     public function methods(): array
     {
         return array_map(fn (array $call): string => $call[0], $this->calls);
+    }
+
+    private function status(string $connectionId, string $provider): ConnectionStatus
+    {
+        return new ConnectionStatus(
+            $connectionId,
+            $provider,
+            $this->statuses[$provider] ?? 'not_connected',
+            $this->expiresAt[$provider] ?? null,
+            $this->models[$provider] ?? [],
+        );
     }
 
     private function call(string $method, string $connectionId, ?string $argument = null): void

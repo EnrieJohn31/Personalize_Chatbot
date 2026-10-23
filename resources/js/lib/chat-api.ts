@@ -95,6 +95,26 @@ export async function stopRun(runId: string): Promise<void> {
     await request('delete', ChatRunController.destroy.url(runId));
 }
 
+/**
+ * Permanently deletes conversations and their messages. Resolves to the IDs the server deleted;
+ * any others no longer exist for this user.
+ */
+export async function deleteConversations(ids: string[]): Promise<string[]> {
+    const response =
+        ids.length === 1
+            ? await request<{ deleted: string[] }>(
+                  'delete',
+                  ConversationController.destroy.url(ids[0]),
+              )
+            : await request<{ deleted: string[] }>(
+                  'delete',
+                  ConversationController.destroyMany.url(),
+                  { ids },
+              );
+
+    return response.deleted;
+}
+
 async function request<T>(
     method: 'get' | 'post' | 'patch' | 'delete',
     url: string,

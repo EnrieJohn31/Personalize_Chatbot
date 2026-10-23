@@ -18,6 +18,8 @@ All paths below start with `/api/chat`. IDs are server-generated UUIDs.
 | `POST /conversations` | Required `title`; optional nullable `provider_connection_id` | 201 with the saved conversation in `data` |
 | `GET /conversations/{conversation}` | Optional `per_page`, `before_sequence` | Conversation in `data`, bounded history in `messages` |
 | `PATCH /conversations/{conversation}` | Optional `title`, nullable `provider_connection_id` | Updated summary; null detaches the connection |
+| `DELETE /conversations/{conversation}` | None | `{"deleted": [id]}`; the conversation and its messages are gone |
+| `DELETE /conversations` | Required `ids`: 1–100 distinct UUIDs | `{"deleted": [...]}`, the IDs among them that the caller owned |
 | `POST /conversations/{conversation}/messages` | Required `content` | 201 with an appended user message in `data` |
 | `GET /conversations/{conversation}/messages/{message}` | None | One owned, correctly nested message in `data` |
 | `GET /provider-connections` | Optional `page`, `per_page` | Owned connection metadata |
@@ -28,7 +30,9 @@ Titles are required on creation and limited to 200 characters. Message content i
 
 Provider identifiers are lowercase slugs of at most 64 characters. Authentication metadata accepts `oauth`, `api_key` or `none`. These values record intent only: they do not establish provider compatibility, a working login or permission to execute. New records have no credential reference. Credential fields, client-chosen status and ownership are rejected. Only validated fields are written; unrelated extra fields are ignored. Credential references and canonical transcript data are excluded from every public resource and hidden during ordinary model serialization. Actual credentials have no column in these tables.
 
-Connection login, refresh, reconnect and disconnect endpoints belong to Phase 3; creating metadata is not a sign-in action. No conversation/message deletion or editing endpoint is introduced here. Existing account deletion cascades owned history and connection metadata. Deleting connection metadata at the database layer detaches it from conversations and retains their history; future credential cleanup/disconnect behavior must be integrated with the engine.
+Connection sign-in, keys, tests and disconnecting live on the Connections page ([connections.md](connections.md)); creating metadata here is not a sign-in action.
+
+Deleting conversations was added on 24 October 2026 (`ConversationDeletion`). It is permanent: messages go with their conversation through the foreign key. Bulk deletion ignores IDs the caller does not own, without revealing whether they exist. A reply still being written for a deleted conversation is cancelled at the engine, and its slot is freed. A relay that finds its conversation gone ends with a `stream.error` of code `conversation_deleted` and saves nothing. Message editing and single-message deletion are not offered. Existing account deletion cascades owned history and connection metadata. Deleting connection metadata at the database layer detaches it from conversations and retains their history; future credential cleanup/disconnect behavior must be integrated with the engine.
 
 ## Pagination
 

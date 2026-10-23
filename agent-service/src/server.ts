@@ -2,11 +2,14 @@ import { createServer as createHttpServer, type IncomingMessage, type ServerResp
 import { Agent } from '@earendil-works/pi-agent-core';
 import { createModels } from '@earendil-works/pi-ai';
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
+import { opencodeProvider } from '@earendil-works/pi-ai/providers/opencode';
+import { opencodeGoProvider } from '@earendil-works/pi-ai/providers/opencode-go';
 import {
+    CONNECTION_PROVIDERS,
     ConnectionError,
     ConnectionManager,
-    SUBSCRIPTION_PROVIDERS,
-    type SubscriptionProvider,
+    isConnectionProvider,
+    type ConnectionProvider,
 } from './auth/connection-manager.js';
 import { loadConfig, type ServerConfig } from './config.js';
 import {
@@ -17,6 +20,7 @@ import {
     validate,
     type CancelRequest,
     type ConnectionCallbackRequest,
+    type ConnectionKeyRequest,
     type ConnectionLoginRequest,
     type ConnectionTestRequest,
     type ContractName,
@@ -33,8 +37,17 @@ import { runSimulation } from './simulation/simulated-run.js';
 const UUID = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
 const CANCEL_PATH = new RegExp(`^/internal/runs/${UUID}/cancel$`);
 const EVENTS_PATH = new RegExp(`^/internal/runs/${UUID}/events$`);
-const CONNECTION_PATH = new RegExp(`^/internal/connections/${UUID}(/login|/login/callback|/test)?$`);
-const CONNECTION_ROUTES = new Set(['GET /', 'DELETE /', 'POST /login', 'GET /login', 'DELETE /login', 'POST /login/callback', 'POST /test']);
+const CONNECTION_PATH = new RegExp(`^/internal/connections/${UUID}(/login|/login/callback|/key|/test)?$`);
+const CONNECTION_ROUTES = new Set([
+    'GET /',
+    'DELETE /',
+    'POST /login',
+    'GET /login',
+    'DELETE /login',
+    'POST /login/callback',
+    'PUT /key',
+    'POST /test',
+]);
 const SEQUENCE = /^(0|[1-9][0-9]{0,6})$/;
 const JSON_CONTENT_TYPE = /^application\/json\s*(;\s*charset=utf-8\s*)?$/i;
 
@@ -77,7 +90,7 @@ export function createServer(config: ServerConfig = loadConfig(), dependencies: 
               : new ConnectionManager({
                     dataDirectory: config.dataDirectory,
                     key: config.credentialKey,
-                    providers: { openai: openaiProvider },
+                    providers: { openai: openaiProvider, opencode: opencodeProvider, 'opencode-go': opencodeGoProvider },
                     loginTimeoutMs: config.loginTimeoutMs,
                     testTimeoutMs: config.connectionTestTimeoutMs,
                     now: config.now,
@@ -173,6 +186,12 @@ export function createServer(config: ServerConfig = loadConfig(), dependencies: 
             case 'POST /login/callback': {
                 const callback = parseContract<ConnectionCallbackRequest>(request, body, 'connectionCallbackRequest');
                 reply(await connections.completeLogin(connectionId, callback.redirectUrl));
+                return;
+            }
+            case 'PUT /key': {
+                // The key is stored encrypted and never echoed, logged or returned.
+                const key = parseContract<ConnectionKeyRequest>(request, body, 'connectionKeyRequest');
+                reply(await connections.saveKey(connectionId, key.provider, key.apiKey));
                 return;
             }
             case 'POST /test': {
@@ -360,14 +379,13 @@ function invalidPayload(details: Issue[]): HttpError {
     return new HttpError(422, 'invalid_payload', `The request does not match contract version ${CONTRACT_VERSION}.`, details);
 }
 
-function providerParameter(query: URLSearchParams): SubscriptionProvider {
+function providerParameter(query: URLSearchParams): ConnectionProvider {
     const provider = query.get('provider');
-    const known = SUBSCRIPTION_PROVIDERS.find((candidate) => candidate === provider);
-    if (known === undefined) {
-        throw invalidPayload([{ path: '/provider', message: `must be one of ${SUBSCRIPTION_PROVIDERS.join(', ')}` }]);
+    if (!isConnectionProvider(provider)) {
+        throw invalidPayload([{ path: '/provider', message: `must be one of ${Object.keys(CONNECTION_PROVIDERS).join(', ')}` }]);
     }
 
-    return known;
+    return provider;
 }
 
 function sendAcknowledgement(response: ServerResponse, runId: string, status: TrackedStatus, duplicate: boolean): void {

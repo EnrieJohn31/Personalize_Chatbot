@@ -64,6 +64,7 @@ test('connection examples satisfy their v1 schemas', () => {
     const examples = {
         connectionLoginRequest: 'connection-login-request.json',
         connectionCallbackRequest: 'connection-callback-request.json',
+        connectionKeyRequest: 'connection-key-request.json',
         connectionTestRequest: 'connection-test-request.json',
         connectionLogin: 'connection-login.json',
         connectionStatus: 'connection-status.json',
@@ -80,6 +81,10 @@ test('connection answers reject credential fields and inconsistent outcomes', ()
     assert.ok(paths('connectionStatus', { ...status, status: 'expired' }).includes('/status'));
     assert.ok(paths('connectionLogin', { ...example('connection-login.json'), authUrl: 'http://insecure.example' }).includes('/authUrl'));
     assert.ok(paths('connectionLoginRequest', { ...example('connection-login-request.json'), apiKey: 'x' }).includes('/apiKey'));
+    assert.deepEqual(validate('connectionStatus', { ...status, provider: 'opencode-go', expiresAt: null }), []);
+    assert.ok(paths('connectionStatus', { ...status, apiKey: 'leaked' }).includes('/apiKey'));
+    assert.ok(paths('connectionLoginRequest', { ...example('connection-login-request.json'), provider: 'opencode' }).includes('/provider'));
+    assert.ok(paths('connectionKeyRequest', { ...example('connection-key-request.json'), provider: 'openai' }).includes('/provider'));
 
     const ok = example('connection-test-result.json');
     const failure = { code: 'timeout', message: 'The provider did not answer within 60 seconds.' };

@@ -176,7 +176,12 @@ Implementation record, 24 October 2026 (task 3.1): signed `/internal/connections
 - **Published port.** Only the provider's fixed callback port is published, and only on the host loopback (`127.0.0.1:1455`). A pasted redirect address covers browsers that cannot reach it.
 - **Laravel.** It mirrors `connected`/`not_configured`/`reauth_required` into the record that `RunRequestFactory` checks.
 
-The live check with a real account is still pending; see [docs/chatgpt-connection.md](docs/chatgpt-connection.md).
+Extended the same day at the user's request with OpenCode Go and Zen (`opencode-go`, `opencode`).
+- **Credentials.** The user's OpenCode API key reaches the engine once through a signed `PUT /internal/connections/{id}/key` and is stored the same way. Laravel never keeps it.
+- **Chat choice.** A user-level choice of connection and model (`users.chat_connection_id`, `chat_model`) records what chat should use once task 3.2 executes live models.
+- **Credential boundary.** A browser-entered key is a deliberate exception to "credentials are server-managed references": it passes through Laravel without being stored, and the run snapshot still carries only the connection reference.
+
+The live check with a real account is still pending; see [docs/connections.md](docs/connections.md).
 
 Use only Pi as the primary agent engine for this path. The Laravel AI SDK can be revisited if a future requirement changes; do not wrap one complete agent loop inside another.
 

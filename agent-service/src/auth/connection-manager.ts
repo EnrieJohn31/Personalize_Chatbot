@@ -1,10 +1,21 @@
+import { randomUUID } from 'node:crypto';
 import { createModels, ModelsError, type AuthInteraction, type MutableModels, type Provider } from '@earendil-works/pi-ai';
 import { CredentialVault, UnreadableCredentialsError } from './credential-vault.js';
 import { installationId } from './installation.js';
 
-/** Subscription sign-ins this engine offers. Each needs its own verification before it is added. */
-export const SUBSCRIPTION_PROVIDERS = ['openai'] as const;
-export type SubscriptionProvider = (typeof SUBSCRIPTION_PROVIDERS)[number];
+/**
+ * Providers a user can connect, and how: `oauth` is the provider's own browser sign-in, `api_key`
+ * a key the user enters. Each needs its own verification before it is added.
+ */
+export const CONNECTION_PROVIDERS = {
+    openai: 'oauth',
+    opencode: 'api_key',
+    'opencode-go': 'api_key',
+} as const satisfies Record<string, 'oauth' | 'api_key'>;
+export type ConnectionProvider = keyof typeof CONNECTION_PROVIDERS;
+
+export const isConnectionProvider = (value: unknown): value is ConnectionProvider =>
+    typeof value === 'string' && Object.hasOwn(CONNECTION_PROVIDERS, value);
 
 /**
  * Ambient credentials such as OPENAI_API_KEY are never consulted: a missing or failed sign-in
@@ -24,7 +35,7 @@ const STEP_WAIT_MS = 5_000;
 export type LoginState = 'starting' | 'waiting_for_user' | 'exchanging' | 'connected' | 'failed' | 'cancelled';
 
 export interface LoginView {
-    provider: SubscriptionProvider;
+    provider: ConnectionProvider;
     state: LoginState;
     authUrl: string | null;
     error: string | null;
@@ -32,7 +43,7 @@ export interface LoginView {
 }
 
 export interface ConnectionStatus {
-    provider: SubscriptionProvider;
+    provider: ConnectionProvider;
     status: 'connected' | 'not_connected' | 'unreadable';
     expiresAt: number | null;
     models: string[];
@@ -44,7 +55,7 @@ export interface TestFailure {
 }
 
 export interface ConnectionTestResult {
-    provider: SubscriptionProvider;
+    provider: ConnectionProvider;
     modelId: string;
     outcome: 'ok' | 'failed';
     latencyMs: number;
@@ -66,8 +77,8 @@ export class ConnectionError extends Error {
 export interface ConnectionManagerOptions {
     dataDirectory: string;
     key: Buffer;
-    /** Provider factories; tests substitute fakes for the real OpenAI provider. */
-    providers: Record<SubscriptionProvider, () => Provider>;
+    /** Provider factories; tests substitute fakes for the real providers. */
+    providers: Record<ConnectionProvider, () => Provider>;
     loginTimeoutMs: number;
     testTimeoutMs: number;
     now: () => number;
@@ -98,7 +109,8 @@ export class ConnectionManager {
 
     constructor(private readonly options: ConnectionManagerOptions) {}
 
-    async startLogin(connectionId: string, provider: SubscriptionProvider, agentName: string): Promise<LoginView> {
+    async startLogin(connectionId: string, provider: ConnectionProvider, agentName: string): Promise<LoginView> {
+        requireAuthMethod(provider, 'oauth');
         const deviceId = await this.installationId();
 
         // No await between this check and claiming the slot, so concurrent starts cannot both pass.
@@ -144,7 +156,7 @@ export class ConnectionManager {
         return session.view();
     }
 
-    async status(connectionId: string, provider: SubscriptionProvider): Promise<ConnectionStatus> {
+    async status(connectionId: string, provider: ConnectionProvider): Promise<ConnectionStatus> {
         const { vault, models } = this.connection(connectionId);
         const catalog = models.getModels(provider).map((model) => model.id);
 
@@ -164,7 +176,7 @@ export class ConnectionManager {
     }
 
     /** Removes the stored sign-in from this engine. Revoking access at the provider is the user's choice. */
-    async disconnect(connectionId: string, provider: SubscriptionProvider): Promise<ConnectionStatus> {
+    async disconnect(connectionId: string, provider: ConnectionProvider): Promise<ConnectionStatus> {
         if (this.login?.connectionId === connectionId) {
             // A sign-in that already stored its credential still finishes; the logout then removes it.
             await this.login.cancel('The connection was removed.');
@@ -174,8 +186,16 @@ export class ConnectionManager {
         return this.status(connectionId, provider);
     }
 
+    /** Stores a key the user entered for an API-key provider, replacing any earlier one. */
+    async saveKey(connectionId: string, provider: ConnectionProvider, apiKey: string): Promise<ConnectionStatus> {
+        requireAuthMethod(provider, 'api_key');
+        await this.connection(connectionId).vault.modify(provider, async () => ({ type: 'api_key', key: apiKey }));
+
+        return this.status(connectionId, provider);
+    }
+
     /** Sends one short message with the stored sign-in. Uses the provider allowance; only on request. */
-    async test(connectionId: string, provider: SubscriptionProvider, modelId: string): Promise<ConnectionTestResult> {
+    async test(connectionId: string, provider: ConnectionProvider, modelId: string): Promise<ConnectionTestResult> {
         const { models } = this.connection(connectionId);
         const model = models.getModel(provider, modelId);
         if (model === undefined) {
@@ -200,13 +220,14 @@ export class ConnectionManager {
         try {
             // Request paths report auth problems only as stream errors, so resolve the sign-in first.
             if ((await models.getAuth(provider, { signal })) === undefined) {
-                return result(null, { code: 'not_connected', message: 'Sign in before testing the connection.' });
+                return result(null, { code: 'not_connected', message: 'Connect the account before testing it.' });
             }
 
             const message = await models.completeSimple(
                 model,
                 { messages: [{ role: 'user', content: TEST_PROMPT, timestamp: Date.now() }] },
-                { signal, maxTokens: TEST_MAX_TOKENS },
+                // OpenCode routes requests by session; each test is its own session.
+                { signal, maxTokens: TEST_MAX_TOKENS, sessionId: `connection-test-${randomUUID()}` },
             );
             if (message.stopReason === 'aborted') {
                 return result(null, timeout);
@@ -251,7 +272,7 @@ export class ConnectionManager {
         if (connection === undefined) {
             const vault = new CredentialVault(`${this.options.dataDirectory}/credentials`, connectionId, this.options.key);
             const models = createModels({ credentials: vault, authContext: NO_AMBIENT_AUTH });
-            for (const provider of SUBSCRIPTION_PROVIDERS) {
+            for (const provider of Object.keys(CONNECTION_PROVIDERS) as ConnectionProvider[]) {
                 models.setProvider(this.options.providers[provider]());
             }
             connection = { vault, models };
@@ -259,6 +280,13 @@ export class ConnectionManager {
         }
 
         return connection;
+    }
+}
+
+function requireAuthMethod(provider: ConnectionProvider, method: 'oauth' | 'api_key'): void {
+    if (CONNECTION_PROVIDERS[provider] !== method) {
+        const how = CONNECTION_PROVIDERS[provider] === 'oauth' ? 'a browser sign-in' : 'an API key';
+        throw new ConnectionError(422, 'unsupported_auth_method', `${provider} connects with ${how}.`);
     }
 }
 
@@ -321,7 +349,7 @@ class LoginSession {
 
     constructor(
         readonly connectionId: string,
-        readonly provider: SubscriptionProvider,
+        readonly provider: ConnectionProvider,
         private readonly expiresAt: number,
     ) {}
 

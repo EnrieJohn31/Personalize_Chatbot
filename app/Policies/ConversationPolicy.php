@@ -19,4 +19,9 @@ class ConversationPolicy
     {
         return $this->view($user, $conversation);
     }
+
+    public function delete(User $user, Conversation $conversation): Response
+    {
+        return $this->view($user, $conversation);
+    }
 }

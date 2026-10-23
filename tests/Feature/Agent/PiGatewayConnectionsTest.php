@@ -70,6 +70,19 @@ class PiGatewayConnectionsTest extends TestCase
         ]);
     }
 
+    public function test_saving_a_key_sends_it_once_in_a_signed_put(): void
+    {
+        $status = [...$this->example('connection-status.json'), 'provider' => 'opencode-go', 'expiresAt' => null];
+        Http::fake([self::BASE.'/key' => Http::response($status)]);
+
+        $saved = $this->gateway()->saveKey(self::CONNECTION_ID, 'opencode-go', 'oc-key-0123456789');
+
+        $this->assertSame(['opencode-go', 'connected', null], [$saved->provider, $saved->status, $saved->expiresAt]);
+        $this->assertSignedRequests([
+            ['PUT', '/internal/connections/'.self::CONNECTION_ID.'/key', '{"contractVersion":1,"provider":"opencode-go","apiKey":"oc-key-0123456789"}'],
+        ]);
+    }
+
     public function test_a_connection_test_reports_the_engine_result(): void
     {
         Http::fake([self::BASE.'/test' => Http::response($this->example('connection-test-result.json'))]);

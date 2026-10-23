@@ -1,8 +1,51 @@
 # Foundation validation
 
+## Chat deletion, date sections and OpenCode connections — 24 October 2026
+
+These were requested by the user during task 3.1:
+- **Chat.** The sidebar sorts conversations into Today, Yesterday, Previous 7 days and Older. Conversations can be deleted singly or in a multi-select.
+- **Connections.** Connections is now its own page in the main menu. It offers OpenCode Go and Zen through an API key, and stores the user's choice of connection and model for chat.
+
+See [chat-ui.md](chat-ui.md), [chat-history.md](chat-history.md), [connections.md](connections.md) and [the contracts](../contracts/README.md#provider-connections). One additive migration (`users.chat_connection_id`, `chat_model`); no dependency or lockfile changed.
+
+| Check | Observed result |
+| --- | --- |
+| `composer ci:check` | Passed: formatting, lint (92 files), TypeScript, 21 frontend unit tests, Pint (119 PHP files), PHPStan level 7 (no errors), and 210 Laravel tests / 1107 assertions |
+| New Laravel tests | 25 (details below) |
+| Engine `npm test` | 55 tests passed (details below) |
+| Frontend unit tests | 3 new date-section tests: day boundaries at midnight, the seven-day edge, empty sections, kept order, future and unreadable timestamps |
+| Browser probe | 13/13 passed against the task's engine image and a worktree server with seeded SQLite data, on an internal Docker network without internet access (details below) |
+| Visual review | Screenshots of the sections, delete dialog, selection mode, Connections page, connected OpenCode card, chat choice and phone layout were inspected. The chat-choice selects were widened |
+
+**New Laravel tests:**
+- **Deletion (7).** Single and bulk deletion, owner-only, foreign IDs ignored, validation, stopping a running reply and freeing the slot, an untouched reply in another conversation, and a conversation deleted mid-stream ending with `conversation_deleted` and no save.
+- **Connections page (15).** Three providers shown without records created, engine states, the ChatGPT flows, OpenCode keys passing through unchanged and never kept, key validation without old input, method mismatches as 404, the test-message flash, re-authentication, the chat choice with its checks and its reset on disconnect, and per-user isolation.
+- **Gateway (1).** The signed key `PUT`.
+
+**Engine tests (55 passing):**
+- An OpenCode key is stored encrypted, used as the request key with a session ID, replaced, and removed on disconnect.
+- Keys and sign-ins are refused for the wrong providers by both the schemas and the manager.
+- The ambient-key guard now also covers `OPENCODE_API_KEY` against Pi's real OpenCode providers.
+
+**Browser probe (13/13):**
+- Sections as expected.
+- Deleting from the menu with a confirmation.
+- Deleting the open conversation from the header, returning to a new chat with the emptied section gone.
+- Select, title-click toggling, Select all, Clear and deleting two.
+- The deletions persisting after a reload.
+- Connections links in the main menu and the chat sidebar, the old address redirecting, and the item gone from Settings.
+- Three cards.
+- OpenCode Go: a rejected key, then a saved key that never appeared in the page; the free `beam-free` test model failing with "Connection error." on that card only.
+- Chat set to OpenCode Go with `beam-free`; removing the key returned chat to the built-in assistant.
+- A 390px phone width without horizontal scroll; no console errors.
+
+The first probe run passed 11/13 because of a wrong count in the probe itself (5 conversations remained, not 4). The application behaved correctly, which a step-by-step trace confirmed.
+
+Not verified: real OpenCode keys and replies, a real ChatGPT sign-in, and using the chat choice for replies (task 3.2). Remote CI was not inspected.
+
 ## Task 3.1 — 24 October 2026 (implementation; live sign-in pending)
 
-Implemented ChatGPT subscription sign-in. It consists of the engine's `ConnectionManager`, the encrypted per-connection `CredentialVault` and installation ID, six signed connection endpoints with strict v1 schemas, Laravel's `ConnectionGateway`/`SubscriptionConnections`, and the **Settings → Connections** page. See [chatgpt-connection.md](chatgpt-connection.md) and [the contracts](../contracts/README.md#provider-connections).
+Implemented ChatGPT subscription sign-in. It consists of the engine's `ConnectionManager`, the encrypted per-connection `CredentialVault` and installation ID, six signed connection endpoints with strict v1 schemas, Laravel's `ConnectionGateway`/`SubscriptionConnections`, and the **Settings → Connections** page. See [connections.md](connections.md) and [the contracts](../contracts/README.md#provider-connections).
 
 Compose now publishes `127.0.0.1:1455` and adds the `agent-data` volume. `.env` gains `AGENT_CREDENTIAL_KEY` and `ASSISTANT_CONNECTION_TEST_MODEL`. No dependency, lockfile or migration changed.
 

@@ -32,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
 
-        // A pasted ChatGPT sign-in address carries a one-time code; never keep it as old input.
-        $exceptions->dontFlash('redirect_url');
+        // A pasted ChatGPT sign-in address carries a one-time code, and a provider API key is a
+        // credential; never keep either as old input.
+        $exceptions->dontFlash(['redirect_url', 'api_key']);
     })->create();

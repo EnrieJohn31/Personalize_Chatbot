@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests\Settings;
+namespace App\Http\Requests\Connections;
 
 use App\Data\Agent\RunRequest;
 use Illuminate\Foundation\Http\FormRequest;

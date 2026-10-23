@@ -3,13 +3,13 @@
 Updated: 24 October 2026\
 Version: 10\
 Companion: [Blueprint.md](Blueprint.md), revision 12; [handoff.md](handoff.md) for the continuation record\
-Status: Phases 0–2 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page and simulated replies streamed through Laravel are implemented. Task 3.1's ChatGPT sign-in and encrypted credential store are implemented; the live check with a real account is pending. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [ChatGPT connection](docs/chatgpt-connection.md) and [validation](docs/validation.md).
+Status: Phases 0–2 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page and simulated replies streamed through Laravel are implemented. Task 3.1's connections are implemented: ChatGPT sign-in, OpenCode Go/Zen keys, an encrypted credential store and a chat choice. The live check with a real account is pending. The user also asked for chat deletion and date sections, which are implemented. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md) and [validation](docs/validation.md).
 
 ## Start here
 
 Build a reusable chatbot foundation with Laravel, React/Inertia, TypeScript, shadcn/ui, Lucide, MySQL and a private Node/Pi engine. Use Docker Compose/Sail for development. Keep Pi as the engine throughout this plan.
 
-**Next task: finish 3.1 — the operator signs in under Settings → Connections with an eligible ChatGPT account and sends a test message; then 3.2.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
+**Next task: finish 3.1 — the operator connects a real ChatGPT or OpenCode account on the Connections page and sends a test message; then 3.2, which makes chat use the chosen connection.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
 
 Use **Blueprint.md for design decisions** and **this file for work order and progress**. Update both when a decision changes. Read the relevant blueprint sections before each phase; there is no need to reproduce the entire architecture in every task.
 
@@ -176,7 +176,7 @@ Keep a short progress record here as implementation proceeds:
 | Last completed task | 2.4 — simulated reply stream through Laravel and one React hook (Phase 2 complete) |
 | Actual checks run on the application | Task 3.1: `composer ci:check` with 198 Laravel tests / 971 assertions and 18 frontend unit tests; 53 engine tests; mutation checks; npm audits; production build; 12-check browser probe and callback-listener probe against the task's engine image without internet access — see docs/validation.md |
 | Git checkpoint and branches | Task 3.1 is local on `development` (not pushed). All Phase 2 tasks are published to `main` and `development`: tasks 2.3 (`89ff7a1`) and 2.4 (`82497ae`), with attribution review `aded851`, on 23 October 2026 |
-| Known prerequisite for live tests | The operator's eligible ChatGPT account, signed in through Settings → Connections |
+| Known prerequisite for live tests | The operator's eligible ChatGPT account, signed in on the Connections page |
 | Next checkpoint | Task 3.1: a live test message succeeds; then record persistence across an engine restart and refresh after the token expires |
 
 For each completed task, append: `ID — result — verification/evidence — remaining issue, if any`. Record a commit reference when working in Git. Checkboxes remain open for partially implemented or unverified behavior.
@@ -206,12 +206,17 @@ For each completed task, append: `ID — result — verification/evidence — re
 
 ### Progress — 24 October 2026
 
-- 3.1 (implementation) — Each user connects their own ChatGPT account under Settings → Connections through Pi's OpenAI "Sign in with ChatGPT".
+- 3.1 (implementation) — Each user connects their own ChatGPT account on the Connections page through Pi's OpenAI "Sign in with ChatGPT".
   - The engine keeps tokens in a private volume, AES-256-GCM per connection, and never falls back to `OPENAI_API_KEY`.
   - Signed, schema-validated endpoints cover status, sign-in, a pasted redirect, cancel, disconnect and a user-triggered test message.
   - Laravel mirrors only non-secret status into the connection record. The callback port is published on loopback only.
   - Verification: 41 new Laravel tests and 19 new engine tests pass, as do two mutation checks and a 12-check browser probe against the real engine image without internet access. The probe found and fixed a poll/session race.
   - Remaining: checkbox stays open until the operator's live sign-in and test message succeed and persistence and refresh are recorded in docs/provider-matrix.md. Chat replies stay simulated until task 3.2.
+- User-requested additions (during 3.1):
+  - **Chat sidebar.** Conversations are grouped into Today, Yesterday, Previous 7 days and Older. They can be deleted singly (menu or header) or several at once (select mode). Deletion is permanent, stops a running reply and frees the reply slot.
+  - **Connections.** It moved from Settings to its own main-menu page. It adds OpenCode Go and Zen through the user's API key, stored encrypted in the engine like the ChatGPT sign-in, and "Use for chat" stores a connected account and model for task 3.2.
+  - Verification: 25 new Laravel tests, 3 new frontend unit tests, engine tests for keys and the OpenCode ambient-key guard (55 total), and a 13-check browser probe against the real engine image without internet access.
+  - Remaining: real OpenCode keys are untested, and chat starts using the chosen connection in task 3.2.
 
 ## Completion boundaries
 

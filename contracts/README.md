@@ -61,24 +61,26 @@ The simulated run is deterministic: the same request always yields the same Mark
 
 ## Provider connections
 
-A connection ID is the UUID of Laravel's `provider_connections` record. These endpoints are signed like the run endpoints (a `GET` or `DELETE` hashes the empty body). They return `503 credential_store_not_configured` until the engine has `AGENT_CREDENTIAL_KEY`. They never return, log or accept a token. See [the ChatGPT connection guide](../docs/chatgpt-connection.md) for the flow and storage.
+A connection ID is the UUID of Laravel's `provider_connections` record. Providers are `openai` (ChatGPT, browser sign-in) and `opencode-go` and `opencode` (OpenCode Go and Zen, API key). These endpoints are signed like the run endpoints (a `GET` or `DELETE` hashes the empty body). They return `503 credential_store_not_configured` until the engine has `AGENT_CREDENTIAL_KEY`. They never return or log a credential; only the key endpoint accepts one. See [the connections guide](../docs/connections.md) for the flow and storage.
 
-| Request                                             | Body                                      | Success: `200` with                  |
-| --------------------------------------------------- | ----------------------------------------- | ------------------------------------ |
-| `GET /internal/connections/{id}?provider=openai`    | None                                      | `connection-status.schema.json`      |
-| `DELETE /internal/connections/{id}?provider=openai` | None; removes the stored sign-in          | `connection-status.schema.json`      |
-| `POST /internal/connections/{id}/login`             | `connection-login-request.schema.json`    | `connection-login.schema.json`       |
-| `GET /internal/connections/{id}/login`              | None; the connection's latest sign-in     | `connection-login.schema.json`       |
-| `DELETE /internal/connections/{id}/login`           | None; cancels it                          | `connection-login.schema.json`       |
-| `POST /internal/connections/{id}/login/callback`    | `connection-callback-request.schema.json` | `connection-login.schema.json`       |
-| `POST /internal/connections/{id}/test`              | `connection-test-request.schema.json`     | `connection-test-result.schema.json` |
+| Request                                                 | Body                                                   | Success: `200` with                  |
+| ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------ |
+| `GET /internal/connections/{id}?provider={provider}`    | None                                                   | `connection-status.schema.json`      |
+| `DELETE /internal/connections/{id}?provider={provider}` | None; removes the stored sign-in or key                | `connection-status.schema.json`      |
+| `POST /internal/connections/{id}/login`                 | `connection-login-request.schema.json` (`openai` only) | `connection-login.schema.json`       |
+| `GET /internal/connections/{id}/login`                  | None; the connection's latest sign-in                  | `connection-login.schema.json`       |
+| `DELETE /internal/connections/{id}/login`               | None; cancels it                                       | `connection-login.schema.json`       |
+| `POST /internal/connections/{id}/login/callback`        | `connection-callback-request.schema.json`              | `connection-login.schema.json`       |
+| `PUT /internal/connections/{id}/key`                    | `connection-key-request.schema.json` (OpenCode only)   | `connection-status.schema.json`      |
+| `POST /internal/connections/{id}/test`                  | `connection-test-request.schema.json`                  | `connection-test-result.schema.json` |
 
-- **Status.** It reads only the engine's encrypted store and never calls the provider. `unreadable` means a stored file cannot be decrypted, for example after the key changed. A new sign-in replaces it.
+- **Status.** It reads only the engine's encrypted store and never calls the provider. `unreadable` means a stored file cannot be decrypted, for example after the key changed. A new sign-in or key replaces it.
+- **Key.** It stores an API key (8–512 printable characters without spaces) for an API-key provider, replacing any earlier one. Different providers of the same connection keep separate credentials.
 - **Login states.** A sign-in moves through `starting` → `waiting_for_user` (with `authUrl`, the provider page the user opens) → `exchanging` → `connected`, `failed` or `cancelled`. Starting answers once the sign-in page is known; a pasted redirect or a cancel answers once the outcome is known. Either waits at most about 5 seconds, and the caller polls after that.
     - There is one sign-in at a time because the provider fixes the callback port. Starting again for the same connection returns its pending sign-in; another connection gets `409 login_in_progress`.
     - An unfinished sign-in is cancelled after 10 minutes. Sign-ins in progress are lost on an engine restart; stored credentials are not.
 - **Callback.** The pasted redirect must match the pending sign-in's `redirect_uri` and `state` and carry a `code`. Otherwise it is refused with `422 invalid_redirect` and the sign-in keeps waiting. An address that reports `error=` is passed on and ends the sign-in as `failed`.
-- **Test.** It sends one short message with the stored sign-in, so it counts against the user's plan. It refreshes an expiring token first. Provider problems are a `200` with `outcome: failed` and one of `not_connected`, `reauth_required`, `credentials_unreadable`, `provider_error` or `timeout` (60 seconds). Ambient credentials such as `OPENAI_API_KEY` are never used.
+- **Test.** It sends one short message with the stored credential, so it can count against the user's plan or balance. It refreshes an expiring token first and sends a fresh session ID, which OpenCode requires. Provider problems are a `200` with `outcome: failed` and one of `not_connected`, `reauth_required`, `credentials_unreadable`, `provider_error` or `timeout` (60 seconds). Ambient credentials such as `OPENAI_API_KEY` and `OPENCODE_API_KEY` are never used.
 
 ## Error codes
 
@@ -103,6 +105,7 @@ A connection ID is the UUID of Laravel's `provider_connections` record. These en
 | 409  | `login_not_waiting`               | Connections: a redirect was pasted after the sign-in moved on                    | No                     |
 | 422  | `invalid_redirect`                | Connections: the pasted address does not belong to the pending sign-in           | With the right address |
 | 422  | `unknown_model`                   | Connections: the test model is not in the engine's catalog                       | No                     |
+| 422  | `unsupported_auth_method`         | Connections: a key for a sign-in provider, or a sign-in for a key provider       | No                     |
 | 503  | `credential_store_not_configured` | Connections: engine has no `AGENT_CREDENTIAL_KEY`                                | After configuration    |
 
 `App\Services\Ai\AgentGatewayException` exposes these codes as `reason`. It adds four Laravel-side reasons: `not_configured` (missing or short key; nothing sent), `unavailable` (connection failure, timeout or a bare 5xx; retryable), `stream_interrupted` (an event stream ended or stalled before its terminal event; read again to resume) and `invalid_response` (anything outside this contract, including another contract version or an out-of-order event). For an engine rejection, `engineMessage` keeps the engine's own message; the settings page shows it for `invalid_redirect`.

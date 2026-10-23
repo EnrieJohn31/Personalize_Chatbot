@@ -1,6 +1,6 @@
 # Chat page and replies — tasks 2.3–2.4
 
-Implemented: 23 October 2026. The signed-in chat interface over the task 2.1 history endpoints (task 2.3), with replies streamed from the engine through Laravel (task 2.4). In development the engine's deterministic simulated provider writes the replies; chat calls no model until task 3.2 uses the ChatGPT connection from [task 3.1](chatgpt-connection.md).
+Implemented: 23 October 2026. The signed-in chat interface over the task 2.1 history endpoints (task 2.3), with replies streamed from the engine through Laravel (task 2.4). In development the engine's deterministic simulated provider writes the replies; chat calls no model until task 3.2 uses the ChatGPT connection from [task 3.1](connections.md).
 
 ## Routes and data
 
@@ -37,14 +37,25 @@ After the first render, the page uses the `/api/chat` endpoints described in [ch
 - **Keyboard.** Enter sends and Shift+Enter inserts a line. Nothing sends during an input-method composition: `isComposing`, composition events and Safari's keyCode 229 confirming Enter are all respected. The rules live in `resources/js/lib/chat-composer.ts` with unit tests.
 - **Limits.** Drafts follow the server: blank text cannot be sent, and the 12,000-character limit counts code points like PHP's `mb_strlen`. A counter appears at 90% and an over-length draft is marked invalid. Titles allow 200 characters.
 - **Transcript.** The view follows new messages, a growing reply and its status changes only while the reader is within 80px of the bottom, or after they send. "Load earlier messages" fetches the previous page and keeps the reading position.
-- **Navigation.** A collapsible conversation sidebar (off-canvas on desktop, a Sheet on mobile) with New chat, the conversation list, "Show more conversations", per-conversation Rename and the existing user menu. The main app sidebar has a Chat link.
-- **Header.** Sidebar toggle, title, Rename for an existing conversation and a Light/Dark/System theme menu backed by the existing appearance setting.
+- **Navigation.** A collapsible conversation sidebar (off-canvas on desktop, a Sheet on mobile) holds:
+  - New chat.
+  - The conversation list, grouped into Today, Yesterday, Previous 7 days and Older by last activity in the viewer's local calendar (`lib/conversation-groups.ts`, unit-tested).
+  - "Show more conversations".
+  - Per-conversation Rename and Delete.
+  - A Connections link and the existing user menu.
+
+  The main app sidebar has Chat and Connections links.
+- **Deleting.**
+  - **One conversation.** Delete it from its menu or from the header, after a confirmation dialog.
+  - **Several conversations.** **Select** switches the list to checkboxes, and the title toggles its checkbox as well. A bar shows the count, Select all or Clear, and **Delete selected**.
+  - **After deleting.** Deletion is permanent and stops a reply that is still being written. Deleting the open conversation returns to a new chat. A toast confirms, and the status region announces it.
+- **Header.** Sidebar toggle, title, Rename and Delete for an existing conversation, and a Light/Dark/System theme menu backed by the existing appearance setting.
 - **Accessibility.** Icon-only controls have labels and tooltips, messages carry screen-reader speaker labels, and a polite status region announces sending, reply progress ("The assistant is replying", "Reply complete", "Reply stopped"), renames and failures. It never reads the streamed text. A reply being written is marked `aria-busy`. Errors use `role="alert"`.
 - **Mobile.** The page is a full-height flex column, so the composer stays at the bottom. The viewport meta adds `interactive-widget=resizes-content`, which lets Chrome on Android shrink the layout above the on-screen keyboard. Safari ignores the hint and logs a console note. Upload controls are not shown.
 
 ## Not included yet
 
-Real model replies (task 3.x), tool use, reply editing or regeneration, message or conversation deletion and uploads. User-message writes are still not idempotent: retrying after an ambiguous network failure can save the same text twice (see [chat-history.md](chat-history.md)). Durable execution independent of any reader, server-side event retention, interruption detection after an engine restart, and heartbeats from Laravel to the browser arrive with Phases 4–5.
+Real model replies (task 3.x), tool use, reply editing or regeneration, single-message deletion and uploads. User-message writes are still not idempotent: retrying after an ambiguous network failure can save the same text twice (see [chat-history.md](chat-history.md)). Durable execution independent of any reader, server-side event retention, interruption detection after an engine restart, and heartbeats from Laravel to the browser arrive with Phases 4–5.
 
 ## Main files
 
@@ -55,10 +66,11 @@ Real model replies (task 3.x), tool use, reply editing or regeneration, message 
 | `app/Services/Chat/ActiveRuns.php` | Cache-backed run ownership and the one-reply-per-user slot |
 | `app/Services/Chat/ConversationRepository.php` | Shared list/history paging and the idempotent assistant-message save |
 | `app/Data/Agent/RunEvent.php`, `app/Services/Ai/PiGateway.php` | Strict engine event parsing and the signed NDJSON stream reader |
-| `resources/js/pages/chat/index.tsx` | Page state: send, create, replies, earlier history and rename |
+| `app/Services/Chat/ConversationDeletion.php` | Deleting owned conversations and stopping their reply |
+| `resources/js/pages/chat/index.tsx` | Page state: send, create, replies, earlier history, rename, selection and deletion |
 | `resources/js/hooks/use-chat-run.ts`, `lib/chat-run-state.ts` | One reply at a time: EventSource, Stop and the tested reply reducer |
-| `resources/js/components/chat/` | Sidebar, header, message list, message, Markdown, composer and rename dialog |
-| `resources/js/hooks/use-conversations.ts` | Sidebar list, later pages and renames |
+| `resources/js/components/chat/` | Sidebar, header, message list, message, Markdown, composer, rename and delete dialogs |
+| `resources/js/hooks/use-conversations.ts`, `lib/conversation-groups.ts` | Sidebar list, later pages, renames, deletions and date sections |
 | `resources/js/lib/chat-api.ts`, `chat-composer.ts` | API calls and testable composer rules |
 | `tests/Feature/Chat/ChatPageTest.php`, `ChatRunTest.php`, `tests/Feature/Agent/PiGatewayEventsTest.php`, `tests/Unit/Agent/RunEventTest.php`, `resources/js/lib/*.test.ts` | Page, relay, gateway, event and frontend rule tests |
 

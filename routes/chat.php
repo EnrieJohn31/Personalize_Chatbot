@@ -9,6 +9,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth', 'verified'])->prefix('api/chat')->name('chat.')->scopeBindings()->group(function (): void {
     Route::get('conversations', [ConversationController::class, 'index'])->name('conversations.index');
     Route::post('conversations', [ConversationController::class, 'store'])->name('conversations.store');
+    // Bulk delete takes a JSON body of IDs; only the caller's own conversations are deleted.
+    Route::delete('conversations', [ConversationController::class, 'destroyMany'])->name('conversations.destroy-many');
+    Route::delete('conversations/{conversation}', [ConversationController::class, 'destroy'])
+        ->can('delete', 'conversation')->name('conversations.destroy');
     Route::get('conversations/{conversation}', [ConversationController::class, 'show'])
         ->can('view', 'conversation')->name('conversations.show');
     Route::patch('conversations/{conversation}', [ConversationController::class, 'update'])

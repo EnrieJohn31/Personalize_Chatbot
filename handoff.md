@@ -4,30 +4,30 @@ Updated: 24 October 2026. Read this file first when resuming work.
 
 ## Where we stopped
 
-**Phase 2 (tasks 2.1–2.4) is implemented, and task 3.1's ChatGPT sign-in is implemented and checked without a real account. Task 3.1 is finished when the operator signs in under Settings → Connections with an eligible ChatGPT account and a test message succeeds.**
+**Phase 2 (tasks 2.1–2.4) is implemented. Task 3.1's connections are implemented and checked without real accounts: ChatGPT sign-in, plus OpenCode Go and Zen keys added at the user's request. Task 3.1 is finished when the operator connects a real account on the Connections page and a test message succeeds.**
 
 The application provides:
 
 - The Laravel React authentication starter and MySQL persistence.
 - Owned history/connection-metadata endpoints.
 - A signed, schema-validated Laravel-to-Pi boundary.
-- The chat page at `/chat`.
-- Per-user ChatGPT sign-in, with tokens encrypted inside the engine.
+- The chat page at `/chat`, with conversations grouped by Today, Yesterday, Previous 7 days and Older, and deletion of one or several conversations.
+- A Connections page in the main menu: per-user ChatGPT sign-in and OpenCode Go/Zen keys, encrypted inside the engine, and a choice of which connection and model chat uses.
 
-Replies still stream from the engine's deterministic simulation through a Stage A Laravel relay. Real model execution (task 3.2), tools and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the ChatGPT connection](docs/chatgpt-connection.md).
+Replies still stream from the engine's deterministic simulation through a Stage A Laravel relay. Real model execution (task 3.2), tools and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the connections guide](docs/connections.md).
 
-| Document                                                 | Use it for                                                               |
-| -------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [Blueprint.md](Blueprint.md)                             | Architecture, ownership, security boundaries and acceptance requirements |
-| [Build_Plan.md](Build_Plan.md)                           | Numbered tasks, completion checkboxes and progress                       |
-| [docs/setup.md](docs/setup.md)                           | Installation, daily commands and troubleshooting                         |
-| [docs/validation.md](docs/validation.md)                 | Dated checks for Phase 1 and tasks 2.1–3.1, with their limits            |
-| [docs/chatgpt-connection.md](docs/chatgpt-connection.md) | Task 3.1 ChatGPT sign-in: use, flow, storage, setup and limits           |
-| [docs/chat-history.md](docs/chat-history.md)             | Task 2.1 endpoints, ownership, storage, pagination and limits            |
-| [docs/chat-ui.md](docs/chat-ui.md)                       | Tasks 2.3–2.4 chat page, Stage A reply relay, events and checks          |
-| [contracts/README.md](contracts/README.md)               | Engine schemas, request signing, admission, event stream and error codes |
-| [docs/runtime-versions.md](docs/runtime-versions.md)     | Installed versions, image identities and compatibility sources           |
-| [docs/provider-matrix.md](docs/provider-matrix.md)       | Provider path, ownership and what is verified or still untested          |
+| Document                                             | Use it for                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Blueprint.md](Blueprint.md)                         | Architecture, ownership, security boundaries and acceptance requirements |
+| [Build_Plan.md](Build_Plan.md)                       | Numbered tasks, completion checkboxes and progress                       |
+| [docs/setup.md](docs/setup.md)                       | Installation, daily commands and troubleshooting                         |
+| [docs/validation.md](docs/validation.md)             | Dated checks for Phase 1 and tasks 2.1–3.1, with their limits            |
+| [docs/connections.md](docs/connections.md)           | Task 3.1 ChatGPT and OpenCode connections and the chat choice            |
+| [docs/chat-history.md](docs/chat-history.md)         | Task 2.1 endpoints (and deletion), ownership, storage and pagination     |
+| [docs/chat-ui.md](docs/chat-ui.md)                   | Chat page, date sections, deletion, Stage A reply relay and checks       |
+| [contracts/README.md](contracts/README.md)           | Engine schemas, request signing, admission, event stream and error codes |
+| [docs/runtime-versions.md](docs/runtime-versions.md) | Installed versions, image identities and compatibility sources           |
+| [docs/provider-matrix.md](docs/provider-matrix.md)   | Provider path, ownership and what is verified or still untested          |
 
 ## Completed and checked
 
@@ -45,7 +45,7 @@ Replies still stream from the engine's deterministic simulation through a Stage 
 - Task 2.3 verification: `composer ci:check` passed with 122 Laravel tests / 636 assertions (6 new page tests), 10 frontend unit tests, Pint (93 files), PHPStan level 7 and frontend format/lint/types; the production build passed. A 31-check Playwright probe passed against a built worktree server with its own SQLite data. It covered desktop and 390px mobile layouts, Enter, Shift+Enter and IME composition in Chromium, Firefox and WebKit, failure and length handling, scroll preservation, rename, copy, theme, sidebar and accessible names. Screenshots were reviewed and a spacing defect fixed. Physical-device keyboards and real IMEs remain unverified. See [docs/validation.md](docs/validation.md).
 - Task 2.4: the engine runs admitted runs as a deterministic simulation and streams contract events from `GET /internal/runs/{id}/events` (replay, then follow; NDJSON with heartbeats). The labelled Stage A `ChatRunController` admits one reply per user (`ActiveRuns`, cache-backed) and relays server-sent events with the engine sequence as the event ID. It saves the final reply once per run through `ConversationRepository::appendAssistantMessage`, also after the browser disconnects, and forwards Stop. The page streams through `hooks/use-chat-run.ts` and a tested reducer, renders replies with safe Markdown, resumes an active reply after a reload, and offers "Get a reply" for an unanswered message without saving it again. Added `react-markdown` and `remark-gfm`; no migration changed.
 - Task 2.4 verification: `composer ci:check` passed with 157 Laravel tests / 756 assertions (35 new), 18 frontend unit tests, Pint (100 files) and PHPStan level 7 (74 files); 34 engine tests passed and both npm audits found 0 vulnerabilities. Timing traces showed events arriving in the browser at the engine's pace. An 11-check full-stack browser probe passed: incremental text, safe Markdown with an injection attempt neutralized, one final reply, reload-resume, Stop, saving after the tab closed, the new-chat flow and mobile. See [docs/validation.md](docs/validation.md).
-- Task 3.1 (implementation): **Settings → Connections** lets each user connect their own ChatGPT account through Pi 1.4.0's OpenAI "Sign in with ChatGPT".
+- Task 3.1 (implementation): a Connections page (first under Settings; in the main menu since 24 October) lets each user connect their own ChatGPT account through Pi 1.4.0's OpenAI "Sign in with ChatGPT".
     - **Engine.**
         - `ConnectionManager` runs the sign-in, one at a time with a 10-minute limit. It pre-checks a pasted redirect, runs a user-triggered test message and disconnects.
         - `CredentialVault` stores one AES-256-GCM file per connection in the private `agent-data` volume. The key comes from `AGENT_CREDENTIAL_KEY`, and the connection ID is authenticated data.
@@ -61,6 +61,18 @@ Replies still stream from the engine's deterministic simulation through a Stage 
     - 53 engine tests passed (19 new), and both npm audits found 0 vulnerabilities. Two mutation checks failed exactly their target tests.
     - A 12-check browser probe and a callback-listener probe ran against the real task image on a network without internet access. They found and fixed a poll/session race that hid inline errors.
     - **Not yet done:** the live sign-in with a real account, a real test reply, persistence across a restart and a refresh after expiry. The 3.1 checkbox stays open until then. See [docs/validation.md](docs/validation.md) and [docs/provider-matrix.md](docs/provider-matrix.md).
+- User-requested additions on 24 October 2026:
+    - **Chat.** The sidebar groups conversations into Today, Yesterday, Previous 7 days and Older. Conversations can be deleted one at a time (menu or header) or several at once (Select, Select all, Delete selected), after confirmation.
+        - `DELETE /api/chat/conversations/{id}` and `DELETE /api/chat/conversations` (bulk, own IDs only) delete permanently through `ConversationDeletion`.
+        - Deletion cancels a reply still being written for that conversation and frees the reply slot. The relay ends a vanished conversation's stream with `conversation_deleted`.
+    - **Connections.** It moved from Settings to its own page (`/connections`) in the main menu and the chat sidebar; the old address redirects.
+        - It now offers OpenCode Go and OpenCode Zen through the user's OpenCode API key. A signed `PUT /internal/connections/{id}/key` stores the key encrypted in the engine.
+        - **Use for chat** stores a connected account and model on the user (`users.chat_connection_id`, `chat_model`; one additive migration). Task 3.2 is to read it.
+        - `SubscriptionConnections` became `ProviderConnections`, configured by `assistant.connection_providers`.
+- Additions verification:
+    - `composer ci:check` passed with 210 Laravel tests / 1107 assertions (25 new), 21 frontend unit tests (3 new), Pint (119 files) and PHPStan level 7.
+    - 55 engine tests passed. A 13-check browser probe ran against the real engine image without internet access and covered the date sections, single, header and multi-select deletion, persistence, navigation, OpenCode key validation and storage, the test-message failure, the chat choice and key removal.
+    - See [docs/validation.md](docs/validation.md).
 
 ## Resume this checkout
 
@@ -91,7 +103,15 @@ docker compose exec --user sail laravel.test npm run build
 docker compose exec --user sail laravel.test php artisan agent:check   # providerAuth: configured
 ```
 
-Open [the login page](http://localhost:8080/login), then [the chat page](http://localhost:8080/chat) or [Settings → Connections](http://localhost:8080/settings/connections). Register your own local account if needed. Email is not delivered: the verification link is written MIME-encoded to `storage/logs/laravel.log`; [setup](docs/setup.md#service-boundary-and-state) explains how to read it and that it must be opened on the same host you signed in on. For first-time installation or a missing dependency tree, use `./scripts/setup.ps1`; normal continuation does not require reinstalling dependencies.
+**Once per existing checkout after the 24 October additions:** run the new migration, rebuild the engine (OpenCode providers and the key endpoint) and rebuild the frontend:
+
+```powershell
+docker compose exec --user sail laravel.test php artisan migrate
+docker compose up -d --build agent
+docker compose exec --user sail laravel.test npm run build
+```
+
+Open [the login page](http://localhost:8080/login), then [the chat page](http://localhost:8080/chat) or [Connections](http://localhost:8080/connections). Register your own local account if needed. Email is not delivered: the verification link is written MIME-encoded to `storage/logs/laravel.log`; [setup](docs/setup.md#service-boundary-and-state) explains how to read it and that it must be opened on the same host you signed in on. For first-time installation or a missing dependency tree, use `./scripts/setup.ps1`; normal continuation does not require reinstalling dependencies.
 
 ```powershell
 # Optional frontend hot reload; keep this terminal open.
@@ -112,15 +132,15 @@ Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal
 
 The remaining 3.1 step needs the operator; nothing in the repository can substitute for it.
 
-1. Sign in at [Settings → Connections](http://localhost:8080/settings/connections) with an eligible ChatGPT account.
-2. Choose **Send test message**. The default model is `gpt-5.4-mini`; try another if OpenAI refuses it for the plan.
+1. On [Connections](http://localhost:8080/connections), sign in with an eligible ChatGPT account, or paste an OpenCode API key into the Go or Zen card.
+2. Choose **Send test message**. ChatGPT tests default to `gpt-5.4-mini`; OpenCode tests default to the free `beam-free`. Try another model if the provider refuses it.
 3. Run `docker compose restart agent` and confirm the page still shows **Connected**, which proves persistence.
 4. After the access token's expiry time, shown on the page, send another test message. A successful reply means the refresh works.
 5. Record the dates and outcomes, but no tokens or personal data, in [docs/provider-matrix.md](docs/provider-matrix.md). Then check 3.1 in the Build Plan.
 
 **Acceptance (3.1):** a live request succeeds; credential persistence and expiry/re-authentication behavior are checked.
 
-Before task 3.2 sends real replies, widen `messages.content` (currently MySQL `TEXT`, 65,535 bytes) with an additive migration; the event contract allows final answers of 200,000 characters. Task 3.2 then replaces the simulation in `agent-service/src/server.ts` (`execute()`) with a fresh Pi Agent per run that emits the same contract events; the relay, page and tests stay as they are. Its model access comes from the run's `connectionId` through `ConnectionManager`'s per-connection `Models` (the same vault, so refreshes stay serialized). It also needs a way to choose the user's connection for a conversation; Laravel's `RunRequestFactory` already requires an owned connection with status `connected`.
+Before task 3.2 sends real replies, widen `messages.content` (currently MySQL `TEXT`, 65,535 bytes) with an additive migration; the event contract allows final answers of 200,000 characters. Task 3.2 then replaces the simulation in `agent-service/src/server.ts` (`execute()`) with a fresh Pi Agent per run that emits the same contract events; the relay, page and tests stay as they are. Its model access comes from the run's `connectionId` through `ConnectionManager`'s per-connection `Models` (the same vault, so refreshes stay serialized). `RunRequestFactory` should then take the provider, model and connection from the user's chat choice (`users.chat_connection_id`, `chat_model`), falling back to the built-in profile when none is chosen. It already requires an owned connection with status `connected`. The engine must admit `openai`, `opencode` and `opencode-go` runs only with the run's own connection.
 
 ## Remaining work in order
 
@@ -148,7 +168,9 @@ Use the build plan's individual acceptance checks; this table does not replace t
     - Disconnecting removes the tokens from the engine only; revoking at OpenAI is the user's step.
     - Changing `AGENT_CREDENTIAL_KEY` makes stored sign-ins unreadable. `docker compose down -v` deletes them.
     - Within the Compose network, other containers can reach the callback listener during a sign-in.
-    - See [docs/chatgpt-connection.md](docs/chatgpt-connection.md).
+    - An OpenCode API key crosses browser → Laravel once on its way to the engine; Laravel never stores, logs or flashes it. Use HTTPS outside local development.
+    - See [docs/connections.md](docs/connections.md).
+- Conversation deletion is permanent (no trash or undo); messages go with their conversation through the foreign key.
 - The Stage A relay saves a reply only while some reader follows its stream; opening the conversation within about four minutes resumes and saves a run whose stream was never opened. Each open stream occupies one PHP CLI server worker (four in development). Laravel sends no heartbeats to the browser yet, which matters behind proxies. An engine restart mid-reply surfaces as a failed reply rather than a detected interruption. Phases 4–5 replace these limits.
 - `messages.content` is MySQL `TEXT` (65,535 bytes); widen it before real replies (see the next task).
 - Physical iOS/Android keyboards, real IMEs and screen readers have not been checked; the browser probes are not part of CI yet (a candidate for task 6.1) and are kept in ignored `.setup/`. The `interactive-widget=resizes-content` viewport hint helps Chrome on Android keep the composer above the keyboard; Safari ignores it with a console note.
@@ -190,7 +212,7 @@ Before future commits, review `git status` and the staged file list. Keep `.env`
 Read handoff.md, Blueprint.md and Build_Plan.md in this repository.
 Confirm the current Git and Docker state; preserve the existing local history.
 Continue on development, which tracks origin/development.
-Task 3.1's ChatGPT sign-in is implemented; I have signed in under Settings → Connections
+Task 3.1's ChatGPT sign-in is implemented; I have signed in on the Connections page
 and will report the test-message result. Record login, persistence, refresh and
 re-authentication results in docs/provider-matrix.md (no tokens or personal data), then
 implement task 3.2: real Pi replies through the user's connection, after widening messages.content.

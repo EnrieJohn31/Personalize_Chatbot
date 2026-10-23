@@ -51,6 +51,14 @@ interface ConnectionGateway
     public function cancelLogin(string $connectionId, string $provider): LoginState;
 
     /**
+     * Store the key a user entered for an API-key provider, replacing any earlier one. The engine
+     * encrypts it and never returns it.
+     *
+     * @throws AgentGatewayException
+     */
+    public function saveKey(string $connectionId, string $provider, string $apiKey): ConnectionStatus;
+
+    /**
      * Remove the engine-held sign-in. Access granted at the provider stays until the user revokes it there.
      *
      * @throws AgentGatewayException

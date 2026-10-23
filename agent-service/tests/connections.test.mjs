@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { createFauxCore, createModels, createProvider, fauxAssistantMessage, InMemoryCredentialStore } from '@earendil-works/pi-ai';
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
+import { opencodeProvider } from '@earendil-works/pi-ai/providers/opencode';
+import { opencodeGoProvider } from '@earendil-works/pi-ai/providers/opencode-go';
 import { ConnectionManager } from '../dist/auth/connection-manager.js';
 import { CredentialVault } from '../dist/auth/credential-vault.js';
 import { loadConfig } from '../dist/config.js';
@@ -98,8 +100,25 @@ function fakeOpenAI(behaviour = {}) {
     return fake;
 }
 
+/** Stand-in for an API-key provider such as OpenCode: the stored key is the request key. */
+function fakeKeyProvider(id) {
+    const core = createFauxCore({ provider: id, models: [{ id: `${id}-model` }] });
+    const auth = {
+        apiKey: {
+            name: `Fake ${id} key`,
+            resolve: async ({ credential }) => (credential?.key ? { auth: { apiKey: credential.key } } : undefined),
+        },
+    };
+
+    return {
+        core,
+        provider: () => createProvider({ id, auth, models: core.models, api: { stream: core.stream, streamSimple: core.streamSimple } }),
+    };
+}
+
 async function start(options = {}) {
     const { fake = fakeOpenAI(), key = randomBytes(32), loginTimeoutMs = 60_000 } = options;
+    const keys = options.keys ?? { opencode: fakeKeyProvider('opencode'), 'opencode-go': fakeKeyProvider('opencode-go') };
     const dir = options.dataDirectory ?? (await mkdtemp(join(tmpdir(), 'engine-')));
     const logs = [];
     const connections =
@@ -108,7 +127,7 @@ async function start(options = {}) {
             : new ConnectionManager({
                   dataDirectory: dir,
                   key,
-                  providers: { openai: fake.provider },
+                  providers: { openai: fake.provider, opencode: keys.opencode.provider, 'opencode-go': keys['opencode-go'].provider },
                   loginTimeoutMs,
                   testTimeoutMs: 5_000,
                   now: Date.now,
@@ -122,7 +141,7 @@ async function start(options = {}) {
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
 
-    return { baseUrl: `http://127.0.0.1:${server.address().port}`, fake, dir, logs, responses: [] };
+    return { baseUrl: `http://127.0.0.1:${server.address().port}`, fake, keys, dir, logs, responses: [] };
 }
 
 async function call(engine, method, path, payload, { contentType = 'application/json', signed = true } = {}) {
@@ -182,15 +201,21 @@ test('connection endpoints need a signature and a configured credential store', 
     assert.equal((await (await fetch(`${engine.baseUrl}/internal/health`)).json()).providerAuth, 'configured');
 });
 
-test('the real OpenAI provider is never authenticated by an ambient API key', async () => {
+test('the real providers are never authenticated by an ambient API key', async () => {
     process.env.OPENAI_API_KEY = 'sk-ambient-key-that-must-not-be-used';
+    process.env.OPENCODE_API_KEY = 'ambient-opencode-key-that-must-not-be-used';
     try {
-        // Control: with Pi's default auth context, this key alone would authenticate requests.
+        // Control: with Pi's default auth context, these keys alone would authenticate requests.
         const ambient = createModels({ credentials: new InMemoryCredentialStore() });
         ambient.setProvider(openaiProvider());
+        ambient.setProvider(opencodeGoProvider());
         assert.equal((await ambient.getAuth('openai'))?.source, 'OPENAI_API_KEY');
+        assert.equal((await ambient.getAuth('opencode-go'))?.source, 'OPENCODE_API_KEY');
 
-        const engine = await start({ fake: { provider: openaiProvider } });
+        const engine = await start({
+            fake: { provider: openaiProvider },
+            keys: { opencode: { provider: opencodeProvider }, 'opencode-go': { provider: opencodeGoProvider } },
+        });
         const id = randomUUID();
         const status = await call(engine, 'GET', statusPath(id));
         assert.equal(status.status, 200);
@@ -203,9 +228,90 @@ test('the real OpenAI provider is never authenticated by an ambient API key', as
         assert.deepEqual(validate('connectionTestResult', result.body), []);
         assert.equal(result.body.outcome, 'failed');
         assert.equal(result.body.error.code, 'not_connected');
+
+        for (const provider of ['opencode', 'opencode-go']) {
+            const openCode = await call(engine, 'GET', `${connectionPath(id)}?provider=${provider}`);
+            assert.equal(openCode.body.status, 'not_connected', provider);
+            const modelId = openCode.body.models[0];
+            const test = await call(engine, 'POST', connectionPath(id, '/test'), { contractVersion: 1, provider, modelId });
+            assert.equal(test.body.error?.code, 'not_connected', provider);
+        }
     } finally {
         delete process.env.OPENAI_API_KEY;
+        delete process.env.OPENCODE_API_KEY;
     }
+});
+
+test('an OpenCode key is stored encrypted, used for tests and removed on disconnect', async () => {
+    const engine = await start();
+    const id = randomUUID();
+    const apiKey = 'secret-opencode-key-0123456789';
+    const keyPath = connectionPath(id, '/key');
+
+    const saved = await call(engine, 'PUT', keyPath, { contractVersion: 1, provider: 'opencode-go', apiKey });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(validate('connectionStatus', saved.body), []);
+    assert.deepEqual(saved.body, {
+        contractVersion: 1,
+        connectionId: id,
+        provider: 'opencode-go',
+        status: 'connected',
+        expiresAt: null,
+        models: ['opencode-go-model'],
+    });
+    assert.ok(!(await readFile(join(engine.dir, 'credentials', `${id}.json.enc`), 'utf8')).includes('secret'));
+
+    const seen = [];
+    engine.keys['opencode-go'].core.setResponses([
+        (_context, options) => {
+            seen.push({ apiKey: options?.apiKey, sessionId: options?.sessionId });
+
+            return fauxAssistantMessage('Connected');
+        },
+    ]);
+    const test = await call(engine, 'POST', connectionPath(id, '/test'), { contractVersion: 1, provider: 'opencode-go', modelId: 'opencode-go-model' });
+    assert.equal(test.body.outcome, 'ok');
+    assert.equal(seen[0].apiKey, apiKey);
+    assert.match(seen[0].sessionId ?? '', /^connection-test-[0-9a-f-]{36}$/);
+
+    // Another provider of the same connection is unaffected; a new key replaces the old one.
+    assert.equal((await call(engine, 'GET', `${connectionPath(id)}?provider=opencode`)).body.status, 'not_connected');
+    await call(engine, 'PUT', keyPath, { contractVersion: 1, provider: 'opencode-go', apiKey: 'secret-replacement-key-987' });
+    engine.keys['opencode-go'].core.setResponses([(_context, options) => fauxAssistantMessage(String(options?.apiKey === 'secret-replacement-key-987'))]);
+    assert.equal((await call(engine, 'POST', connectionPath(id, '/test'), { contractVersion: 1, provider: 'opencode-go', modelId: 'opencode-go-model' })).body.reply, 'true');
+
+    const removed = await call(engine, 'DELETE', `${connectionPath(id)}?provider=opencode-go`);
+    assert.equal(removed.body.status, 'not_connected');
+    assert.ok(engine.responses.every((text) => !text.includes('secret')));
+    assert.ok(engine.logs.every((line) => !line.includes('secret')));
+});
+
+test('keys and browser sign-ins are accepted only for providers that use them', async () => {
+    const engine = await start();
+    const id = randomUUID();
+    const refuse = async (method, path, payload) => {
+        const response = await call(engine, method, path, payload);
+        assert.equal(response.status, 422, `${method} ${path} ${JSON.stringify(payload)}`);
+        assert.equal(response.body.error.code, 'invalid_payload');
+    };
+
+    await refuse('PUT', connectionPath(id, '/key'), { contractVersion: 1, provider: 'openai', apiKey: 'sk-0123456789' });
+    await refuse('PUT', connectionPath(id, '/key'), { contractVersion: 1, provider: 'opencode', apiKey: 'short' });
+    await refuse('PUT', connectionPath(id, '/key'), { contractVersion: 1, provider: 'opencode', apiKey: 'has a space inside' });
+    await refuse('POST', connectionPath(id, '/login'), { ...loginRequest, provider: 'opencode' });
+
+    // The manager refuses too, independently of the schemas.
+    const manager = new ConnectionManager({
+        dataDirectory: engine.dir,
+        key: randomBytes(32),
+        providers: { openai: fakeOpenAI().provider, opencode: fakeKeyProvider('opencode').provider, 'opencode-go': fakeKeyProvider('opencode-go').provider },
+        loginTimeoutMs: 1_000,
+        testTimeoutMs: 1_000,
+        now: Date.now,
+        log: () => {},
+    });
+    await assert.rejects(manager.saveKey(id, 'openai', 'sk-0123456789'), { code: 'unsupported_auth_method' });
+    await assert.rejects(manager.startLogin(id, 'opencode', 'App'), { code: 'unsupported_auth_method' });
 });
 
 test('a pasted redirect finishes the sign-in, and pasting mistakes keep it waiting', async () => {

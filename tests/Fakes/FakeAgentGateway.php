@@ -7,6 +7,7 @@ use App\Data\Agent\RunAcknowledgement;
 use App\Data\Agent\RunEvent;
 use App\Data\Agent\RunRequest;
 use App\Services\Ai\AgentGatewayException;
+use Closure;
 use Generator;
 
 /** Scripted engine for controller tests: records calls and replays configured events. */
@@ -25,7 +26,12 @@ final class FakeAgentGateway implements AgentGateway
 
     public ?AgentGatewayException $cancelFailure = null;
 
-    /** @var list<array{0: string, 1?: array<string, mixed>}|AgentGatewayException> */
+    /** Health's report of the engine's credential store. */
+    public string $providerAuth = 'not_configured';
+
+    public ?AgentGatewayException $healthFailure = null;
+
+    /** @var list<array{0: string, 1?: array<string, mixed>}|AgentGatewayException|Closure(): void> a closure runs between events */
     public array $script = [];
 
     /** A complete successful run whose deltas add up to $text. */
@@ -75,6 +81,11 @@ final class FakeAgentGateway implements AgentGateway
             if ($step instanceof AgentGatewayException) {
                 throw $step;
             }
+            if ($step instanceof Closure) {
+                $step();
+
+                continue;
+            }
 
             $sequence++;
             if ($sequence > $after) {
@@ -85,6 +96,10 @@ final class FakeAgentGateway implements AgentGateway
 
     public function health(): array
     {
-        return ['status' => 'ok', 'providerAuth' => 'not_configured', 'requestAuth' => 'configured', 'simulation' => 'enabled'];
+        if ($this->healthFailure !== null) {
+            throw $this->healthFailure;
+        }
+
+        return ['status' => 'ok', 'providerAuth' => $this->providerAuth, 'requestAuth' => 'configured', 'simulation' => 'enabled'];
     }
 }

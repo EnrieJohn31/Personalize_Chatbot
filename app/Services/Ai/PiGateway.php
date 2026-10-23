@@ -173,6 +173,14 @@ final class PiGateway implements AgentGateway, ConnectionGateway
         return $this->login($this->send('DELETE', $this->connectionPath($connectionId, '/login'), null, timeout: $this->connectionTimeout), $connectionId, $provider);
     }
 
+    public function saveKey(string $connectionId, string $provider, #[SensitiveParameter] string $apiKey): ConnectionStatus
+    {
+        $body = $this->json(['contractVersion' => RunRequest::CONTRACT_VERSION, 'provider' => $provider, 'apiKey' => $apiKey]);
+        $response = $this->send('PUT', $this->connectionPath($connectionId, '/key'), $body, timeout: $this->connectionTimeout);
+
+        return $this->answer($response, fn (mixed $payload) => ConnectionStatus::fromPayload($payload, $connectionId, $provider));
+    }
+
     public function disconnect(string $connectionId, string $provider): ConnectionStatus
     {
         $response = $this->send('DELETE', $this->connectionPath($connectionId, '', $provider), null, timeout: $this->connectionTimeout);

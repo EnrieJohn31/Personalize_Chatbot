@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { AppearanceMenu } from '@/components/appearance-menu';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -12,9 +12,10 @@ import {
 type Props = {
     title: string;
     onRename?: () => void;
+    onDelete?: () => void;
 };
 
-export function ChatHeader({ title, onRename }: Props) {
+export function ChatHeader({ title, onRename, onDelete }: Props) {
     return (
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-sidebar-border/50 px-3 md:px-4">
             <SidebarTrigger className="-ml-1" />
@@ -34,6 +35,21 @@ export function ChatHeader({ title, onRename }: Props) {
                             </Button>
                         </TooltipTrigger>
                         <TooltipContent>Rename</TooltipContent>
+                    </Tooltip>
+                )}
+                {onDelete && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Delete conversation"
+                                onClick={onDelete}
+                            >
+                                <Trash2 />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete</TooltipContent>
                     </Tooltip>
                 )}
                 <AppearanceMenu />

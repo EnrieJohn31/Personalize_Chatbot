@@ -1,0 +1,20 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:connection-key-request",
+    "title": "Provider API key",
+    "description": "Laravel to engine: PUT /internal/connections/{connectionId}/key. Stores the key a user entered for an API-key provider, replacing any earlier one. The engine encrypts it and never returns, logs or echoes it.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["contractVersion", "provider", "apiKey"],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "provider": { "enum": ["opencode", "opencode-go"] },
+        "apiKey": {
+            "description": "Printable ASCII without spaces.",
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 512,
+            "pattern": "^[!-~]+$"
+        }
+    }
+}

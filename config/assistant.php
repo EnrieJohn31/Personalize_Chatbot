@@ -18,8 +18,27 @@ return [
     'agent_connection_timeout_seconds' => (float) env('AGENT_CONNECTION_TIMEOUT_SECONDS', 15),
     'agent_connection_test_timeout_seconds' => (float) env('AGENT_CONNECTION_TEST_TIMEOUT_SECONDS', 75),
 
-    // Settings > Connections sends its test message to this model of the engine's catalog.
-    'connection_test_model' => env('ASSISTANT_CONNECTION_TEST_MODEL', 'gpt-5.4-mini'),
+    // Accounts a user can connect under Connections, in page order. `auth` is how they connect:
+    // the provider's own browser sign-in (oauth) or a key the user enters (api_key). The engine
+    // holds the credential. `test_model` must be in the engine's catalog; the OpenCode defaults
+    // are free models, so a test message costs nothing on a pay-as-you-go balance.
+    'connection_providers' => [
+        'openai' => [
+            'name' => 'ChatGPT',
+            'auth' => 'oauth',
+            'test_model' => env('ASSISTANT_CONNECTION_TEST_MODEL', 'gpt-5.4-mini'),
+        ],
+        'opencode-go' => [
+            'name' => 'OpenCode Go',
+            'auth' => 'api_key',
+            'test_model' => env('ASSISTANT_OPENCODE_GO_TEST_MODEL', 'beam-free'),
+        ],
+        'opencode' => [
+            'name' => 'OpenCode Zen',
+            'auth' => 'api_key',
+            'test_model' => env('ASSISTANT_OPENCODE_ZEN_TEST_MODEL', 'beam-free'),
+        ],
+    ],
 
     // Versioned default profile copied into each server-created run snapshot. The simulated
     // provider needs no connection and is only admitted when the engine enables simulation.

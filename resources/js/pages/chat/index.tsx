@@ -1,6 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import { MessageSquare, RotateCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import ChatPageController from '@/actions/App/Http/Controllers/ChatPageController';
 import { AppShell } from '@/components/app-shell';
 import { ChatComposer } from '@/components/chat/chat-composer';
@@ -11,6 +12,7 @@ import type {
 } from '@/components/chat/chat-message';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
+import { DeleteConversationsDialog } from '@/components/chat/delete-conversations-dialog';
 import { RenameConversationDialog } from '@/components/chat/rename-conversation-dialog';
 import { Button } from '@/components/ui/button';
 import { SidebarInset } from '@/components/ui/sidebar';
@@ -68,6 +70,9 @@ export default function ChatPage({
     const [error, setError] = useState<string | null>(null);
     const [announcement, setAnnouncement] = useState('');
     const [renaming, setRenaming] = useState<Conversation | null>(null);
+    const [deleting, setDeleting] = useState<Conversation[]>([]);
+    // Selected conversation IDs while choosing several to delete; null when not selecting.
+    const [selectedIds, setSelectedIds] = useState<string[] | null>(null);
 
     const reply = useChatRun((saved) => {
         // The saved reply replaces the streamed draft in one render.
@@ -204,6 +209,42 @@ export default function ChatPage({
         }
     };
 
+    const remove = async (ids: string[]): Promise<string | null> => {
+        try {
+            await sidebar.remove(ids);
+        } catch (caught) {
+            return errorMessage(caught);
+        }
+
+        const message =
+            ids.length === 1
+                ? 'Conversation deleted.'
+                : `${ids.length} conversations deleted.`;
+        toast.success(message);
+        setAnnouncement(message);
+        setSelectedIds(null);
+
+        if (current !== null && ids.includes(current.id)) {
+            router.visit(ChatPageController.index.url(), { replace: true });
+        }
+
+        return null;
+    };
+
+    const selection =
+        selectedIds === null
+            ? null
+            : {
+                  ids: selectedIds,
+                  toggle: (id: string) =>
+                      setSelectedIds((list) =>
+                          list?.includes(id)
+                              ? list.filter((selected) => selected !== id)
+                              : [...(list ?? []), id],
+                      ),
+                  setAll: setSelectedIds,
+              };
+
     const draft = draftStatus[status];
     // Only a reply for this conversation is shown, and a stopped or failed one only if text arrived.
     const replyHere =
@@ -257,11 +298,19 @@ export default function ChatPage({
                 conversations={sidebar}
                 activeId={current?.id ?? null}
                 onRename={setRenaming}
+                onDelete={setDeleting}
+                selection={selection}
+                onSelecting={(selecting) =>
+                    setSelectedIds(selecting ? [] : null)
+                }
             />
             <SidebarInset className="h-dvh min-h-0 overflow-hidden peer-data-[variant=inset]:min-h-0 md:peer-data-[variant=inset]:h-[calc(100dvh-1rem)]">
                 <ChatHeader
                     title={title}
                     onRename={current ? () => setRenaming(current) : undefined}
+                    onDelete={
+                        current ? () => setDeleting([current]) : undefined
+                    }
                 />
                 <ChatMessageList
                     messages={displayed}
@@ -324,6 +373,11 @@ export default function ChatPage({
                 conversation={renaming}
                 onClose={() => setRenaming(null)}
                 onSave={rename}
+            />
+            <DeleteConversationsDialog
+                conversations={deleting}
+                onClose={() => setDeleting([])}
+                onConfirm={remove}
             />
         </AppShell>
     );

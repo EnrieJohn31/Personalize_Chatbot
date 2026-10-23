@@ -11,6 +11,7 @@ use App\Services\Chat\ActiveRuns;
 use App\Services\Chat\ConversationRepository;
 use App\Services\Chat\RunNotDispatchable;
 use App\Services\Chat\RunRequestFactory;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -160,6 +161,16 @@ class ChatRunController extends Controller
                 'code' => $resumable ? 'stream_interrupted' : 'relay_failed',
                 'message' => $resumable ? 'The reply stream was interrupted.' : 'The reply could not be completed.',
                 'resumable' => $resumable,
+            ]);
+        } catch (ModelNotFoundException) {
+            // The conversation was deleted while its reply was being written; there is nowhere to save it.
+            $this->stopQuietly($runId);
+            $this->runs->finish($runId, $user);
+            $this->send('stream.error', [
+                'runId' => $runId,
+                'code' => 'conversation_deleted',
+                'message' => 'The conversation was deleted.',
+                'resumable' => false,
             ]);
         }
     }

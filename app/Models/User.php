@@ -7,6 +7,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -25,6 +26,8 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
  * @property string|null $remember_token
+ * @property string|null $chat_connection_id connection chosen for chat replies
+ * @property string|null $chat_model model of that connection
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -45,6 +48,12 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public function providerConnections(): HasMany
     {
         return $this->hasMany(ProviderConnection::class);
+    }
+
+    /** @return BelongsTo<ProviderConnection, $this> */
+    public function chatConnection(): BelongsTo
+    {
+        return $this->belongsTo(ProviderConnection::class, 'chat_connection_id');
     }
 
     /**

@@ -17,6 +17,7 @@ const validators = {
     error: compile('error.schema.json'),
     connectionLoginRequest: compile('connection-login-request.schema.json'),
     connectionCallbackRequest: compile('connection-callback-request.schema.json'),
+    connectionKeyRequest: compile('connection-key-request.schema.json'),
     connectionTestRequest: compile('connection-test-request.schema.json'),
     connectionLogin: compile('connection-login.schema.json'),
     connectionStatus: compile('connection-status.schema.json'),
@@ -65,9 +66,15 @@ export interface ConnectionCallbackRequest {
     redirectUrl: string;
 }
 
+export interface ConnectionKeyRequest {
+    contractVersion: typeof CONTRACT_VERSION;
+    provider: 'opencode' | 'opencode-go';
+    apiKey: string;
+}
+
 export interface ConnectionTestRequest {
     contractVersion: typeof CONTRACT_VERSION;
-    provider: 'openai';
+    provider: 'openai' | 'opencode' | 'opencode-go';
     modelId: string;
 }
 

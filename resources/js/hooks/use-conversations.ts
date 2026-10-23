@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
     ChatApiError,
+    deleteConversations,
     fetchConversations,
     renameConversation,
 } from '@/lib/chat-api';
@@ -13,6 +14,8 @@ export type UseConversationsReturn = {
     error: string | null;
     loadMore: () => Promise<void>;
     rename: (id: string, title: string) => Promise<Conversation>;
+    /** Deletes conversations permanently and drops them from the list. */
+    remove: (ids: string[]) => Promise<void>;
     moveToTop: (conversation: Conversation) => void;
 };
 
@@ -64,6 +67,12 @@ export function useConversations(
         return updated;
     };
 
+    const remove = async (ids: string[]): Promise<void> => {
+        await deleteConversations(ids);
+        // IDs the server did not delete no longer exist for this user, so all of them go.
+        setItems((current) => current.filter((item) => !ids.includes(item.id)));
+    };
+
     const moveToTop = (conversation: Conversation): void => {
         setItems((current) => [
             conversation,
@@ -78,6 +87,7 @@ export function useConversations(
         error,
         loadMore,
         rename,
+        remove,
         moveToTop,
     };
 }

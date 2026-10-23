@@ -2,18 +2,26 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Chat\DeleteConversationsRequest;
 use App\Http\Requests\Chat\PaginatedRequest;
 use App\Http\Requests\Chat\SaveConversationRequest;
 use App\Http\Requests\Chat\ShowConversationRequest;
 use App\Http\Resources\ConversationResource;
 use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
+use App\Models\User;
+use App\Services\Chat\ConversationDeletion;
 use App\Services\Chat\ConversationRepository;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ConversationController extends Controller
 {
-    public function __construct(private readonly ConversationRepository $repository) {}
+    public function __construct(
+        private readonly ConversationRepository $repository,
+        private readonly ConversationDeletion $deletion,
+    ) {}
 
     public function index(PaginatedRequest $request): AnonymousResourceCollection
     {
@@ -50,5 +58,25 @@ class ConversationController extends Controller
         $conversation->update($request->validated());
 
         return new ConversationResource($conversation);
+    }
+
+    /** Permanently deletes one conversation and its messages. */
+    public function destroy(Request $request, Conversation $conversation): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        return response()->json(['deleted' => $this->deletion->delete($user, [$conversation->id])]);
+    }
+
+    /** Permanently deletes several of the user's conversations; IDs the user does not own are ignored. */
+    public function destroyMany(DeleteConversationsRequest $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        /** @var list<string> $ids */
+        $ids = $request->validated('ids');
+
+        return response()->json(['deleted' => $this->deletion->delete($user, $ids)]);
     }
 }

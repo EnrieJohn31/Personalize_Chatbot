@@ -19,7 +19,7 @@
             "type": "string",
             "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         },
-        "provider": { "enum": ["openai"] },
+        "provider": { "enum": ["openai", "opencode", "opencode-go"] },
         "status": {
             "description": "unreadable: a sign-in is stored but this engine cannot decrypt it. Signing in again replaces it.",
             "enum": ["connected", "not_connected", "unreadable"]

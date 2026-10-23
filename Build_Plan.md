@@ -175,7 +175,7 @@ Keep a short progress record here as implementation proceeds:
 | Current task | Ready for 3.1 — supported provider login and credential store in the engine container |
 | Last completed task | 2.4 — simulated reply stream through Laravel and one React hook (Phase 2 complete) |
 | Actual checks run on the application | Task 2.4: `composer ci:check` with 157 Laravel tests / 756 assertions and 18 frontend unit tests; 34 engine tests; npm audits; production build; stream timing traces; 11-check full-stack browser probe — see docs/validation.md for dated results and earlier checks |
-| Git checkpoint and branches | Tasks 2.3–2.4 local on `development` (not pushed); tasks 2.1–2.2 and `97ab480` are published on `main` and `development` |
+| Git checkpoint and branches | Tasks 2.3 (`89ff7a1`) and 2.4 (`82497ae`), with attribution review `aded851`, published to both `main` and `development` on 23 October 2026; all Phase 2 tasks are published |
 | Known prerequisite for live tests | Supported provider authentication entered through the intended runtime |
 | Next checkpoint | Task 3.1: a live request succeeds; credential persistence and expiry/re-authentication behavior are checked |
 

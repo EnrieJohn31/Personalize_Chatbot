@@ -1,8 +1,8 @@
 # Blueprint: Laravel Chatbot Foundation
 
-Updated: 23 October 2026\
-Revision: 12 — Stage A simulated stream implemented; execution architecture unchanged\
-Status: Laravel/React, MySQL, owned history, a signed private Pi boundary, the chat page and simulated replies streamed through a Stage A Laravel relay run locally. Phase 2 is complete; provider login, real model execution and durable runs remain. No provider or throughput benchmark has been produced.
+Updated: 24 October 2026\
+Revision: 13 — Provider connections and account credential cleanup implemented; live verification pending\
+Status: Phase 2 is complete. Provider sign-in/key storage, connection selection, chat deletion and date sections are implemented locally. Account deletion disconnects owned provider credentials before removing the database account. Task 3.1 still needs real-account verification; chat replies remain simulated, and real model execution and durable runs remain. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
 
@@ -182,6 +182,8 @@ Extended the same day at the user's request with OpenCode Go and Zen (`opencode-
 - **Credential boundary.** A browser-entered key is a deliberate exception to "credentials are server-managed references": it passes through Laravel without being stored, and the run snapshot still carries only the connection reference.
 
 The live check with a real account is still pending; see [docs/connections.md](docs/connections.md).
+
+Review correction, 24 October 2026: account deletion first disconnects every owned record for a supported provider, including duplicate records and unfinished sign-ins. Each engine response must confirm `not_connected` before the database account is deleted. Cleanup failure preserves the account and session for a retry; previously completed disconnects remain effective. The engine remains the sole credential store.
 
 Use only Pi as the primary agent engine for this path. The Laravel AI SDK can be revisited if a future requirement changes; do not wrap one complete agent loop inside another.
 

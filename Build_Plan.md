@@ -1,8 +1,8 @@
 # Build Plan: Laravel + Pi Chatbot
 
 Updated: 24 October 2026\
-Version: 10\
-Companion: [Blueprint.md](Blueprint.md), revision 12; [handoff.md](handoff.md) for the continuation record\
+Version: 11\
+Companion: [Blueprint.md](Blueprint.md), revision 13; [handoff.md](handoff.md) for the continuation record\
 Status: Phases 0–2 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page and simulated replies streamed through Laravel are implemented. Task 3.1's connections are implemented: ChatGPT sign-in, OpenCode Go/Zen keys, an encrypted credential store and a chat choice. The live check with a real account is pending. The user also asked for chat deletion and date sections, which are implemented. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md) and [validation](docs/validation.md).
 
 ## Start here
@@ -174,9 +174,9 @@ Keep a short progress record here as implementation proceeds:
 | --- | --- |
 | Current task | 3.1 — implemented; waiting for the operator's live sign-in and test message |
 | Last completed task | 2.4 — simulated reply stream through Laravel and one React hook (Phase 2 complete) |
-| Actual checks run on the application | Task 3.1: `composer ci:check` with 198 Laravel tests / 971 assertions and 18 frontend unit tests; 53 engine tests; mutation checks; npm audits; production build; 12-check browser probe and callback-listener probe against the task's engine image without internet access — see docs/validation.md |
-| Git checkpoint and branches | Task 3.1 is local on `development` (not pushed). All Phase 2 tasks are published to `main` and `development`: tasks 2.3 (`89ff7a1`) and 2.4 (`82497ae`), with attribution review `aded851`, on 23 October 2026 |
-| Known prerequisite for live tests | The operator's eligible ChatGPT account, signed in on the Connections page |
+| Actual checks run on the application | Review on 24 October: baseline `composer ci:check` passed (210 Laravel tests / 1107 assertions, 21 frontend tests, format/lint/types/Pint/PHPStan); 55 engine tests passed. After the account-cleanup fix: 32 targeted tests / 342 assertions, PHPStan and changed-file Pint passed. Live `agent:check` and migration-status checks passed — see docs/validation.md |
+| Git checkpoint and branches | Local on `development`: task 3.1 `d7bad7e`, chat/connection additions `09da496`, account-cleanup fix `ac5a7f9`. Nothing from this review was pushed; published branches remain at the Phase 2 publication record `97f5afc` |
+| Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key, connected on the Connections page |
 | Next checkpoint | Task 3.1: a live test message succeeds; then record persistence across an engine restart and refresh after the token expires |
 
 For each completed task, append: `ID — result — verification/evidence — remaining issue, if any`. Record a commit reference when working in Git. Checkboxes remain open for partially implemented or unverified behavior.
@@ -217,6 +217,8 @@ For each completed task, append: `ID — result — verification/evidence — re
   - **Connections.** It moved from Settings to its own main-menu page. It adds OpenCode Go and Zen through the user's API key, stored encrypted in the engine like the ChatGPT sign-in, and "Use for chat" stores a connected account and model for task 3.2.
   - Verification: 25 new Laravel tests, 3 new frontend unit tests, engine tests for keys and the OpenCode ambient-key guard (55 total), and a 13-check browser probe against the real engine image without internet access.
   - Remaining: real OpenCode keys are untested, and chat starts using the chosen connection in task 3.2.
+
+- Review correction — Found that account deletion left engine credentials behind. `ac5a7f9` disconnects all owned supported-provider records before deleting the account, requires confirmed removal and preserves the account on failure. Four new regression cases pass within the 32-test targeted run. Existing implementation commits and the complete history pass the contributor policy; local settings remain ignored. Task 3.1's live acceptance remains open.
 
 ## Completion boundaries
 

@@ -1,5 +1,24 @@
 # Foundation validation
 
+## Code and contributor review — 24 October 2026
+
+Reviewed the local changes in `d7bad7e` and `09da496`: connection ownership and request validation, encrypted credentials, signed engine calls, non-secret responses, the chat choice and conversation deletion. Both commits already had descriptive messages and the approved author/committer; they were preserved.
+
+Found and fixed an account-deletion gap in `ac5a7f9`: the existing profile deletion cascaded database records without asking the engine to erase stored credentials. Account deletion now disconnects every owned supported-provider record, including duplicates and unconfigured records that may have a pending sign-in. It requires `not_connected` acknowledgements before deleting the database account. A failure retains the account and signed-in session for retry. Already disconnected providers remain disconnected; credentials are not restored as a rollback.
+
+| Check | Observed result |
+| --- | --- |
+| Baseline `composer ci:check` on `09da496` | Passed: 210 Laravel tests / 1107 assertions, 21 frontend unit tests, formatting (128 files), lint (92 files), TypeScript, Pint (119 files), PHPStan (88 files) |
+| Engine `npm test` | TypeScript build and all 55 tests passed |
+| Cleanup regression | Before the fix, tests demonstrated skipped disconnects and account removal without an engine acknowledgement. After the fix, all four new cases pass: all owned records only, failure and retry, refusing an incomplete acknowledgement, and wrong password causing no disconnect |
+| Post-fix targeted PHP tests | 32 tests / 342 assertions passed across account cleanup, profile updates, connections and connection gateway tests |
+| Post-fix static checks | Pint passed for the three changed/new PHP files; PHPStan reported no errors; `git diff --check` passed |
+| Live `php artisan agent:check` | Passed: configured request/credential settings, signed probe reached validation and unsigned probe was rejected; no run or provider request started |
+| `php artisan migrate:status` | All nine migrations are applied, including the chat-connection migration. Read-only check; no database migration or deletion was performed during review |
+| Attribution and exclusions | Full-history audit passed; both original commits and the cleanup commit use the approved human identity. No prohibited credits or trailers found in the reviewed changes. Hooks and approved identities remain intact; `.claude/` remains ignored/untracked with attribution disabled locally |
+
+The complete baseline suite ran before the PHP cleanup fix; the affected tests and static analysis ran again afterward. The earlier browser probes, production frontend build, npm audits and mutation checks below were not repeated. Real provider login, live replies, token refresh, restart persistence with a real account and concurrent account-deletion/sign-in behavior remain unverified. Task 3.1 stays open. No push or remote CI verification was performed.
+
 ## Chat deletion, date sections and OpenCode connections — 24 October 2026
 
 These were requested by the user during task 3.1:

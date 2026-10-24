@@ -1,5 +1,36 @@
 # Foundation validation
 
+## Task 3.2: live replies through a Pi Agent per run — 24 October 2026
+
+Chat replies now come from each conversation's recorded connection and model. The engine builds a fresh Pi Agent per run on the run's own connection and maps its stream to the existing run events. See [chat-ui.md](chat-ui.md), [connections.md](connections.md) and [the contracts](../contracts/README.md#engine-admission-order).
+
+Two contract changes:
+- **Run requests:** optional `model.reasoning` (`low`, `medium` or `high`; Laravel sends `ASSISTANT_REASONING`, default `medium`).
+- **Connection status:** a `reauth_required` value. The engine remembers a rejected renewal, so viewing Connections no longer resets a rejection that a test or reply found.
+
+No migration and no dependency changed. `ASSISTANT_LIVE_REPLIES` now defaults to `true`.
+
+| Check | Observed result |
+| --- | --- |
+| Engine `npm test` | 69 passed (8 new live-run tests on Pi's faux provider, plus an extended re-authentication test) |
+| Laravel tests | 237 passed / 1366 assertions (5 new tests and one data set). Covered: older conversations adopting the current choice, the reasoning value, sign-in failures from a reply marking the connection, the engine's `connection_required` refusal, a rejected sign-in surviving page views until a new sign-in, and the live run-request example |
+| Static checks | Pint, formatting, lint (96 files), TypeScript, 27 frontend tests and PHPStan passed |
+| Live acceptance | On the operator's real stack, after rebuilding the engine: two runs on `openai` / `gpt-6-luna`, reasoning `medium`, submitted and read through Laravel's signed `AgentGateway` on the operator's ChatGPT connection, with no chat rows written. The first answered "17 times 3 is 51." in 6.0 s (first text at 5.6 s). The second, a five-item Markdown list, streamed in 10 deltas between 2.7 s and 4.2 s. Both ended with `assistant.final` and `run.completed` |
+
+**New engine tests:**
+- Batched deltas that add up to the final answer, with the system prompt, history, stored key, reasoning and session ID reaching the model.
+- Reasoning sent only to reasoning models.
+- Admission refusals: no connection, an unknown provider, no local server, no credential store.
+- `not_connected`, `model_unavailable` and `credentials_unreadable` failures, with no model request made.
+- Provider and network errors, and an empty reply.
+- Stop aborting the provider request.
+- The deadline.
+- 36,000 streamed characters split within the delta limit without breaking an emoji.
+
+Notes:
+- A host's HTTPS-scanning security software can break provider requests with "fetch failed"; see the connections guide. The live runs went to `api.openai.com`, which was not intercepted.
+- Not checked live: a reply in the browser (the relay and page are unchanged and covered by tests), Stop and the deadline against OpenAI, a rejected refresh against OpenAI, OpenCode and local servers. Remote CI was not inspected.
+
 ## New chat refreshing on its first message; ChatGPT connection wording — 24 October 2026
 
 The user reported that the chat page refreshed when they sent a message, and that the Connections card's "the current token is valid until 06:11 PM" read as a sign-in that would end.

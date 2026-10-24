@@ -1,8 +1,8 @@
 # Provider choice and verification
 
-Recorded: 22 October 2026 (Asia/Shanghai), Build Plan task 0.3. Updated 24 October 2026 for task 3.1, the OpenCode connections and the local model server.
+Recorded: 22 October 2026 (Asia/Shanghai), Build Plan task 0.3. Updated 24 October 2026 for task 3.1, the OpenCode connections, the local model server and task 3.2's live replies.
 
-Status: **ChatGPT sign-in, OpenCode keys, the local model server and the credential store are implemented; no live sign-in, key or local server has been used yet.** No real credential has been requested, read, copied or created. Every check so far used fakes or invented credentials on a network without internet access. Chat replies still use the simulation until task 3.2.
+Status: **ChatGPT works live: the operator signed in, and live chat runs on `gpt-6-luna` streamed real answers through Laravel on 24 October 2026.** OpenCode keys and the local model server have not been used live yet. No credential was copied, printed or recorded; the checks read only non-secret status and answers.
 
 ## Shared
 
@@ -13,7 +13,8 @@ Status: **ChatGPT sign-in, OpenCode keys, the local model server and the credent
 | Connection owner | Each Laravel user connects their own accounts on the Connections page; one connection record per user and provider |
 | Credential persistence | Implemented: one AES-256-GCM file per connection in the private `agent-data` volume, keyed from `AGENT_CREDENTIAL_KEY`, authenticated with the connection ID, with serialized atomic writes. Verified with fakes and invented credentials |
 | Not used | Pi's legacy `openai-codex` provider, which reuses the Codex CLI's OAuth client. `OPENAI_API_KEY` and `OPENCODE_API_KEY` are also never used: the engine's auth context hides environment variables and files, so there is no silent API billing |
-| Streaming / tool calling / Stop / budgets | Not implemented for live models (tasks 3.2–3.5) |
+| Streaming | Implemented (task 3.2): a fresh Pi Agent per run on the run's own connection, with batched deltas, honest failure codes and Stop. Verified live with ChatGPT (below) and with Pi's faux provider |
+| Tool calling / budgets | Not implemented (tasks 3.3–3.4) |
 
 ## ChatGPT (`openai`)
 
@@ -23,10 +24,10 @@ Status: **ChatGPT sign-in, OpenCode keys, the local model server and the credent
 | Agent identity sent to OpenAI | `APP_NAME` as the consent-screen name, and a stable installation UUID (`/var/lib/agent/installation-id`) as the agent host ID |
 | Model catalog | Pi 1.4.0 lists 42 OpenAI chat models; the default test model is `gpt-5.4-mini` (`ASSISTANT_CONNECTION_TEST_MODEL`). Which models a plan may call is decided by OpenAI: **unverified** |
 | Account eligibility | Decided by OpenAI during sign-in (for example Plus or Pro): **unverified** |
-| Login | Implemented: the browser callback through the loopback-published port 1455, or a pasted redirect address, one sign-in at a time with a 10-minute limit. Verified up to the real OpenAI sign-in address and the engine's callback listener, also from the Windows host; **completing it with a real account is untested** |
-| Refresh | Implemented by Pi under the vault lock when less than five minutes remain. Verified with a fake provider; **the real token lifetime and refresh are untested** |
-| Re-authentication | A failed refresh reports `reauth_required` and marks the record; an unreadable file reports "connect again". Verified with fakes; **untested against OpenAI** |
-| Last live test | None. On 24 October 2026 the operator's record was still `not_configured`. Next: sign in on the Connections page and send a test message |
+| Login | Implemented: the browser callback through the loopback-published port 1455, or a pasted redirect address, one sign-in at a time with a 10-minute limit. **Completed with the operator's real account on 24 October 2026.** It first failed with "fetch failed": host security software (Kaspersky's encrypted-connection scanning) re-signed `chatgpt.com` and sometimes `auth.openai.com`, and the engine rejected that certificate. It worked once scanning was paused. See the connections guide's limits |
+| Refresh | Implemented by Pi under the vault lock when less than five minutes remain. Verified with a fake provider; **the real token lifetime and refresh after expiry are untested** |
+| Re-authentication | A rejected refresh reports `reauth_required`. The engine remembers it per connection, so status stays `reauth_required` until a new sign-in, and Laravel marks the record from a test or a chat reply. An unreadable file reports "connect again". Verified with fakes; **untested against OpenAI** |
+| Last live test | 24 October 2026, task 3.2: two runs on `gpt-6-luna` with reasoning `medium`, submitted and read through Laravel's signed gateway on the operator's connection. "What is 17 times 3?" answered "17 times 3 is 51." in 6.0 s (first text at 5.6 s). A five-item Markdown list streamed in 10 pieces between 2.7 s and 4.2 s. No chat rows were written. Persistence across an engine restart: the engine was rebuilt and restarted before these runs, and the stored sign-in still worked |
 
 ## OpenCode Go (`opencode-go`) and OpenCode Zen (`opencode`)
 

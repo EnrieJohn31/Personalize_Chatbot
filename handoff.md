@@ -4,7 +4,7 @@ Updated: 24 October 2026. Read this file first when resuming work.
 
 ## Where we stopped
 
-**Phase 2 (tasks 2.1–2.4) is implemented. Task 3.1's connections are implemented and checked without real accounts: ChatGPT sign-in, plus OpenCode Go and Zen keys and an administrator-configured local model server added at the user's request. The preparation for task 3.2 is implemented and published. Task 3.1's live acceptance remains open: the operator must connect a real account (or a real local server), send a successful test message and record the applicable persistence and refresh checks.**
+**Phase 2 (tasks 2.1–2.4) is implemented. Task 3.2 is done: chat replies come from each conversation's chosen account and model through a fresh Pi Agent per run, verified live with the operator's ChatGPT connection on `gpt-6-luna`. Task 3.1's connections (ChatGPT, OpenCode Go/Zen, a local model server) are implemented; the operator's ChatGPT sign-in works live and survived an engine restart. Its remaining acceptance item is a refresh after the access token expires. Next build task: 3.3, the sample lookup tool.**
 
 The application provides:
 
@@ -15,7 +15,7 @@ The application provides:
 - A Connections page in the main menu: per-user ChatGPT sign-in and OpenCode Go/Zen keys, encrypted inside the engine, a shared local model server (`LOCAL_LLM_URL`), and a choice of which connection and model chat uses.
 - Each conversation records the choice it started with; the chat header shows it and links to Connections.
 
-Replies still stream from the engine's deterministic simulation through a Stage A Laravel relay, because `ASSISTANT_LIVE_REPLIES` stays `false` until task 3.2. Real model execution (task 3.2), tools and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the connections guide](docs/connections.md).
+Replies stream through a Stage A Laravel relay. They come from the conversation's account and model (`ASSISTANT_LIVE_REPLIES`, default `true`, with `ASSISTANT_REASONING` default `medium`), or from the engine's deterministic simulation when the conversation has none. Tools, bounded context and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the connections guide](docs/connections.md).
 
 | Document                                             | Use it for                                                               |
 | ---------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -104,6 +104,24 @@ Replies still stream from the engine's deterministic simulation through a Stage 
     - **ChatGPT card.** It no longer shows "the current token is valid until …", which read as a sign-in that ends. It says the account stays connected until disconnected; access already renewed automatically.
     - Verification: browser probe, failed before and 6/6 after; 27 frontend tests (2 new); format, lint, types and the production build. See [docs/validation.md](docs/validation.md).
 
+- Task 3.2 on 24 October 2026: live replies.
+    - **Engine.**
+        - Admits `openai`, `opencode`, `opencode-go` and `local` runs only with the run's own `connectionId`.
+        - `runtime/live-run.ts` builds a fresh Pi Agent per run on the connection's `Models`: system prompt, saved history, conversation session ID and output capped at 32,000 tokens.
+        - Streamed text goes out in batches (at most every `runDeadlineMs / 1500` ms), split within the delta limit.
+        - Failure codes Laravel acts on; Stop aborts the provider request.
+        - `ConnectionManager` remembers a rejected renewal, so status reports `reauth_required` until a new sign-in.
+    - **Contracts.** Optional `model.reasoning` on run requests, and `reauth_required` as a connection status.
+    - **Laravel.**
+        - Sends `ASSISTANT_REASONING` (default `medium`); `ASSISTANT_LIVE_REPLIES` now defaults to `true`.
+        - Older conversations adopt the current choice at their first live reply.
+        - The relay records sign-in failures on the connection.
+        - The card shows **Sign in again** for a rejected sign-in.
+    - **Verification.**
+        - 69 engine tests (8 new), 237 Laravel tests (5 new plus a data set), 27 frontend tests, Pint, PHPStan, formatting, lint and types.
+        - Live on the operator's stack: two `gpt-6-luna` runs at reasoning `medium` through Laravel's gateway. "17 times 3 is 51." in 6.0 s, and a Markdown list that streamed in 10 pieces.
+        - See [docs/validation.md](docs/validation.md) and [docs/provider-matrix.md](docs/provider-matrix.md).
+
 Publication review on 24 October 2026: reviewed `917cd5e` (local model connection and chat preparation) and `ea3be49` (PHP timestamp rechecking) with no blocking findings. Reran `composer ci:check`: 232 Laravel tests / 1332 assertions, 22 frontend tests, format/lint/types, Pint and PHPStan all passed. All 61 engine tests and the production frontend build passed. Live `agent:check` passed without starting a run; all 11 migrations were already applied, and CLI OPcache is enabled with timestamp validation and a two-second recheck. The reviewed engine source matches the running container. Earlier browser probes and performance measurements were not rerun; real provider acceptance and remote CI remain unverified. See [docs/validation.md](docs/validation.md).
 
 ## Resume this checkout
@@ -152,6 +170,13 @@ docker compose exec --user sail laravel.test npm run build
 docker compose exec --user sail laravel.test php artisan agent:check
 ```
 
+**Once per existing checkout after task 3.2:** rebuild the engine (live runs) and the frontend. No migration; live replies are on unless `.env` sets `ASSISTANT_LIVE_REPLIES=false`.
+
+```powershell
+docker compose up -d --build agent
+docker compose exec --user sail laravel.test npm run build
+```
+
 Open [the login page](http://localhost:8080/login), then [the chat page](http://localhost:8080/chat) or [Connections](http://localhost:8080/connections). Register your own local account if needed. Email is not delivered: the verification link is written MIME-encoded to `storage/logs/laravel.log`; [setup](docs/setup.md#service-boundary-and-state) explains how to read it and that it must be opened on the same host you signed in on. For first-time installation or a missing dependency tree, use `./scripts/setup.ps1`; normal continuation does not require reinstalling dependencies.
 
 ```powershell
@@ -169,37 +194,34 @@ docker compose down
 
 Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal at `mysql:3306`; the engine is internal at `http://agent:3101`, and only its sign-in callback is published, on `127.0.0.1:1455`. Health reports `providerAuth` (`configured` once the engine has its credential key), `requestAuth` and `simulation`. Existing local secrets stay in ignored `.env`; preserve the application key and MySQL volume. Do not use `docker compose down -v` for routine shutdown.
 
-## Next: finish 3.1, then 3.2
+## Next: close 3.1, then 3.3
 
-The remaining 3.1 step needs the operator; nothing in the repository can substitute for it.
+**3.1 (operator).** A live request succeeded and the ChatGPT sign-in survived an engine restart (task 3.2's live runs). One item remains:
 
-1. On [Connections](http://localhost:8080/connections), sign in with an eligible ChatGPT account, or paste an OpenCode API key into the Go or Zen card. A local server (for example Ollama with a pulled model) needs only `LOCAL_LLM_URL` and `docker compose up -d agent`.
-2. Choose **Send test message**. ChatGPT tests default to `gpt-5.4-mini`; OpenCode tests default to the free `beam-free`; local tests use the server's first model. Try another model if the provider refuses it.
-3. Run `docker compose restart agent` and confirm the page still shows **Connected**, which proves persistence.
-4. After the access token's expiry, send another test message. A successful reply means the refresh works. The page no longer shows the expiry time; the engine's connection status still reports it as `expiresAt`.
-5. Record the dates and outcomes, but no tokens or personal data, in [docs/provider-matrix.md](docs/provider-matrix.md). Then check 3.1 in the Build Plan.
+- After the access token's expiry, send another message or test. A successful reply means the refresh works. The engine's connection status reports the expiry as `expiresAt`.
+- Record the date and outcome, with no tokens or personal data, in [docs/provider-matrix.md](docs/provider-matrix.md). Then check 3.1 in the Build Plan.
+- If HTTPS scanning (Kaspersky) is back on, sign-ins and requests to `chatgpt.com` or `auth.openai.com` can fail with "fetch failed". The live chat runs used `api.openai.com`, which was not intercepted.
 
-**Acceptance (3.1):** a live request succeeds; credential persistence and expiry/re-authentication behavior are checked.
+**3.3 (build): a sample lookup tool.** Register `lookup_reference` with a schema, permission, timeout and size limit against invented fixtures. Pi must call it, receive a matching result and answer with it; denied access and invalid arguments must not run the lookup. Starting points:
 
-The preparation for task 3.2 is done: `messages.content` is `MEDIUMTEXT`, each conversation records its provider and model, `RunRequestFactory::modelFor()` already sends them (with the owned, `connected` connection) once `ASSISTANT_LIVE_REPLIES=true`, replies record the model that wrote them, and account errors lead to Connections.
+- The run request's `capabilities` (currently always refused by `SUPPORTED_CAPABILITIES` in `server.ts`).
+- `RunRequestFactory`'s profile capabilities.
+- The Pi Agent's `tools`, `beforeToolCall` and `afterToolCall` hooks in `runtime/live-run.ts`.
+- The contract's tool event types (`run-event.schema.json`), which the page does not show yet.
+- `limits.maxModelRounds` and `maxToolCalls`, which travel with every run but are not yet enforced.
 
-Task 3.2 replaces the simulation in `agent-service/src/server.ts` (`execute()`) with a fresh Pi Agent per run that emits the same contract events; the relay, page and tests stay as they are.
-
-- Model access comes from the run's `connectionId` through `ConnectionManager`'s per-connection `Models` (the same vault, so refreshes stay serialized). For `local`, use `LocalModelServer.provider()` instead, as the test message does.
-- The engine must admit `openai`, `opencode` and `opencode-go` runs only with the run's own connection, and `local` only while a server is configured.
-- Map provider failures to `run.failed` codes the page already links to Connections (`not_connected`, `reauth_required`, `credentials_unreadable`).
-- Then set `ASSISTANT_LIVE_REPLIES=true`.
+Then 3.4 (bounded context and budgets) and 3.5 (Stop through to the tool and provider abort signal; the provider abort already works).
 
 ## Remaining work in order
 
-| Tasks   | Remaining result                                                                                             |
-| ------- | ------------------------------------------------------------------------------------------------------------ |
-| 3.1–3.5 | Live-check the ChatGPT sign-in (start here), real Pi streaming, sample lookup tool, bounded history and Stop |
-| 4.1–4.4 | Durable runs/events, claims, idempotency and transactional final saves                                       |
-| 5.1–5.4 | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                             |
-| 6.1–6.3 | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation           |
-| 7.1–7.3 | First purpose and authorized connector, after the purpose is selected                                        |
-| 8.1–8.4 | Production images, serving/supervision, backup/restore and deployment acceptance                             |
+| Tasks        | Remaining result                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1, 3.3–3.5 | ChatGPT refresh after token expiry (operator), sample lookup tool (start here), bounded history and budgets, Stop through tools |
+| 4.1–4.4      | Durable runs/events, claims, idempotency and transactional final saves                                                          |
+| 5.1–5.4      | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                                                |
+| 6.1–6.3      | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation                              |
+| 7.1–7.3      | First purpose and authorized connector, after the purpose is selected                                                           |
+| 8.1–8.4      | Production images, serving/supervision, backup/restore and deployment acceptance                                                |
 
 Use the build plan's individual acceptance checks; this table does not replace them. Phase 3 requires supported, authorized provider access. Account and model eligibility are still unverified; do not infer that a healthy engine or a "Connected" badge can make a live request, and never silently substitute another billing/authentication path.
 
@@ -230,6 +252,8 @@ Use the build plan's individual acceptance checks; this table does not replace t
 - `.setup/` contains ignored downloads, temporary probes and dependency backups. It is not application source and is not included in a new clone. The persistence probe fixture was cleaned up.
 
 ## Git branches and contributor requirements
+
+Latest local checkpoints (not pushed): **`93f3085` — Stream a new chat's first reply in place and keep ChatGPT shown as connected**, and **`3ca251e` — Answer chats with the chosen account through a Pi Agent per run** (task 3.2), followed by its documentation record. Both were developed in parallel sibling worktrees and fast-forwarded into `development`. Publication needs the user's explicit request.
 
 Latest published implementation checkpoint: **`b6afd9b` — Keep deleted chats from reappearing after navigation**. Reviewed and atomically pushed to `main` and `development` at the user's request on 24 October 2026. Both remote hashes matched `b6afd9b5788f93e6aa86e95edc720b7b4c1ea2cf` before adding this review record. Formatting, lint, TypeScript, all 25 frontend tests and the production build passed; no blocking findings. The history restore and cache invalidation behavior was checked against the installed Inertia implementation. PHP, engine and browser checks were not repeated; their previous results remain dated evidence in [docs/validation.md](docs/validation.md).
 
@@ -275,11 +299,11 @@ Navigation-fix contributor review on 24 October: the complete-history audit and 
 Read handoff.md, Blueprint.md and Build_Plan.md in this repository.
 Confirm the current Git and Docker state; preserve the existing local history.
 Continue on development, which tracks origin/development.
-Task 3.1's connections (ChatGPT, OpenCode, local model server) are implemented; I will
-report my test-message result. Record login, persistence, refresh and re-authentication
-results in docs/provider-matrix.md (no tokens or personal data), then implement task 3.2:
-real Pi replies through each conversation's recorded connection and model, including the
-local server, then turn on ASSISTANT_LIVE_REPLIES.
+Task 3.2 (live replies through a Pi Agent per run) is done and verified on gpt-6-luna.
+If I report the ChatGPT refresh-after-expiry result, record it in docs/provider-matrix.md
+(no tokens or personal data) and close 3.1. Then implement task 3.3: the lookup_reference
+sample tool with schema, permission, timeout and size limit against invented fixtures.
+Live tests use only openai / gpt-6-luna at reasoning medium or high.
 Never copy host credentials or fall back to API keys.
 Run the relevant checks, document actual results and update the build plan and handoff.
 Commit locally with descriptive messages using the configured human identity;

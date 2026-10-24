@@ -191,6 +191,13 @@ Extended again at the user's request with a local model server (`local`):
 
 Review correction, 24 October 2026: account deletion first disconnects every owned record for a supported provider, including duplicate records and unfinished sign-ins. Each engine response must confirm `not_connected` before the database account is deleted. Cleanup failure preserves the account and session for a retry; previously completed disconnects remain effective. The engine remains the sole credential store.
 
+Implementation record, 24 October 2026 (task 3.2): each run gets a fresh Pi Agent on the run's own connection; there is no other agent loop.
+- **Admission.** A provider model is admitted only with its `connectionId`, and the credential is resolved inside the engine by that ID.
+- **Reasoning.** Laravel owns the effort through an optional `model.reasoning`.
+- **Events.** Streamed text maps to the existing run events in bounded batches.
+- **Failures** are reported as explicit codes. A rejected renewal is remembered by the engine (`reauth_required`), so Laravel's mirrored status cannot silently return to connected.
+- **No silent fallback.** A missing or rejected sign-in fails the run; it never falls back to another account or to API billing.
+
 Use only Pi as the primary agent engine for this path. The Laravel AI SDK can be revisited if a future requirement changes; do not wrap one complete agent loop inside another.
 
 ## 6. Build in two stages

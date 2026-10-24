@@ -51,6 +51,7 @@ Network isolation remains required: the engine port is never published, and the 
 7. A newly admitted run starts executing immediately, whether or not anyone reads its events. A duplicate admission never starts a second execution.
 
 The engine admits two kinds of model (task 3.2):
+
 - **`simulated`**, deterministic and only when `AGENT_SIMULATION_ENABLED=true`, which development Compose sets explicitly.
 - **A connection provider** (`openai`, `opencode`, `opencode-go`, `local`), only with the run's own `connectionId`, only when the credential store is configured, and for `local` only while `LOCAL_LLM_URL` is set. A run without its connection gets `422 connection_required`. The credential is looked up by that ID inside the engine; the request never carries one.
 
@@ -63,16 +64,17 @@ The engine admits two kinds of model (task 3.2):
 Each run keeps at most 2,000 events in engine memory, with the last slot reserved for a terminal event, so an overlong run ends with `run.failed` (`event_limit_exceeded`). Events are lost with the admission record (15 minutes, or an engine restart). Laravel's persisted event store (task 4.3) replaces this for durable replay.
 
 A live run (`runtime/live-run.ts`) builds a fresh Pi Agent on the connection's Pi `Models`:
+
 - **Setup.** It uses a short system prompt, the saved history as plain text and the conversation ID as the provider session ID, with output capped at 32,000 tokens.
 - **Events.** It emits `run.started`, `run.progress` (`preparing`, then `answering` with the first text), `assistant.delta`, `assistant.final` and `run.completed`.
 - **Text batching.** Streamed text is passed on at most every `runDeadlineMs / 1500` milliseconds (at least 100 ms) in pieces of at most 16,384 characters. A surrogate pair is never split, so a run within its deadline stays under the event limit.
 - **Before any model request,** the sign-in is resolved (and refreshed if needed).
 - **Failures** end the run with `run.failed` and one of these codes:
-  - `not_connected`, `reauth_required` or `credentials_unreadable`: the sign-in. Laravel marks the connection and links to Connections.
-  - `model_unavailable`: the model is not in the catalog.
-  - `provider_error`: the provider's own message, with network and TLS failures explained.
-  - `empty_reply`
-  - `deadline_exceeded`
+    - `not_connected`, `reauth_required` or `credentials_unreadable`: the sign-in. Laravel marks the connection and links to Connections.
+    - `model_unavailable`: the model is not in the catalog.
+    - `provider_error`: the provider's own message, with network and TLS failures explained.
+    - `empty_reply`
+    - `deadline_exceeded`
 - **Stop** aborts the model request and ends the run with `run.cancelled`.
 
 The simulated run is deterministic: the same request always yields the same Markdown answer, which quotes the latest question. It emits `run.started`, `run.progress` (`answering`), `assistant.delta` chunks of about three words, `assistant.final` with the complete text, and `run.completed`. The deltas always add up to the final text. `AGENT_SIMULATION_CHUNK_DELAY_MS` (default 35, maximum 1000) sets the pause between chunks. Cancellation ends the run with `run.cancelled` and no final text; passing the run deadline ends it with `run.failed` (`deadline_exceeded`).

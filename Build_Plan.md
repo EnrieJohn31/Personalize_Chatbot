@@ -1,8 +1,8 @@
 # Build Plan: Laravel + Pi Chatbot
 
 Updated: 24 October 2026\
-Version: 12\
-Companion: [Blueprint.md](Blueprint.md), revision 14; [handoff.md](handoff.md) for the continuation record\
+Version: 13\
+Companion: [Blueprint.md](Blueprint.md), revision 15; [handoff.md](handoff.md) for the continuation record\
 Status: Phases 0–2 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page and simulated replies streamed through Laravel are implemented. Task 3.1's connections are implemented: ChatGPT sign-in, OpenCode Go/Zen keys, an administrator-configured local model server, an encrypted credential store and a chat choice recorded per conversation. The live check with a real account is pending. The user also asked for chat deletion and date sections, which are implemented. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md) and [validation](docs/validation.md).
 
 ## Start here
@@ -174,8 +174,8 @@ Keep a short progress record here as implementation proceeds:
 | --- | --- |
 | Current task | 3.1 — implemented (ChatGPT, OpenCode, local model server); waiting for the operator's live test message. Task 3.2's preparation is done |
 | Last completed task | 2.4 — simulated reply stream through Laravel and one React hook (Phase 2 complete) |
-| Actual checks run on the application | Local model and refinements on 24 October: `composer ci:check` passed (232 Laravel tests / 1332 assertions, 22 frontend tests, format/lint/types/Pint/PHPStan); 61 engine tests passed; a 14-check browser probe against a fake local server passed — see docs/validation.md |
-| Git checkpoint and branches | Local, not pushed: "Add a local model connection and pre-3.2 refinements" on `development`. Last published to both `main` and `development` on 24 October: task 3.1 `d7bad7e`, chat/connection additions `09da496`, account-cleanup fix `ac5a7f9`, and review record `5345421` |
+| Actual checks run on the application | Publication review on 24 October: reran `composer ci:check` (232 Laravel tests / 1332 assertions, 22 frontend tests, format/lint/types/Pint/PHPStan), all 61 engine tests and the production frontend build; all passed. Signed live connectivity, all 11 applied migrations and active OPcache settings verified. The earlier 14-check browser probe was not repeated — see docs/validation.md |
+| Git checkpoint and branches | Published to both `main` and `development` on 24 October: local model and chat preparation `917cd5e`, then PHP timestamp rechecking `ea3be49`. Original commits and messages preserved; this documentation records their review and publication |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
 | Next checkpoint | Task 3.1: a live test message succeeds; then record persistence across an engine restart and refresh after the token expires. Then task 3.2 |
 
@@ -233,6 +233,8 @@ For each completed task, append: `ID — result — verification/evidence — re
   - Remaining: no real local server tested; replies stay simulated until task 3.2.
 
 - Publication — At the user's request, fast-forwarded `main` and atomically pushed the four reviewed commits through `5345421` to both remote branches. Fetched tips showed no divergence; the full contributor audit and diff checks passed, `.claude/` remained excluded, and both remote hashes matched. No application code changed or application tests reran during publication; remote CI results remain unverified.
+
+Publication review of local model changes on 24 October: no blocking findings across `917cd5e` and `ea3be49`; full application/engine checks and the frontend build passed. The contributor audit passed with approved author/committer identities, unchanged hooks and no prohibited attribution. Both branches were fast-forwarded and pushed atomically; remote hashes matched `ea3be49`. Live provider acceptance remains open, and remote CI results remain unverified.
 
 ## Completion boundaries
 

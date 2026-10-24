@@ -1,8 +1,8 @@
 # Blueprint: Laravel Chatbot Foundation
 
 Updated: 24 October 2026\
-Revision: 14 — Reviewed provider connections and account credential cleanup published; live verification pending\
-Status: Phase 2 is complete. Provider sign-in/key storage, connection selection, chat deletion and date sections are published to `main` and `development`. Account deletion disconnects owned provider credentials before removing the database account. Task 3.1 still needs real-account verification; chat replies remain simulated, and real model execution and durable runs remain. No provider or throughput benchmark has been produced.
+Revision: 15 — Local model connections and preparation for real replies reviewed and published; live verification pending\
+Status: Phase 2 is complete. Provider sign-in/key storage, connection selection, chat deletion and date sections are published to `main` and `development`, along with the administrator-configured local model connection, per-conversation model choice, larger message storage and development PHP cache settings. Account deletion disconnects owned provider credentials before removing the database account. Task 3.1 still needs verification with a real account or local model server; chat replies remain simulated, and real model execution and durable runs remain. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
 

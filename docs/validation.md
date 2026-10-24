@@ -1,5 +1,21 @@
 # Foundation validation
 
+## Publication review of local model changes — 24 October 2026
+
+Reviewed `917cd5e` and `ea3be49`: administrator-only local-server configuration, signed endpoints and strict response parsing, credential-free local connections, account cleanup, per-conversation model selection, reply metadata, rate limiting, migrations and development PHP caching. No blocking findings; no application code changed during this review.
+
+| Check | Observed result |
+| --- | --- |
+| `composer ci:check` | Passed: formatting (130 files), lint (92 files), TypeScript, 22 frontend tests, Pint (123 PHP files), PHPStan (91 files), and 232 Laravel tests / 1332 assertions |
+| Engine `npm test` | TypeScript build and all 61 tests passed, including local-server tests with invented credentials; hashes of the new local-model source, connection manager and server matched the running container |
+| `npm run build` | Passed; the existing optional font fallback warning remains non-fatal |
+| Live `php artisan agent:check` | Passed: signed probe reached validation, unsigned probe was rejected, simulation remains enabled; no run or provider request started |
+| `php artisan migrate:status` | All 11 migrations already applied, including larger message content and conversation model columns; no migration or user-data change performed during review |
+| Runtime PHP configuration | CLI OPcache enabled, timestamp validation enabled, `opcache.revalidate_freq=2` |
+| Contributor policy and publication | Complete-history audit passed; approved author and committer for both commits, unchanged hooks and identity list, no prohibited attribution in the 67 changed files, `.claude/` ignored/untracked, generated dependencies and assets excluded. Both branches were pushed atomically and matched `ea3be49` |
+
+The earlier 14-check browser probe, dependency audits, mutation checks and latency measurements were not repeated. No real local model server, subscription sign-in, key, refresh or credential restart-persistence check was performed. Task 3.1's live acceptance remains open; chat stays simulated until task 3.2. Remote CI results remain unverified. Retain the existing optimization follow-up: measure a Linux-filesystem checkout before further cache or bundle changes.
+
 ## Local model connection and pre-3.2 refinements — 24 October 2026
 
 Requested by the user before task 3.2:

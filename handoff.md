@@ -4,7 +4,7 @@ Updated: 24 October 2026. Read this file first when resuming work.
 
 ## Where we stopped
 
-**Phase 2 (tasks 2.1–2.4) is implemented. Task 3.1's connections are implemented and checked without real accounts: ChatGPT sign-in, plus OpenCode Go and Zen keys added at the user's request. Task 3.1 is finished when the operator connects a real account on the Connections page and a test message succeeds.**
+**Phase 2 (tasks 2.1–2.4) is implemented. Task 3.1's connections are implemented and checked without real accounts: ChatGPT sign-in, plus OpenCode Go and Zen keys and an administrator-configured local model server added at the user's request. The pre-3.2 refinements are done, so task 3.2 can start. Task 3.1 is finished when the operator connects a real account (or a real local server) and a test message succeeds.**
 
 The application provides:
 
@@ -12,9 +12,10 @@ The application provides:
 - Owned history/connection-metadata endpoints.
 - A signed, schema-validated Laravel-to-Pi boundary.
 - The chat page at `/chat`, with conversations grouped by Today, Yesterday, Previous 7 days and Older, and deletion of one or several conversations.
-- A Connections page in the main menu: per-user ChatGPT sign-in and OpenCode Go/Zen keys, encrypted inside the engine, and a choice of which connection and model chat uses.
+- A Connections page in the main menu: per-user ChatGPT sign-in and OpenCode Go/Zen keys, encrypted inside the engine, a shared local model server (`LOCAL_LLM_URL`), and a choice of which connection and model chat uses.
+- Each conversation records the choice it started with; the chat header shows it and links to Connections.
 
-Replies still stream from the engine's deterministic simulation through a Stage A Laravel relay. Real model execution (task 3.2), tools and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the connections guide](docs/connections.md).
+Replies still stream from the engine's deterministic simulation through a Stage A Laravel relay, because `ASSISTANT_LIVE_REPLIES` stays `false` until task 3.2. Real model execution (task 3.2), tools and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the connections guide](docs/connections.md).
 
 | Document                                             | Use it for                                                               |
 | ---------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -22,7 +23,7 @@ Replies still stream from the engine's deterministic simulation through a Stage 
 | [Build_Plan.md](Build_Plan.md)                       | Numbered tasks, completion checkboxes and progress                       |
 | [docs/setup.md](docs/setup.md)                       | Installation, daily commands and troubleshooting                         |
 | [docs/validation.md](docs/validation.md)             | Dated checks for Phase 1 and tasks 2.1–3.1, with their limits            |
-| [docs/connections.md](docs/connections.md)           | Task 3.1 ChatGPT and OpenCode connections and the chat choice            |
+| [docs/connections.md](docs/connections.md)           | Task 3.1 ChatGPT, OpenCode and local-server connections, the chat choice |
 | [docs/chat-history.md](docs/chat-history.md)         | Task 2.1 endpoints (and deletion), ownership, storage and pagination     |
 | [docs/chat-ui.md](docs/chat-ui.md)                   | Chat page, date sections, deletion, Stage A reply relay and checks       |
 | [contracts/README.md](contracts/README.md)           | Engine schemas, request signing, admission, event stream and error codes |
@@ -74,6 +75,22 @@ Replies still stream from the engine's deterministic simulation through a Stage 
     - 55 engine tests passed. A 13-check browser probe ran against the real engine image without internet access and covered the date sections, single, header and multi-select deletion, persistence, navigation, OpenCode key validation and storage, the test-message failure, the chat choice and key removal.
     - See [docs/validation.md](docs/validation.md).
 
+- Local model connection and pre-3.2 refinements on 24 October 2026 (user-requested):
+    - **Local model server.** The engine's `LocalModelServer` serves an administrator-set OpenAI-compatible server (Ollama, LM Studio, llama.cpp, vLLM) as provider `local` with auth method `none`. Its address comes only from the engine's environment (`LOCAL_LLM_URL`, `LOCAL_LLM_NAME`, `LOCAL_LLM_API_KEY`), so users cannot point the engine elsewhere.
+        - It lists models from `GET /v1/models` (cached 15 s), streams through Pi's `openai-completions` API, and sends the placeholder key `unused` when none is set.
+        - A signed `GET /internal/local-model` feeds the card, and Compose maps `host.docker.internal` for Linux hosts.
+        - In Laravel, the card has no key or disconnect. Choosing it creates a credential-free record, which the Connections page keeps in step with the server (`connected` or `unreachable`). Account deletion skips it.
+    - **Refinements.**
+        - Conversations record `model_provider` and `model` from the chat choice when created.
+        - `RunRequestFactory::modelFor()` uses them once `ASSISTANT_LIVE_REPLIES` is on.
+        - Replies save their provider and model in `canonical_content`, and messages expose `model`.
+        - The header shows the account and model.
+        - Account errors offer **Open Connections**, with new 409 messages.
+        - Run starts are limited to 20 a minute.
+        - `messages.content` is `MEDIUMTEXT`.
+        - `docker/php/php.ini` enables CLI OPcache.
+- Local model and refinements verification: `composer ci:check` passed with 232 Laravel tests / 1332 assertions (18 new), 22 frontend unit tests, Pint and PHPStan. 61 engine tests passed (6 new). A 14-check browser probe ran against a fake OpenAI-compatible server on an internal network: the server up, stopped, restarted and not configured. It found a real bug, keyless servers being refused by Pi, which is fixed and covered by a test. See [docs/validation.md](docs/validation.md).
+
 - Review on 24 October 2026: the two implementation commits already had descriptive messages and the approved human identity. The existing `composer ci:check` passed with 210 Laravel tests / 1107 assertions and 21 frontend tests; all 55 engine tests passed. A code review found that account deletion removed database records without clearing engine credentials. Fixed in `ac5a7f9`: disconnect every owned supported-provider record first, require confirmed removal, and preserve the account/session if cleanup fails. Four new regression cases pass within 32 targeted account/connection tests / 342 assertions; changed-file Pint and PHPStan also pass. Signed live connectivity and the applied migration status were verified without making a provider request. See [docs/validation.md](docs/validation.md) for the review's scope and limits.
 
 ## Resume this checkout
@@ -113,6 +130,15 @@ docker compose up -d --build agent
 docker compose exec --user sail laravel.test npm run build
 ```
 
+**Once per existing checkout after the local model connection:** run the two new migrations, rebuild the PHP image (CLI OPcache) and the engine, and rebuild the frontend. To offer a local model, set `LOCAL_LLM_URL` (and optionally `LOCAL_LLM_NAME`) in `.env` before recreating the engine; see [the connections guide](docs/connections.md#setup-and-upgrade).
+
+```powershell
+docker compose exec --user sail laravel.test php artisan migrate
+docker compose up -d --build laravel.test agent
+docker compose exec --user sail laravel.test npm run build
+docker compose exec --user sail laravel.test php artisan agent:check
+```
+
 Open [the login page](http://localhost:8080/login), then [the chat page](http://localhost:8080/chat) or [Connections](http://localhost:8080/connections). Register your own local account if needed. Email is not delivered: the verification link is written MIME-encoded to `storage/logs/laravel.log`; [setup](docs/setup.md#service-boundary-and-state) explains how to read it and that it must be opened on the same host you signed in on. For first-time installation or a missing dependency tree, use `./scripts/setup.ps1`; normal continuation does not require reinstalling dependencies.
 
 ```powershell
@@ -134,15 +160,22 @@ Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal
 
 The remaining 3.1 step needs the operator; nothing in the repository can substitute for it.
 
-1. On [Connections](http://localhost:8080/connections), sign in with an eligible ChatGPT account, or paste an OpenCode API key into the Go or Zen card.
-2. Choose **Send test message**. ChatGPT tests default to `gpt-5.4-mini`; OpenCode tests default to the free `beam-free`. Try another model if the provider refuses it.
+1. On [Connections](http://localhost:8080/connections), sign in with an eligible ChatGPT account, or paste an OpenCode API key into the Go or Zen card. A local server (for example Ollama with a pulled model) needs only `LOCAL_LLM_URL` and `docker compose up -d agent`.
+2. Choose **Send test message**. ChatGPT tests default to `gpt-5.4-mini`; OpenCode tests default to the free `beam-free`; local tests use the server's first model. Try another model if the provider refuses it.
 3. Run `docker compose restart agent` and confirm the page still shows **Connected**, which proves persistence.
 4. After the access token's expiry time, shown on the page, send another test message. A successful reply means the refresh works.
 5. Record the dates and outcomes, but no tokens or personal data, in [docs/provider-matrix.md](docs/provider-matrix.md). Then check 3.1 in the Build Plan.
 
 **Acceptance (3.1):** a live request succeeds; credential persistence and expiry/re-authentication behavior are checked.
 
-Before task 3.2 sends real replies, widen `messages.content` (currently MySQL `TEXT`, 65,535 bytes) with an additive migration; the event contract allows final answers of 200,000 characters. Task 3.2 then replaces the simulation in `agent-service/src/server.ts` (`execute()`) with a fresh Pi Agent per run that emits the same contract events; the relay, page and tests stay as they are. Its model access comes from the run's `connectionId` through `ConnectionManager`'s per-connection `Models` (the same vault, so refreshes stay serialized). `RunRequestFactory` should then take the provider, model and connection from the user's chat choice (`users.chat_connection_id`, `chat_model`), falling back to the built-in profile when none is chosen. It already requires an owned connection with status `connected`. The engine must admit `openai`, `opencode` and `opencode-go` runs only with the run's own connection.
+The preparation for task 3.2 is done: `messages.content` is `MEDIUMTEXT`, each conversation records its provider and model, `RunRequestFactory::modelFor()` already sends them (with the owned, `connected` connection) once `ASSISTANT_LIVE_REPLIES=true`, replies record the model that wrote them, and account errors lead to Connections.
+
+Task 3.2 replaces the simulation in `agent-service/src/server.ts` (`execute()`) with a fresh Pi Agent per run that emits the same contract events; the relay, page and tests stay as they are.
+
+- Model access comes from the run's `connectionId` through `ConnectionManager`'s per-connection `Models` (the same vault, so refreshes stay serialized). For `local`, use `LocalModelServer.provider()` instead, as the test message does.
+- The engine must admit `openai`, `opencode` and `opencode-go` runs only with the run's own connection, and `local` only while a server is configured.
+- Map provider failures to `run.failed` codes the page already links to Connections (`not_connected`, `reauth_required`, `credentials_unreadable`).
+- Then set `ASSISTANT_LIVE_REPLIES=true`.
 
 ## Remaining work in order
 
@@ -175,15 +208,17 @@ Use the build plan's individual acceptance checks; this table does not replace t
 - Conversation deletion is permanent (no trash or undo); messages go with their conversation through the foreign key.
 - Account deletion now clears owned provider credentials first. An account with supported-provider records needs the engine to confirm removal; if a later cleanup fails, the account remains available for retry but earlier connections stay disconnected. No provider-side revocation is implied.
 - The Stage A relay saves a reply only while some reader follows its stream; opening the conversation within about four minutes resumes and saves a run whose stream was never opened. Each open stream occupies one PHP CLI server worker (four in development). Laravel sends no heartbeats to the browser yet, which matters behind proxies. An engine restart mid-reply surfaces as a failed reply rather than a detected interruption. Phases 4–5 replace these limits.
-- `messages.content` is MySQL `TEXT` (65,535 bytes); widen it before real replies (see the next task).
+- The local model server is shared by every account and has no per-user quota beyond the run limit (20 starts a minute per user, one reply at a time). Its traffic is plain HTTP unless the server offers HTTPS; keep it on a trusted network. Its context window and output limit are assumed (32,768 and 8,192 tokens); task 3.2 may need them configurable. No real local server has been tested yet.
 - Physical iOS/Android keyboards, real IMEs and screen readers have not been checked; the browser probes are not part of CI yet (a candidate for task 6.1) and are kept in ignored `.setup/`. The `interactive-widget=resizes-content` viewport hint helps Chrome on Android keep the composer above the keyboard; Safari ignores it with a console note.
-- Development requests are slow because PHP's CLI server runs with `opcache.enable_cli=0` on the Windows bind mount. Enabling OPcache in a probe server cut warm requests from about 3.6 s to 220–440 ms. Consider enabling it for development in `docker/php/php.ini`; it was not changed. The chat page bundle is 58 kB gzip, mostly Markdown parsing; measure before splitting it.
+- `docker/php/php.ini` now enables OPcache for the PHP CLI server (timestamps checked on every request). It takes effect after `docker compose up -d --build laravel.test`; in a worktree container it cut the PHP suite from 480 s to about 50 s. The chat page bundle is 58 kB gzip, mostly Markdown parsing; measure before splitting it.
 - Windows bind mounts were slow: the frontend build took about 156 seconds. A future move of the single authoritative checkout to Ubuntu's Linux filesystem is the main optimization suggestion. Ubuntu's initial user/Docker integration setup remains separate from the working PowerShell/Compose path.
 - The optional `fontaine` warning is non-fatal; fonts build and render. No new dependency was added just to silence it.
 - CI is configured for pushes to `main` and `development`, and for pull requests. Remote CI results have not yet been verified. A pristine-checkout run of the complete setup script, live provider tests, real mail delivery, physical passkey enrollment, production deployment and backup/restore are not verified.
 - `.setup/` contains ignored downloads, temporary probes and dependency backups. It is not application source and is not included in a new clone. The persistence probe fixture was cleaned up.
 
 ## Git branches and contributor requirements
+
+Latest local checkpoint (not pushed): **"Add a local model connection and pre-3.2 refinements"** on `development`, developed in a temporary worktree and fast-forwarded. Publication needs the user's explicit request.
 
 Latest published implementation checkpoint: **`ac5a7f9` — Remove provider credentials before deleting an account**, with review record **`5345421` — Record connection review and credential-cleanup checkpoint**. On 24 October 2026, the user authorized publication and both remote branches received all four reviewed commits in one atomic push. This documentation records that publication; task 3.1's live acceptance remains open.
 
@@ -221,10 +256,11 @@ Before future commits, review `git status` and the staged file list. Keep `.env`
 Read handoff.md, Blueprint.md and Build_Plan.md in this repository.
 Confirm the current Git and Docker state; preserve the existing local history.
 Continue on development, which tracks origin/development.
-Task 3.1's ChatGPT sign-in is implemented; I have signed in on the Connections page
-and will report the test-message result. Record login, persistence, refresh and
-re-authentication results in docs/provider-matrix.md (no tokens or personal data), then
-implement task 3.2: real Pi replies through the user's connection, after widening messages.content.
+Task 3.1's connections (ChatGPT, OpenCode, local model server) are implemented; I will
+report my test-message result. Record login, persistence, refresh and re-authentication
+results in docs/provider-matrix.md (no tokens or personal data), then implement task 3.2:
+real Pi replies through each conversation's recorded connection and model, including the
+local server, then turn on ASSISTANT_LIVE_REPLIES.
 Never copy host credentials or fall back to API keys.
 Run the relevant checks, document actual results and update the build plan and handoff.
 Commit locally with descriptive messages using the configured human identity;

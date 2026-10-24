@@ -1,0 +1,9 @@
+{
+    "contractVersion": 1,
+    "configured": true,
+    "name": "Ollama on this PC",
+    "baseUrl": "http://host.docker.internal:11434/v1",
+    "reachable": true,
+    "models": ["llama3.2:latest", "qwen2.5:7b"],
+    "error": null
+}

@@ -75,8 +75,9 @@ export function ChatChoice({
                 <Alert variant="destructive">
                     <TriangleAlert />
                     <AlertDescription>
-                        {chat.name} is not connected right now. Connect it again
-                        or choose another option.
+                        {chat.provider === 'local'
+                            ? `${chat.name} is not answering right now. Chat can use it again once it answers, or choose another option.`
+                            : `${chat.name} is not connected right now. Connect it again or choose another option.`}
                     </AlertDescription>
                 </Alert>
             )}

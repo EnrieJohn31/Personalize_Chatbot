@@ -4,6 +4,7 @@ namespace Tests\Unit\Agent;
 
 use App\Data\Agent\ConnectionStatus;
 use App\Data\Agent\ConnectionTestResult;
+use App\Data\Agent\LocalModelStatus;
 use App\Data\Agent\LoginState;
 use Closure;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -105,6 +106,38 @@ class ConnectionPayloadsTest extends TestCase
             'extra error field' => [fn (array $p): array => [...$p, 'outcome' => 'failed', 'reply' => null, 'error' => [...$failure, 'raw' => 'x']]],
             'another model' => [fn (array $p): array => [...$p, 'modelId' => 'gpt-5.5']],
             'negative latency' => [fn (array $p): array => [...$p, 'latencyMs' => -1]],
+        ];
+    }
+
+    public function test_local_model_statuses_parse_whether_or_not_a_server_is_set_up(): void
+    {
+        $local = LocalModelStatus::fromPayload(self::example('local-model-status.json'));
+        $this->assertNotNull($local);
+        $this->assertSame(['Ollama on this PC', ['llama3.2:latest', 'qwen2.5:7b'], null], [$local->name, $local->models, $local->error]);
+
+        $none = LocalModelStatus::fromPayload(['contractVersion' => 1, 'configured' => false, 'name' => null, 'baseUrl' => null, 'reachable' => false, 'models' => [], 'error' => null]);
+        $this->assertNotNull($none);
+        $this->assertFalse($none->configured);
+    }
+
+    /** @param  Closure(array<string, mixed>): array<string, mixed>  $change */
+    #[DataProvider('invalidLocalModels')]
+    public function test_local_model_statuses_outside_the_contract_are_rejected(Closure $change): void
+    {
+        $this->assertNull(LocalModelStatus::fromPayload($change(self::example('local-model-status.json'))));
+    }
+
+    /** @return array<string, array{Closure(array<string, mixed>): array<string, mixed>}> */
+    public static function invalidLocalModels(): array
+    {
+        return [
+            'api key field' => [fn (array $p): array => [...$p, 'apiKey' => 'secret']],
+            'other scheme' => [fn (array $p): array => [...$p, 'baseUrl' => 'file:///etc/passwd']],
+            'string flag' => [fn (array $p): array => [...$p, 'reachable' => 'yes']],
+            'malformed model' => [fn (array $p): array => [...$p, 'models' => ['llama 3']]],
+            'too many models' => [fn (array $p): array => [...$p, 'models' => array_map(fn (int $i): string => "model-$i", range(1, 201))]],
+            'overlong error' => [fn (array $p): array => [...$p, 'error' => str_repeat('x', 501)]],
+            'newer contract' => [fn (array $p): array => [...$p, 'contractVersion' => 2]],
         ];
     }
 

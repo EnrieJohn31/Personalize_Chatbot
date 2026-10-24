@@ -3,6 +3,7 @@ import type { RunAction, RunState, RunStreamEvent } from '@/lib/chat-run-state';
 import {
     initialRunState,
     isResponding,
+    needsConnectionFix,
     runReducer,
 } from '@/lib/chat-run-state';
 import type { ChatRun } from '@/types';
@@ -107,6 +108,32 @@ describe('runReducer', () => {
             }),
         );
         expect([engine.status, engine.error]).toEqual(['failed', 'Too slow.']);
+        expect(engine.errorCode).toBe('deadline_exceeded');
+        expect(needsConnectionFix(engine.errorCode)).toBe(false);
+    });
+
+    test('account failures carry their code so the page can link to Connections', () => {
+        const started = reduce({
+            type: 'failed',
+            message: 'Connect it again.',
+            resumable: false,
+            code: 'connection_required',
+        });
+        expect(started.errorCode).toBe('connection_required');
+        expect(needsConnectionFix(started.errorCode)).toBe(true);
+
+        const engine = reduce(
+            following,
+            event('run.failed', 1, {
+                code: 'reauth_required',
+                message: 'Sign in again.',
+            }),
+        );
+        expect(needsConnectionFix(engine.errorCode)).toBe(true);
+        expect(needsConnectionFix(null)).toBe(false);
+
+        // Following the same run again clears the old failure.
+        expect(runReducer(engine, following).errorCode).toBeNull();
     });
 
     test('stopping waits for the engine to confirm the cancellation', () => {

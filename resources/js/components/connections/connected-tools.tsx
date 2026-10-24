@@ -28,7 +28,10 @@ import { Spinner } from '@/components/ui/spinner';
 import { formatTime } from '@/lib/utils';
 import type { ConnectionTest, ProviderConnectionCard } from '@/types';
 
-/** What a connected provider offers: a test message, key replacement and disconnecting. */
+/**
+ * What a connected provider offers: a test message, key replacement and disconnecting. The
+ * administrator's local server only offers the test; there is nothing of the user's to remove.
+ */
 export function ConnectedTools({ card }: { card: ProviderConnectionCard }) {
     const [replacing, setReplacing] = useState(false);
 
@@ -36,15 +39,7 @@ export function ConnectedTools({ card }: { card: ProviderConnectionCard }) {
         <div className="space-y-6">
             <div className="flex items-start gap-2 text-sm">
                 <CircleCheck className="mt-0.5 size-4 shrink-0 text-green-600 dark:text-green-500" />
-                <p>
-                    {card.auth === 'oauth'
-                        ? `Your ${card.name} account is connected. Access renews automatically${
-                              card.expires_at === null
-                                  ? '.'
-                                  : `; the current token is valid until ${formatTime(card.expires_at)}.`
-                          }`
-                        : 'Your API key is saved. Requests use it until you replace or remove it.'}
-                </p>
+                <p>{connectedNote(card)}</p>
             </div>
 
             <TestMessage card={card} />
@@ -62,10 +57,34 @@ export function ConnectedTools({ card }: { card: ProviderConnectionCard }) {
                     </Button>
                 ))}
 
-            <Disconnect card={card} />
+            {card.auth !== 'none' && <Disconnect card={card} />}
         </div>
     );
 }
+
+function connectedNote(card: ProviderConnectionCard): string {
+    switch (card.auth) {
+        case 'oauth':
+            return `Your ${card.name} account is connected. Access renews automatically${
+                card.expires_at === null
+                    ? '.'
+                    : `; the current token is valid until ${formatTime(card.expires_at)}.`
+            }`;
+        case 'none':
+            return `${card.name} answers at ${card.local?.base_url ?? 'the configured address'} with ${card.models.length} ${
+                card.models.length === 1 ? 'model' : 'models'
+            }. Every account on this server can use it.`;
+        default:
+            return 'Your API key is saved. Requests use it until you replace or remove it.';
+    }
+}
+
+const TEST_NOTES: Record<ProviderConnectionCard['auth'], string> = {
+    oauth: "Sends one short message, which counts toward your plan's usage.",
+    api_key:
+        'Sends one short message. Free models cost nothing; others count toward your plan or balance.',
+    none: 'Sends one short message to your own server; nothing is billed. A large model may take a while to load first.',
+};
 
 function TestMessage({ card }: { card: ProviderConnectionCard }) {
     const activity = useFormActivity();
@@ -115,9 +134,7 @@ function TestMessage({ card }: { card: ProviderConnectionCard }) {
                             Send test message
                         </Button>
                         <p className="text-xs text-muted-foreground">
-                            {card.auth === 'oauth'
-                                ? "Sends one short message, which counts toward your plan's usage."
-                                : 'Sends one short message. Free models cost nothing; others count toward your plan or balance.'}
+                            {TEST_NOTES[card.auth]}
                         </p>
                     </div>
                     <InputError message={errors.connection} />

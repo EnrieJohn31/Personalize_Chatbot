@@ -13,6 +13,7 @@ Introduced by Build Plan task 2.2; the event stream was added in task 2.4 and pr
 | `GET /internal/runs/{runId}/events?after={n}` | None; signed, empty body                          | `200`, NDJSON lines of `run-event.schema.json` (below) |
 | `GET /internal/health`                        | None; unsigned readiness only                     | `200`; never makes a model call                        |
 | `/internal/connections/{connectionId}…`       | See [provider connections](#provider-connections) | `200`, non-secret sign-in state                        |
+| `GET /internal/local-model`                   | None; signed, empty body                          | `200`, `local-model-status.schema.json`                |
 
 Every non-2xx response uses `error.schema.json`. `run-event.schema.json` defines the normalized engine events. The engine streams them from the events endpoint, and Laravel validates each one again (`App\Data\Agent\RunEvent`) before relaying it. Tool and source event types arrive with the first tool in task 3.3.
 
@@ -61,7 +62,7 @@ The simulated run is deterministic: the same request always yields the same Mark
 
 ## Provider connections
 
-A connection ID is the UUID of Laravel's `provider_connections` record. Providers are `openai` (ChatGPT, browser sign-in) and `opencode-go` and `opencode` (OpenCode Go and Zen, API key). These endpoints are signed like the run endpoints (a `GET` or `DELETE` hashes the empty body). They return `503 credential_store_not_configured` until the engine has `AGENT_CREDENTIAL_KEY`. They never return or log a credential; only the key endpoint accepts one. See [the connections guide](../docs/connections.md) for the flow and storage.
+A connection ID is the UUID of Laravel's `provider_connections` record. Providers are `openai` (ChatGPT, browser sign-in), `opencode-go` and `opencode` (OpenCode Go and Zen, API key), and `local` (the administrator's local model server, no user credential). These endpoints are signed like the run endpoints (a `GET` or `DELETE` hashes the empty body). They return `503 credential_store_not_configured` until the engine has `AGENT_CREDENTIAL_KEY`. They never return or log a credential; only the key endpoint accepts one. See [the connections guide](../docs/connections.md) for the flow and storage.
 
 | Request                                                 | Body                                                   | Success: `200` with                  |
 | ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------ |
@@ -81,6 +82,8 @@ A connection ID is the UUID of Laravel's `provider_connections` record. Provider
     - An unfinished sign-in is cancelled after 10 minutes. Sign-ins in progress are lost on an engine restart; stored credentials are not.
 - **Callback.** The pasted redirect must match the pending sign-in's `redirect_uri` and `state` and carry a `code`. Otherwise it is refused with `422 invalid_redirect` and the sign-in keeps waiting. An address that reports `error=` is passed on and ends the sign-in as `failed`.
 - **Test.** It sends one short message with the stored credential, so it can count against the user's plan or balance. It refreshes an expiring token first and sends a fresh session ID, which OpenCode requires. Provider problems are a `200` with `outcome: failed` and one of `not_connected`, `reauth_required`, `credentials_unreadable`, `provider_error` or `timeout` (60 seconds). Ambient credentials such as `OPENAI_API_KEY` and `OPENCODE_API_KEY` are never used.
+- **Local server.** For `local`, status asks the configured server for its models (cached 15 seconds) instead of reading the store: `connected` with its models, `unreachable` when it does not answer, or `not_connected` when none is configured. Key and sign-in requests are refused as `invalid_payload`, and disconnect stores and removes nothing. A test lists the server's models first, so a model it no longer serves is `unknown_model`.
+- **Local model view.** `GET /internal/local-model` answers `configured`, the card `name`, the `baseUrl`, `reachable`, the `models` and the `error` reason. The address comes only from the engine's `LOCAL_LLM_URL`; no request can set it. It never returns `LOCAL_LLM_API_KEY`.
 
 ## Error codes
 

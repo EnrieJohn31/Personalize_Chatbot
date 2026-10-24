@@ -35,26 +35,38 @@ final class ActiveRuns
         }
     }
 
-    public function record(string $runId, User $user, Conversation $conversation): void
+    /** Records an admitted run, with the provider and model that will write its reply. */
+    public function record(string $runId, User $user, Conversation $conversation, string $provider = '', string $model = ''): void
     {
         Cache::put($this->runKey($runId), [
             'user_id' => $user->id,
             'conversation_id' => $conversation->id,
             'finished' => false,
+            'provider' => $provider,
+            'model' => $model,
         ], $this->ttl());
     }
 
-    /** @return array{user_id: int, conversation_id: string, finished: bool}|null */
+    /** @return array{user_id: int, conversation_id: string, finished: bool, provider: string, model: string}|null */
     public function find(string $runId): ?array
     {
         $record = Cache::get($this->runKey($runId));
 
-        return is_array($record)
-            && is_int($record['user_id'] ?? null)
-            && is_string($record['conversation_id'] ?? null)
-            && is_bool($record['finished'] ?? null)
-                ? $record
-                : null;
+        if (! is_array($record)
+            || ! is_int($record['user_id'] ?? null)
+            || ! is_string($record['conversation_id'] ?? null)
+            || ! is_bool($record['finished'] ?? null)) {
+            return null;
+        }
+
+        return [
+            'user_id' => $record['user_id'],
+            'conversation_id' => $record['conversation_id'],
+            'finished' => $record['finished'],
+            // Records written before the provider was kept have none.
+            'provider' => is_string($record['provider'] ?? null) ? $record['provider'] : '',
+            'model' => is_string($record['model'] ?? null) ? $record['model'] : '',
+        ];
     }
 
     public function finish(string $runId, User $user): void

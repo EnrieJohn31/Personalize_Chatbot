@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Contracts\AgentGateway;
 use App\Data\Agent\ConnectionStatus;
+use App\Data\Agent\LocalModelStatus;
 use App\Data\Agent\LoginState;
 use App\Http\Requests\Connections\CompleteSignInRequest;
 use App\Http\Requests\Connections\SaveConnectionKeyRequest;
@@ -23,7 +24,8 @@ use Inertia\Response;
 
 /**
  * The Connections page: connect ChatGPT through its browser sign-in and OpenCode Go or Zen with an
- * API key, test them, and choose which connection chat uses. Every action redirects back to the
+ * API key, see the administrator's local model server, test them, and choose which connection
+ * chat uses. Every action redirects back to the
  * page, whose `connections` prop is read from the engine on each visit, so the page polls by
  * reloading that prop while a sign-in is in progress.
  */
@@ -98,6 +100,9 @@ class ConnectionsController extends Controller
 
     public function disconnect(Request $request, string $provider): RedirectResponse
     {
+        // The administrator manages the local model server; users have nothing to disconnect.
+        abort_if($this->connections->authMethod($provider) === 'none', 404);
+
         return $this->attempt(function () use ($request, $provider): void {
             $this->connections->disconnect($this->user($request), $this->connection($request, $provider));
 
@@ -119,11 +124,22 @@ class ConnectionsController extends Controller
         }
 
         $modelId = $request->string('model_id')->toString();
-        $connection = $this->connections->find($user, $provider);
 
-        return $this->attempt(function () use ($user, $provider, $modelId, $connection): ?RedirectResponse {
+        return $this->attempt(function () use ($user, $provider, $modelId): ?RedirectResponse {
+            if ($this->connections->authMethod($provider) === 'none') {
+                // The local model server needs no sign-in, so its record is created on first choice, once it answers.
+                $local = $this->connections->localModel();
+                if (! $local->reachable) {
+                    $problem = $local->configured ? __(':name is not reachable right now.', ['name' => $this->name($provider)]) : __('No local model server is set up.');
+
+                    return to_route('connections.index')->withErrors(['chat' => $problem]);
+                }
+                $connection = $this->connections->connectionFor($user, $provider);
+            } else {
+                $connection = $this->connections->find($user, $provider);
+            }
+
             $status = $connection === null ? null : $this->connections->status($connection);
-
             if ($connection === null || $status === null || ! $status->isConnected()) {
                 return to_route('connections.index')->withErrors(['chat' => __('Connect :name first.', ['name' => $this->name($provider)])]);
             }
@@ -154,6 +170,14 @@ class ConnectionsController extends Controller
 
             $providers = [];
             foreach ($this->connections->providers() as $provider => $definition) {
+                if ($definition['auth'] === 'none') {
+                    $local = $this->connections->localModel();
+                    $this->connections->mirrorLocal($user, $provider, $local);
+                    $providers[] = $this->localCard($provider, $definition, $local);
+
+                    continue;
+                }
+
                 $connection = $this->connections->find($user, $provider);
                 $status = $connection === null ? null : $this->connections->status($connection);
                 $login = $connection !== null && $definition['auth'] === 'oauth' ? $this->connections->loginState($connection) : null;
@@ -203,6 +227,31 @@ class ConnectionsController extends Controller
                 'error' => $login->error,
                 'expires_at' => $this->time($login->expiresAt),
             ] : null,
+            'local' => null,
+        ];
+    }
+
+    /**
+     * The administrator's local model server, shared by every user.
+     *
+     * @param  array{name: string, auth: string, test_model: string}  $definition
+     * @return array<string, mixed>
+     */
+    private function localCard(string $provider, array $definition, LocalModelStatus $local): array
+    {
+        $models = $local->models;
+        sort($models, SORT_NATURAL);
+
+        return [
+            'provider' => $provider,
+            'name' => $local->name ?? $definition['name'],
+            'auth' => $definition['auth'],
+            'status' => ! $local->configured ? 'not_connected' : ($local->reachable ? 'connected' : 'unreachable'),
+            'expires_at' => null,
+            'models' => $models,
+            'test_model' => in_array($definition['test_model'], $models, true) ? $definition['test_model'] : ($models[0] ?? ''),
+            'login' => null,
+            'local' => ['configured' => $local->configured, 'base_url' => $local->baseUrl, 'error' => $local->error],
         ];
     }
 

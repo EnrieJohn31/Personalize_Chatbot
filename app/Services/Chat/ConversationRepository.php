@@ -64,11 +64,12 @@ class ConversationRepository
 
     /**
      * The trusted server path for a run's final answer. Saving is idempotent per run, so every
-     * reader that reaches the run's completion can call it and only one message is stored.
+     * reader that reaches the run's completion can call it and only one message is stored. The
+     * provider and model that wrote it are kept with it.
      */
-    public function appendAssistantMessage(Conversation $conversation, string $content, string $runId): Message
+    public function appendAssistantMessage(Conversation $conversation, string $content, string $runId, string $provider = '', string $model = ''): Message
     {
-        return DB::transaction(function () use ($conversation, $content, $runId): Message {
+        return DB::transaction(function () use ($conversation, $content, $runId, $provider, $model): Message {
             $locked = Conversation::query()->whereKey($conversation->id)->lockForUpdate()->firstOrFail();
 
             $existing = $locked->messages()
@@ -83,7 +84,12 @@ class ConversationRepository
                 'sequence' => ((int) $locked->messages()->max('sequence')) + 1,
                 'role' => 'assistant',
                 'content' => $content,
-                'canonical_content' => ['role' => 'assistant', 'content' => $content, 'run_id' => $runId],
+                'canonical_content' => [
+                    'role' => 'assistant',
+                    'content' => $content,
+                    'run_id' => $runId,
+                    ...($provider === '' ? [] : ['provider' => $provider, 'model' => $model]),
+                ],
             ]);
 
             $locked->touch();

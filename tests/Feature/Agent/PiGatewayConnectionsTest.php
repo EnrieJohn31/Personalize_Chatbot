@@ -95,6 +95,22 @@ class PiGatewayConnectionsTest extends TestCase
         ]);
     }
 
+    public function test_the_local_model_server_is_read_with_a_signed_get(): void
+    {
+        Http::fake([
+            'http://agent.test:3101/internal/local-model' => Http::sequence()
+                ->push($this->example('local-model-status.json'))
+                ->push([...$this->example('local-model-status.json'), 'baseUrl' => 'file:///etc/passwd']),
+        ]);
+
+        $local = $this->gateway()->localModel();
+
+        $this->assertSame([true, true, ['llama3.2:latest', 'qwen2.5:7b']], [$local->configured, $local->reachable, $local->models]);
+        $this->assertSame('http://host.docker.internal:11434/v1', $local->baseUrl);
+        $this->assertSame('invalid_response', $this->failure(fn () => $this->gateway()->localModel())->reason);
+        $this->assertSignedRequests([['GET', '/internal/local-model', ''], ['GET', '/internal/local-model', '']]);
+    }
+
     public function test_engine_refusals_keep_their_code_and_own_message(): void
     {
         Http::fake([self::BASE.'/login/callback' => Http::response(['error' => [

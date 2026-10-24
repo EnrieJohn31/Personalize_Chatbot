@@ -1,8 +1,8 @@
 # Provider choice and verification
 
-Recorded: 22 October 2026 (Asia/Shanghai), Build Plan task 0.3. Updated 24 October 2026 for task 3.1 and the OpenCode connections.
+Recorded: 22 October 2026 (Asia/Shanghai), Build Plan task 0.3. Updated 24 October 2026 for task 3.1, the OpenCode connections and the local model server.
 
-Status: **ChatGPT sign-in, OpenCode keys and the credential store are implemented; no live sign-in or key has been used yet.** No real credential has been requested, read, copied or created. Every check so far used fakes or invented credentials on a network without internet access. Chat replies still use the simulation until task 3.2.
+Status: **ChatGPT sign-in, OpenCode keys, the local model server and the credential store are implemented; no live sign-in, key or local server has been used yet.** No real credential has been requested, read, copied or created. Every check so far used fakes or invented credentials on a network without internet access. Chat replies still use the simulation until task 3.2.
 
 ## Shared
 
@@ -36,6 +36,15 @@ Status: **ChatGPT sign-in, OpenCode keys and the credential store are implemente
 | Model catalog | Pi 1.4.0 lists 29 Go and 83 Zen models. Both default test models are the free `beam-free` (`ASSISTANT_OPENCODE_GO_TEST_MODEL`, `ASSISTANT_OPENCODE_ZEN_TEST_MODEL`). Which models an account may call is decided by OpenCode: **unverified** |
 | Key handling | Implemented: the key crosses browser → Laravel → engine once and is stored encrypted. It is never returned, logged, kept by Laravel or flashed as old input. Verified with fakes and an invented key, including that the probe page never contained it |
 | Last live test | None. Next: paste a real key and send a test message on the free model |
+
+## Local model server (`local`)
+
+| Field | Current state |
+| --- | --- |
+| Path | An administrator-configured OpenAI-compatible server (`LOCAL_LLM_URL`): Ollama, LM Studio, llama.cpp or vLLM. Pi's `openai-completions` API with streaming, a system message instead of the developer role, and no reasoning effort. No user credential; an optional `LOCAL_LLM_API_KEY` is sent as a bearer token, otherwise the placeholder `unused` |
+| Model catalog | Whatever the server lists at `GET /v1/models`, up to 200 IDs, cached for 15 seconds. Context window and output limit are assumed (32,768 and 8,192 tokens) |
+| Billing | None per message; the server's own hardware |
+| Last live test | None with a real server. Verified with a fake OpenAI-compatible server on an internal network: listing, a streamed test message, choosing it for chat, the server stopping and recovering, and no server configured. Next: point `LOCAL_LLM_URL` at a running Ollama or LM Studio and send a test message |
 
 After the operator's live check, record here: the date, whether the sign-in or key worked, the test model and its reply or error, and for ChatGPT the access token lifetime (from the status `expiresAt`) and whether a test after expiry refreshed silently. Do not record tokens, keys, account e-mail addresses or screenshots of consent pages with personal data.
 

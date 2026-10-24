@@ -31,6 +31,7 @@ final class RunRequestFactory
     public function __construct(
         #[Config('assistant.profile')] private readonly array $profile,
         #[Config('assistant.limits')] private readonly array $limits,
+        #[Config('assistant.live_replies')] private readonly bool $liveReplies = false,
     ) {}
 
     /**
@@ -48,7 +49,7 @@ final class RunRequestFactory
             $gate->authorize('view', $connection);
         }
 
-        $model = $this->profile['model'];
+        $model = $this->modelFor($conversation);
         $connectionId = null;
         if ($model['provider'] !== self::SIMULATED_PROVIDER) {
             if ($connection === null || $connection->provider !== $model['provider']) {
@@ -92,5 +93,20 @@ final class RunRequestFactory
                 'runDeadlineMs' => $this->limits['run_deadline_ms'],
             ],
         );
+    }
+
+    /**
+     * The model a conversation's replies use: the one it was started with once live replies are
+     * enabled, otherwise the default profile.
+     *
+     * @return array{provider: string, id: string}
+     */
+    public function modelFor(Conversation $conversation): array
+    {
+        if ($this->liveReplies && $conversation->model_provider !== null && $conversation->model !== null) {
+            return ['provider' => $conversation->model_provider, 'id' => $conversation->model];
+        }
+
+        return $this->profile['model'];
     }
 }

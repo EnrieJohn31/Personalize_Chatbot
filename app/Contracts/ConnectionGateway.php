@@ -4,6 +4,7 @@ namespace App\Contracts;
 
 use App\Data\Agent\ConnectionStatus;
 use App\Data\Agent\ConnectionTestResult;
+use App\Data\Agent\LocalModelStatus;
 use App\Data\Agent\LoginState;
 use App\Services\Ai\AgentGatewayException;
 use App\Services\Ai\PiGateway;
@@ -18,11 +19,19 @@ use Illuminate\Container\Attributes\Bind;
 interface ConnectionGateway
 {
     /**
-     * The engine-held sign-in of a connection. Never calls the provider.
+     * The engine-held sign-in of a connection. Never calls the provider, except that the local
+     * model server is asked for its model list.
      *
      * @throws AgentGatewayException
      */
     public function connectionStatus(string $connectionId, string $provider): ConnectionStatus;
+
+    /**
+     * The administrator's local model server: whether one is configured, reachable, and its models.
+     *
+     * @throws AgentGatewayException
+     */
+    public function localModel(): LocalModelStatus;
 
     /**
      * Start the provider's browser sign-in. A connection whose sign-in is already pending gets it

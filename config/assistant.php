@@ -19,9 +19,11 @@ return [
     'agent_connection_test_timeout_seconds' => (float) env('AGENT_CONNECTION_TEST_TIMEOUT_SECONDS', 75),
 
     // Accounts a user can connect under Connections, in page order. `auth` is how they connect:
-    // the provider's own browser sign-in (oauth) or a key the user enters (api_key). The engine
-    // holds the credential. `test_model` must be in the engine's catalog; the OpenCode defaults
-    // are free models, so a test message costs nothing on a pay-as-you-go balance.
+    // the provider's own browser sign-in (oauth), a key the user enters (api_key), or nothing for
+    // the administrator's local model server (none; its address is engine configuration). The
+    // engine holds every credential. `test_model` must be in the engine's catalog; the OpenCode
+    // defaults are free models, so a test message costs nothing on a pay-as-you-go balance. An
+    // empty local test model uses the first model the server lists.
     'connection_providers' => [
         'openai' => [
             'name' => 'ChatGPT',
@@ -38,7 +40,16 @@ return [
             'auth' => 'api_key',
             'test_model' => env('ASSISTANT_OPENCODE_ZEN_TEST_MODEL', 'beam-free'),
         ],
+        'local' => [
+            'name' => env('LOCAL_LLM_NAME') ?: 'Local model',
+            'auth' => 'none',
+            'test_model' => (string) env('LOCAL_LLM_TEST_MODEL', ''),
+        ],
     ],
+
+    // Whether runs use each conversation's chosen connection and model. Until the engine executes
+    // live models (task 3.2) every reply comes from the default profile below.
+    'live_replies' => (bool) env('ASSISTANT_LIVE_REPLIES', false),
 
     // Versioned default profile copied into each server-created run snapshot. The simulated
     // provider needs no connection and is only admitted when the engine enables simulation.

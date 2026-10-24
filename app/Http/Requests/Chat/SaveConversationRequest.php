@@ -19,6 +19,9 @@ class SaveConversationRequest extends FormRequest
             'id' => ['missing'],
             'user_id' => ['missing'],
             'messages' => ['missing'],
+            // Copied from the owner's chat choice on creation; never chosen by the browser.
+            'model_provider' => ['missing'],
+            'model' => ['missing'],
         ];
     }
 }

@@ -8,6 +8,8 @@ const at = (id: string, date: Date): Conversation => ({
     id,
     title: id,
     provider_connection_id: null,
+    model_provider: null,
+    model: null,
     created_at: date.toISOString(),
     updated_at: date.toISOString(),
 });

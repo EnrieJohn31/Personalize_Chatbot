@@ -8,7 +8,7 @@
     "required": ["contractVersion", "provider", "modelId"],
     "properties": {
         "contractVersion": { "const": 1 },
-        "provider": { "enum": ["openai", "opencode", "opencode-go"] },
+        "provider": { "enum": ["openai", "opencode", "opencode-go", "local"] },
         "modelId": {
             "type": "string",
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"

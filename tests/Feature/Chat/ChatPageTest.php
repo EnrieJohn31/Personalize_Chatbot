@@ -97,6 +97,37 @@ class ChatPageTest extends TestCase
                 ->missing('conversations.data.0.user_id'));
     }
 
+    public function test_the_page_says_which_account_and_model_answer(): void
+    {
+        $owner = User::factory()->create();
+        $this->actingAs($owner)->get('/chat')->assertInertia(fn (Assert $page) => $page
+            ->where('assistant', ['provider' => null, 'name' => 'Built-in assistant', 'model' => null, 'ready' => true, 'live' => false]));
+
+        $connection = $owner->providerConnections()->create(['provider' => 'local', 'auth_method' => 'none']);
+        $connection->forceFill(['status' => 'connected'])->save();
+        $owner->forceFill(['chat_connection_id' => $connection->id, 'chat_model' => 'qwen2.5:7b'])->save();
+        $owner->refresh();
+        $this->get('/chat')->assertInertia(fn (Assert $page) => $page
+            ->where('assistant', ['provider' => 'local', 'name' => 'Local model', 'model' => 'qwen2.5:7b', 'ready' => true, 'live' => false]));
+
+        // A conversation shows what it started with, not the current choice.
+        $older = $this->conversation($owner, ['Hello']);
+        $this->get("/chat/$older->id")->assertInertia(fn (Assert $page) => $page->where('assistant.provider', null));
+    }
+
+    public function test_a_conversation_whose_account_is_down_is_marked_not_ready(): void
+    {
+        config(['assistant.live_replies' => true]);
+        $owner = User::factory()->create();
+        $connection = $owner->providerConnections()->create(['provider' => 'local', 'auth_method' => 'none']);
+        $connection->forceFill(['status' => 'unreachable'])->save();
+        $conversation = $this->conversation($owner, ['Hello']);
+        $conversation->forceFill(['provider_connection_id' => $connection->id, 'model_provider' => 'local', 'model' => 'llama3.2:latest'])->save();
+
+        $this->actingAs($owner)->get("/chat/$conversation->id")->assertInertia(fn (Assert $page) => $page
+            ->where('assistant', ['provider' => 'local', 'name' => 'Local model', 'model' => 'llama3.2:latest', 'ready' => false, 'live' => true]));
+    }
+
     public function test_another_users_conversation_and_malformed_ids_are_not_found(): void
     {
         $conversation = $this->conversation(User::factory()->create(), ['Private']);

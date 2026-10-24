@@ -183,6 +183,12 @@ Extended the same day at the user's request with OpenCode Go and Zen (`opencode-
 
 The live check with a real account is still pending; see [docs/connections.md](docs/connections.md).
 
+Extended again at the user's request with a local model server (`local`):
+- **Configuration.** An OpenAI-compatible server on the Docker host or the local network (Ollama, LM Studio, llama.cpp, vLLM) is configured by the administrator in the engine's environment (`LOCAL_LLM_URL`). Users cannot supply an address, which prevents the engine being pointed at arbitrary hosts.
+- **Sharing.** It is shared by every user and needs no user credential (auth method `none`). An optional server key stays in the engine's environment.
+- **Execution.** Pi reaches it through its `openai-completions` API.
+- **Per-conversation snapshot.** Each conversation records the chat choice it started with (`conversations.model_provider`, `model`), so changing the choice affects only new conversations. `RunRequestFactory` sends that snapshot once `ASSISTANT_LIVE_REPLIES` is enabled with task 3.2.
+
 Review correction, 24 October 2026: account deletion first disconnects every owned record for a supported provider, including duplicate records and unfinished sign-ins. Each engine response must confirm `not_connected` before the database account is deleted. Cleanup failure preserves the account and session for a retry; previously completed disconnects remain effective. The engine remains the sole credential store.
 
 Use only Pi as the primary agent engine for this path. The Laravel AI SDK can be revisited if a future requirement changes; do not wrap one complete agent loop inside another.

@@ -6,6 +6,9 @@ export type Conversation = {
     id: string;
     title: string;
     provider_connection_id: string | null;
+    /** The provider and model this conversation was started with; null uses the built-in assistant. */
+    model_provider: string | null;
+    model: string | null;
     created_at: string;
     updated_at: string;
 };
@@ -16,7 +19,21 @@ export type ChatMessage = {
     sequence: number;
     role: ChatRole;
     content: string;
+    /** The model that wrote an assistant reply; null for user messages and built-in replies. */
+    model: string | null;
     created_at: string;
+};
+
+/** Who answers a conversation (ChatPageController). */
+export type ChatAssistant = {
+    /** Null for the built-in assistant. */
+    provider: string | null;
+    name: string;
+    model: string | null;
+    /** False when the chosen account is not connected right now. */
+    ready: boolean;
+    /** False while replies still come from the built-in simulation (before task 3.2). */
+    live: boolean;
 };
 
 export type ConversationList = {
@@ -56,4 +73,5 @@ export type ChatPageProps = {
     messages: MessageHistory | null;
     /** The user's unfinished reply, if any, so the page can resume its stream. */
     active_run: ChatRun | null;
+    assistant: ChatAssistant;
 };

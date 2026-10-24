@@ -56,7 +56,7 @@ class ConnectionsTest extends TestCase
             ->get('/settings/connections')->assertStatus(301)->assertRedirect('/connections');
     }
 
-    public function test_a_new_user_sees_three_unconnected_providers_without_records_being_created(): void
+    public function test_a_new_user_sees_four_unconnected_providers_without_records_being_created(): void
     {
         $user = User::factory()->create();
 
@@ -66,7 +66,7 @@ class ConnectionsTest extends TestCase
                 ->component('connections/index')
                 ->where('connections.engine', 'available')
                 ->where('connections.chat', null)
-                ->has('connections.providers', 3)
+                ->has('connections.providers', 4)
                 ->where('connections.providers.0', [
                     'provider' => 'openai',
                     'name' => 'ChatGPT',
@@ -76,15 +76,97 @@ class ConnectionsTest extends TestCase
                     'models' => [],
                     'test_model' => 'gpt-5.4-mini',
                     'login' => null,
+                    'local' => null,
                 ])
                 ->where('connections.providers.1.provider', 'opencode-go')
                 ->where('connections.providers.1.auth', 'api_key')
                 ->where('connections.providers.2.provider', 'opencode')
                 ->where('connections.providers.2.name', 'OpenCode Zen')
-                ->where('connections.providers.2.test_model', 'beam-free'));
+                ->where('connections.providers.2.test_model', 'beam-free')
+                ->where('connections.providers.3', [
+                    'provider' => 'local',
+                    'name' => 'Local model',
+                    'auth' => 'none',
+                    'status' => 'not_connected',
+                    'expires_at' => null,
+                    'models' => [],
+                    'test_model' => '',
+                    'login' => null,
+                    'local' => ['configured' => false, 'base_url' => null, 'error' => null],
+                ]));
 
         $this->assertSame(0, $user->providerConnections()->count());
-        $this->assertSame([], $this->engine->calls);
+        // Only the shared local server is asked about; the user has no connection records yet.
+        $this->assertSame([['localModel', 'server']], $this->engine->calls);
+    }
+
+    public function test_the_local_model_server_is_listed_tested_and_chosen_for_chat_without_a_key(): void
+    {
+        $user = User::factory()->create();
+        $this->engine->serveLocally(['qwen2.5:7b', 'llama3.2:latest']);
+        $this->actingAs($user);
+
+        $this->get('/connections')->assertInertia(fn (Assert $page) => $page
+            ->where('connections.providers.3.name', 'Ollama on this PC')
+            ->where('connections.providers.3.status', 'connected')
+            ->where('connections.providers.3.models', ['llama3.2:latest', 'qwen2.5:7b'])
+            ->where('connections.providers.3.test_model', 'llama3.2:latest')
+            ->where('connections.providers.3.local', ['configured' => true, 'base_url' => 'http://host.docker.internal:11434/v1', 'error' => null]));
+        $this->assertSame(0, $user->providerConnections()->count());
+
+        $this->post('/connections/local/test', ['model_id' => 'qwen2.5:7b'])
+            ->assertInertiaFlash('connectionTest.ok', true)
+            ->assertInertiaFlash('connectionTest.model_id', 'qwen2.5:7b');
+
+        $this->put('/connections/chat', ['provider' => 'local', 'model_id' => 'mistral:7b'])
+            ->assertSessionHasErrors(['model_id' => 'Local model does not offer that model.']);
+        $this->put('/connections/chat', ['provider' => 'local', 'model_id' => 'qwen2.5:7b'])
+            ->assertSessionHasNoErrors()
+            ->assertInertiaFlash('toast', ['type' => 'success', 'message' => 'Chat will use Local model with qwen2.5:7b.']);
+
+        $connection = $user->providerConnections()->sole();
+        $this->assertSame(['local', 'none', 'connected', null], [$connection->provider, $connection->auth_method, $connection->status, $connection->credential_reference]);
+        $this->assertSame([$connection->id, 'qwen2.5:7b'], [$user->refresh()->chat_connection_id, $user->chat_model]);
+        $this->get('/connections')->assertInertia(fn (Assert $page) => $page
+            ->where('connections.chat', ['provider' => 'local', 'name' => 'Local model', 'model' => 'qwen2.5:7b', 'connected' => true]));
+
+        // The administrator manages the server, so there is nothing to disconnect or paste.
+        $this->delete('/connections/local')->assertNotFound();
+        $this->put('/connections/local/key', ['api_key' => self::KEY])->assertNotFound();
+        $this->post('/connections/local/login')->assertNotFound();
+        $this->assertNotContains('disconnect', $this->engine->methods());
+    }
+
+    public function test_a_local_server_that_is_missing_or_down_cannot_be_chosen_and_recovers_on_the_next_visit(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $this->put('/connections/chat', ['provider' => 'local', 'model_id' => 'llama3.2:latest'])
+            ->assertSessionHasErrors(['chat' => 'No local model server is set up.']);
+
+        $this->engine->serveLocally(reachable: false);
+        $this->get('/connections')->assertInertia(fn (Assert $page) => $page
+            ->where('connections.providers.3.status', 'unreachable')
+            ->where('connections.providers.3.models', [])
+            ->where('connections.providers.3.local.error', 'Ollama on this PC could not be reached.'));
+        $this->put('/connections/chat', ['provider' => 'local', 'model_id' => 'llama3.2:latest'])
+            ->assertSessionHasErrors(['chat' => 'Local model is not reachable right now.']);
+        $this->assertSame(0, $user->providerConnections()->count());
+
+        $this->engine->serveLocally();
+        $this->put('/connections/chat', ['provider' => 'local', 'model_id' => 'llama3.2:latest'])->assertSessionHasNoErrors();
+        $connection = $user->providerConnections()->sole();
+        $user->refresh();
+
+        // The record follows the server, so chat is blocked only while it is down.
+        $this->engine->serveLocally(reachable: false);
+        $this->get('/connections')->assertInertia(fn (Assert $page) => $page->where('connections.chat.connected', false));
+        $this->assertSame('unreachable', $connection->refresh()->status);
+
+        $this->engine->serveLocally();
+        $this->get('/connections');
+        $this->assertSame('connected', $connection->refresh()->status);
     }
 
     public function test_an_unconfigured_or_unreachable_engine_is_reported_without_failing_the_page(): void

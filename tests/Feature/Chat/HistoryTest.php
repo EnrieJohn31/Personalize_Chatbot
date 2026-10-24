@@ -164,6 +164,37 @@ class HistoryTest extends TestCase
             ->assertOk()->assertJsonPath('data.provider_connection_id', null);
     }
 
+    public function test_a_new_conversation_keeps_the_chat_choice_it_started_with(): void
+    {
+        $owner = User::factory()->create();
+        $connection = $owner->providerConnections()->create(['provider' => 'local', 'auth_method' => 'none']);
+        $this->actingAs($owner);
+
+        $this->postJson('/api/chat/conversations', ['title' => 'Before a choice'])->assertCreated()
+            ->assertJsonPath('data.provider_connection_id', null)
+            ->assertJsonPath('data.model_provider', null)
+            ->assertJsonPath('data.model', null);
+
+        $owner->forceFill(['chat_connection_id' => $connection->id, 'chat_model' => 'qwen2.5:7b'])->save();
+        $owner->refresh();
+        $id = $this->postJson('/api/chat/conversations', ['title' => 'Local'])->assertCreated()
+            ->assertJsonPath('data.provider_connection_id', $connection->id)
+            ->assertJsonPath('data.model_provider', 'local')
+            ->assertJsonPath('data.model', 'qwen2.5:7b')
+            ->json('data.id');
+
+        // A later choice applies to new conversations only.
+        $owner->forceFill(['chat_model' => 'llama3.2:latest'])->save();
+        $this->getJson("/api/chat/conversations/$id")->assertJsonPath('data.model', 'qwen2.5:7b');
+
+        // The snapshot is the server's; clients cannot set or change it.
+        $this->postJson('/api/chat/conversations', ['title' => 'Forged', 'model' => 'gpt-6'])
+            ->assertUnprocessable()->assertJsonValidationErrors('model');
+        $this->patchJson("/api/chat/conversations/$id", ['model_provider' => 'openai'])
+            ->assertUnprocessable()->assertJsonValidationErrors('model_provider');
+        $this->assertDatabaseCount('conversations', 2);
+    }
+
     public function test_clients_cannot_assign_owners_ids_or_embed_messages(): void
     {
         $owner = User::factory()->create();

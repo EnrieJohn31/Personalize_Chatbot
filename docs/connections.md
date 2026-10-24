@@ -1,19 +1,20 @@
-# Connections: ChatGPT and OpenCode
+# Connections: ChatGPT, OpenCode and a local model server
 
-Build Plan task 3.1, extended on 24 October 2026. Each user connects their own AI accounts on the **Connections** page, which has its own entry in the main menu and in the chat sidebar (`/connections`; the old `/settings/connections` address redirects there).
+Build Plan task 3.1, extended on 24 October 2026. Each user connects their own AI accounts on the **Connections** page, which has its own entry in the main menu and in the chat sidebar (`/connections`; the old `/settings/connections` address redirects there). The administrator can also offer one local model server to every user.
 
 | Card | Provider ID | How it connects | Billing |
 | --- | --- | --- | --- |
 | ChatGPT | `openai` | OpenAI's "Sign in with ChatGPT" for agents, in the browser | The user's ChatGPT plan, for example Plus or Pro |
 | OpenCode Go | `opencode-go` | The user's OpenCode API key | The user's OpenCode Go subscription |
 | OpenCode Zen | `opencode` | The user's OpenCode API key | Pay as you go from the user's Zen balance; free models cost nothing |
+| Local model (named by `LOCAL_LLM_NAME`) | `local` | The administrator's OpenAI-compatible server (Ollama, LM Studio, llama.cpp or vLLM), set in `.env` | Nothing per message; it runs on your own hardware |
 
-The engine keeps every sign-in and key encrypted. Laravel and the browser only ever see non-secret status. The page also chooses which connection and model chat uses.
+The engine keeps every sign-in and key encrypted. Laravel and the browser only ever see non-secret status. The page also chooses which connection and model chat uses; the local server can be chosen exactly like the others.
 
 **Status:**
-- Implemented, and tested with fakes and live-engine browser probes on a network without internet access.
-- No real sign-in or key has been used yet, so live access is unverified; see the [provider matrix](provider-matrix.md).
-- Chat replies still come from the built-in simulation. Task 3.2 makes chat use the chosen connection.
+- Implemented, and tested with fakes and live-engine browser probes on a network without internet access. The local server was probed with a fake OpenAI-compatible server, including stopping and restarting it.
+- No real sign-in, key or local server has been used yet, so live access is unverified; see the [provider matrix](provider-matrix.md).
+- Chat replies still come from the built-in simulation. Task 3.2 makes chat use the chosen connection; until then `ASSISTANT_LIVE_REPLIES` stays `false`.
 
 ## Using it
 
@@ -26,11 +27,18 @@ The engine keeps every sign-in and key encrypted. Laravel and the browser only e
 1. Create an API key at [opencode.ai/auth](https://opencode.ai/auth). The same key works for both services.
 2. Paste it into the card and choose **Save key**. Use **Replace key** or **Remove key** later.
 
+**Local model server**
+- Users connect nothing. Once the administrator sets it up (see [Setup](#setup-and-upgrade)), the card shows **Available** with the server's address and the models it lists, and every user can test it or choose it for chat.
+- **Not set up** means `LOCAL_LLM_URL` is empty; the card shows an example. **Not answering** means the server did not respond; the card shows the reason and the usual fixes.
+- The card has no key, **Replace key** or **Disconnect**.
+
 **When connected**
 - **Send test message** sends one short message to the chosen model and shows the reply or the provider's error. At most six tests run per minute per user.
   - ChatGPT tests use `ASSISTANT_CONNECTION_TEST_MODEL` (`gpt-5.4-mini`) and count toward the plan.
   - OpenCode tests default to the free `beam-free` model (`ASSISTANT_OPENCODE_GO_TEST_MODEL`, `ASSISTANT_OPENCODE_ZEN_TEST_MODEL`), so a test costs nothing on Zen.
-- **Use for chat** chooses a connected account and one of its models, or the built-in assistant. Disconnecting the chosen account returns chat to the built-in assistant.
+  - Local tests use `LOCAL_LLM_TEST_MODEL` when the server lists it, otherwise the first listed model. They cost nothing, but a large model may take a while to load first.
+- **Use for chat** chooses a connected account (or the available local server) and one of its models, or the built-in assistant. Disconnecting the chosen account returns chat to the built-in assistant.
+  - Each new conversation keeps the choice made when it started (`conversations.model_provider` and `model`); a later choice applies to new conversations only. The chat header shows which account and model answer, and links here.
 - **Disconnect** removes the sign-in or key from this engine only. To revoke access completely, also remove it in the ChatGPT account settings or at opencode.ai.
 - **Delete application account** first disconnects all of that user's records for supported providers, including duplicate records and unfinished sign-ins. The database account is deleted only after the engine confirms removal. If cleanup fails, the account stays signed in and the delete dialog shows an error; retry after the engine recovers. Connections already removed by an earlier step stay disconnected. Accounts with no supported-provider records can still be deleted without the engine.
 
@@ -47,7 +55,11 @@ Browser ──Inertia──▶ Laravel ──signed HTTP──▶ engine (Pi) �
    └──── ChatGPT redirect to http://127.0.0.1:1455/auth/callback ──▶ engine callback listener
 ```
 
-- **Providers.** `config/assistant.php` → `connection_providers` lists the three cards in page order, with their name, `auth` method (`oauth` or `api_key`) and test model. Routes accept only these provider IDs, and each action checks the method: a key for ChatGPT, or a browser sign-in for OpenCode, is a 404.
+- **Providers.** `config/assistant.php` → `connection_providers` lists the four cards in page order, with their name, `auth` method (`oauth`, `api_key` or `none`) and test model. Routes accept only these provider IDs, and each action checks the method: a key for ChatGPT, a browser sign-in for OpenCode, or a key, sign-in or disconnect for the local server, is a 404.
+- **Local model server.** Its address exists only in the engine's environment (`LOCAL_LLM_URL`, `LOCAL_LLM_NAME`, optional `LOCAL_LLM_API_KEY`). No request can change it, so users cannot point the engine at other hosts.
+  - `LocalModelServer` reads `GET {url}/models` with a 3-second timeout, keeps the model IDs the contracts accept (at most 200), and caches the answer for 15 seconds. It never throws; a failure becomes "not answering" with a reason.
+  - It gives Pi an OpenAI-compatible provider (`openai-completions`, streaming, system role instead of developer role, no reasoning effort). Pi refuses to call a provider without a key, so the engine sends `LOCAL_LLM_API_KEY` or the placeholder `unused`, which keyless servers ignore.
+  - Laravel reads it through the signed `GET /internal/local-model`. Each user who chooses it gets a `provider_connections` row with `auth_method` `none` and no `credential_reference`. Visiting Connections mirrors the server's state into that row (`connected` or `unreachable`), so a chat blocked while the server was down works again once the page sees it answer.
 - **Connection records.** `ProviderConnections` finds or creates one `provider_connections` row per user and provider when the user first connects; viewing the page creates none.
   - It mirrors the engine's status into the row: `connected`, `not_configured` or `reauth_required`.
   - `credential_reference` holds `engine:{id}`, a pointer, never a secret. Only `connected` lets `RunRequestFactory` use the connection for a live model.
@@ -86,6 +98,18 @@ docker compose exec --user sail laravel.test php artisan agent:check   # provide
   - On a remote server, the browser's redirect cannot reach the engine; use the paste step.
 - **Keep the volume.** `docker compose down -v` deletes the `agent-data` volume with every stored sign-in and key and the installation ID. Routine `docker compose down` keeps them.
 
+**Local model server.** Set the address in `.env` and recreate the engine (`docker compose up -d agent`). Use the server's OpenAI-compatible base URL, including `/v1`:
+
+| Server | `LOCAL_LLM_URL` | Notes |
+| --- | --- | --- |
+| Ollama on the Docker host | `http://host.docker.internal:11434/v1` | On Linux, Ollama must listen on all addresses: set `OLLAMA_HOST=0.0.0.0` and restart it |
+| LM Studio on the Docker host | `http://host.docker.internal:1234/v1` | Start its local server; on Linux also enable "Serve on local network" |
+| A server on the local network | `http://192.168.1.20:8000/v1` | It must listen on its network address; llama.cpp (`llama-server --host 0.0.0.0`) and vLLM serve `/v1` |
+
+- `host.docker.internal` reaches the Docker host; Compose maps it to the host gateway (`extra_hosts`), so it also works on Linux. Docker Desktop on Windows and macOS usually forwards it to the host's own `localhost` as well.
+- `LOCAL_LLM_NAME` names the card for both Laravel and the engine. Set `LOCAL_LLM_API_KEY` only when the server was started with a key (for example vLLM `--api-key`). `LOCAL_LLM_TEST_MODEL` picks the default test model.
+- The URL must be plain `http` or `https` without a user name, password, query or fragment, or the engine refuses to start. Leave it empty and the card shows **Not set up**.
+
 ## Limits and open items
 
 - Live behavior with real accounts is unverified: ChatGPT eligibility, the token lifetime and refresh after expiry, OpenCode key acceptance, and refusals for specific models. Record the results in the provider matrix.
@@ -94,6 +118,8 @@ docker compose exec --user sail laravel.test php artisan agent:check   # provide
 - An API key typed into the page crosses the browser–Laravel connection once. Use HTTPS outside local development.
 - The engine keeps one Pi `Models` object per connection it has seen, for the life of the process. That is bounded by the number of connection records.
 - Pi's legacy `openai-codex` provider reuses the Codex CLI's OAuth client and is deliberately not used.
+- The local server is shared: everyone on this installation can use it, and there is no per-user quota beyond the run limit. Its traffic is plain HTTP unless the server offers HTTPS, so keep it on a trusted network.
+- Local models report no context window or output limit through the OpenAI API. The engine assumes 32,768 and 8,192 tokens; task 3.2 may need to make these configurable for larger models.
 
 ## Checks
 

@@ -22,6 +22,7 @@ const validators = {
     connectionLogin: compile('connection-login.schema.json'),
     connectionStatus: compile('connection-status.schema.json'),
     connectionTestResult: compile('connection-test-result.schema.json'),
+    localModelStatus: compile('local-model-status.schema.json'),
 };
 
 export type ContractName = keyof typeof validators;
@@ -74,7 +75,7 @@ export interface ConnectionKeyRequest {
 
 export interface ConnectionTestRequest {
     contractVersion: typeof CONTRACT_VERSION;
-    provider: 'openai' | 'opencode' | 'opencode-go';
+    provider: 'openai' | 'opencode' | 'opencode-go' | 'local';
     modelId: string;
 }
 

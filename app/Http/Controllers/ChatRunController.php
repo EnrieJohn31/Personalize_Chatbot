@@ -43,6 +43,8 @@ class ChatRunController extends Controller
         } catch (RunNotDispatchable $exception) {
             return $this->problem(409, $exception->reason, match ($exception->reason) {
                 'no_pending_user_message' => 'The latest message already has a reply.',
+                'connection_required' => "This chat's account is no longer connected. Connect it again on the Connections page.",
+                'connection_not_ready' => "This chat's account needs attention. Check it on the Connections page.",
                 default => 'This conversation cannot get a reply yet.',
             });
         }
@@ -64,7 +66,7 @@ class ChatRunController extends Controller
                 : $this->problem($exception->isRetryable() ? 503 : 502, 'engine_unavailable', 'The assistant could not start a reply. Try again.');
         }
 
-        $this->runs->record($run->runId, $user, $conversation);
+        $this->runs->record($run->runId, $user, $conversation, $run->modelProvider, $run->modelId);
 
         return response()->json(['data' => $this->runs->describe($run->runId, $conversation->id)], 202);
     }
@@ -86,7 +88,9 @@ class ChatRunController extends Controller
         $cursor = $request->header('Last-Event-ID', (string) $request->query('after', '0'));
         $after = preg_match('/\A\d{1,7}\z/', $cursor) === 1 ? (int) $cursor : 0;
 
-        return response()->stream(fn () => $this->relay($user, $conversation, $run, $after), 200, [
+        $model = ['provider' => $record['provider'], 'model' => $record['model']];
+
+        return response()->stream(fn () => $this->relay($user, $conversation, $run, $after, $model), 200, [
             'Content-Type' => 'text/event-stream',
             'Cache-Control' => 'no-cache, no-transform',
             'X-Accel-Buffering' => 'no',
@@ -115,8 +119,10 @@ class ChatRunController extends Controller
      * Reads the run from its first event, so the final text is always known, and forwards only
      * events after the reader's cursor. Reading continues after the browser leaves so the reply
      * is still saved; the gateway's stream timeout bounds how long that can take.
+     *
+     * @param  array{provider: string, model: string}  $model  what writes the reply, saved with it
      */
-    private function relay(User $user, Conversation $conversation, string $runId, int $after): void
+    private function relay(User $user, Conversation $conversation, string $runId, int $after, array $model): void
     {
         ignore_user_abort(true);
         $final = null;
@@ -132,7 +138,7 @@ class ChatRunController extends Controller
                 if ($event->type === 'run.completed') {
                     $final ?? throw AgentGatewayException::invalidResponse(200, 'the run completed without a final answer.');
 
-                    $message = $this->repository->appendAssistantMessage($conversation, $final, $runId);
+                    $message = $this->repository->appendAssistantMessage($conversation, $final, $runId, $model['provider'], $model['model']);
                     $data = ['message' => (new MessageResource($message))->resolve()];
                 }
 

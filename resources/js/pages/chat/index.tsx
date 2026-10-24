@@ -1,8 +1,9 @@
-import { Head, router } from '@inertiajs/react';
-import { MessageSquare, RotateCw } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { Cable, MessageSquare, RotateCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import ChatPageController from '@/actions/App/Http/Controllers/ChatPageController';
+import ConnectionsController from '@/actions/App/Http/Controllers/ConnectionsController';
 import { AppShell } from '@/components/app-shell';
 import { ChatComposer } from '@/components/chat/chat-composer';
 import { ChatHeader } from '@/components/chat/chat-header';
@@ -26,7 +27,7 @@ import {
 } from '@/lib/chat-api';
 import { titleFromMessage } from '@/lib/chat-composer';
 import type { RunStatus } from '@/lib/chat-run-state';
-import { isResponding } from '@/lib/chat-run-state';
+import { isResponding, needsConnectionFix } from '@/lib/chat-run-state';
 import type { ChatMessage, ChatPageProps, Conversation } from '@/types';
 
 const errorMessage = (caught: unknown): string =>
@@ -57,6 +58,7 @@ export default function ChatPage({
     conversation,
     messages,
     active_run: activeRun,
+    assistant,
 }: ChatPageProps) {
     const sidebar = useConversations(conversations);
     // A conversation created on this page stays here until its first message is saved.
@@ -260,6 +262,7 @@ export default function ChatPage({
             role: message.role,
             content: message.content,
             status: null,
+            model: message.model,
         })),
         ...(pending === null
             ? []
@@ -307,6 +310,7 @@ export default function ChatPage({
             <SidebarInset className="h-dvh min-h-0 overflow-hidden peer-data-[variant=inset]:min-h-0 md:peer-data-[variant=inset]:h-[calc(100dvh-1rem)]">
                 <ChatHeader
                     title={title}
+                    assistant={assistant}
                     onRename={current ? () => setRenaming(current) : undefined}
                     onDelete={
                         current ? () => setDeleting([current]) : undefined
@@ -345,6 +349,18 @@ export default function ChatPage({
                                     {replyError}
                                 </span>
                             )}
+                            {/* Account problems are fixed on Connections, not by retrying. */}
+                            {replyError &&
+                                needsConnectionFix(reply.state.errorCode) && (
+                                    <Button asChild variant="outline" size="sm">
+                                        <Link
+                                            href={ConnectionsController.index()}
+                                        >
+                                            <Cable />
+                                            Open Connections
+                                        </Link>
+                                    </Button>
+                                )}
                             <Button variant="outline" size="sm" onClick={retry}>
                                 <RotateCw />
                                 {replyError ? 'Retry reply' : 'Get a reply'}

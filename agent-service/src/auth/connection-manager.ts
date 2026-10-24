@@ -2,17 +2,22 @@ import { randomUUID } from 'node:crypto';
 import { createModels, ModelsError, type AuthInteraction, type MutableModels, type Provider } from '@earendil-works/pi-ai';
 import { CredentialVault, UnreadableCredentialsError } from './credential-vault.js';
 import { installationId } from './installation.js';
+import type { LocalModelServer } from './local-model.js';
 
 /**
  * Providers a user can connect, and how: `oauth` is the provider's own browser sign-in, `api_key`
- * a key the user enters. Each needs its own verification before it is added.
+ * a key the user enters, and `none` the administrator-configured local model server, which every
+ * user may use without a credential of their own. Each needs its own verification before it is added.
  */
 export const CONNECTION_PROVIDERS = {
     openai: 'oauth',
     opencode: 'api_key',
     'opencode-go': 'api_key',
-} as const satisfies Record<string, 'oauth' | 'api_key'>;
+    local: 'none',
+} as const satisfies Record<string, 'oauth' | 'api_key' | 'none'>;
 export type ConnectionProvider = keyof typeof CONNECTION_PROVIDERS;
+/** Providers whose credentials users store; their Pi providers come from factories. */
+export type CredentialProvider = Exclude<ConnectionProvider, 'local'>;
 
 export const isConnectionProvider = (value: unknown): value is ConnectionProvider =>
     typeof value === 'string' && Object.hasOwn(CONNECTION_PROVIDERS, value);
@@ -44,7 +49,8 @@ export interface LoginView {
 
 export interface ConnectionStatus {
     provider: ConnectionProvider;
-    status: 'connected' | 'not_connected' | 'unreadable';
+    /** `unreachable`: the local model server is configured but did not answer. */
+    status: 'connected' | 'not_connected' | 'unreadable' | 'unreachable';
     expiresAt: number | null;
     models: string[];
 }
@@ -78,7 +84,9 @@ export interface ConnectionManagerOptions {
     dataDirectory: string;
     key: Buffer;
     /** Provider factories; tests substitute fakes for the real providers. */
-    providers: Record<ConnectionProvider, () => Provider>;
+    providers: Record<CredentialProvider, () => Provider>;
+    /** The administrator-configured local model server, if any. */
+    local?: LocalModelServer | null;
     loginTimeoutMs: number;
     testTimeoutMs: number;
     now: () => number;
@@ -157,6 +165,10 @@ export class ConnectionManager {
     }
 
     async status(connectionId: string, provider: ConnectionProvider): Promise<ConnectionStatus> {
+        if (provider === 'local') {
+            return this.localStatus(connectionId);
+        }
+
         const { vault, models } = this.connection(connectionId);
         const catalog = models.getModels(provider).map((model) => model.id);
 
@@ -177,6 +189,10 @@ export class ConnectionManager {
 
     /** Removes the stored sign-in from this engine. Revoking access at the provider is the user's choice. */
     async disconnect(connectionId: string, provider: ConnectionProvider): Promise<ConnectionStatus> {
+        if (provider === 'local') {
+            // Nothing of the user's is stored for the shared local server.
+            return { provider, status: 'not_connected', expiresAt: null, models: [] };
+        }
         if (this.login?.connectionId === connectionId) {
             // A sign-in that already stored its credential still finishes; the logout then removes it.
             await this.login.cancel('The connection was removed.');
@@ -197,6 +213,9 @@ export class ConnectionManager {
     /** Sends one short message with the stored sign-in. Uses the provider allowance; only on request. */
     async test(connectionId: string, provider: ConnectionProvider, modelId: string): Promise<ConnectionTestResult> {
         const { models } = this.connection(connectionId);
+        if (provider === 'local') {
+            await this.prepareLocal(models);
+        }
         const model = models.getModel(provider, modelId);
         if (model === undefined) {
             throw new ConnectionError(422, 'unknown_model', `The ${provider} catalog has no model ${modelId}.`);
@@ -248,6 +267,30 @@ export class ConnectionManager {
         }
     }
 
+    /** The shared local server's state; it needs no credential, so every user sees the same status. */
+    private async localStatus(connectionId: string): Promise<ConnectionStatus> {
+        const local = this.options.local ?? null;
+        if (local === null) {
+            return { provider: 'local', status: 'not_connected', expiresAt: null, models: [] };
+        }
+
+        await this.prepareLocal(this.connection(connectionId).models);
+        const view = local.view();
+
+        return { provider: 'local', status: view.reachable ? 'connected' : 'unreachable', expiresAt: null, models: view.models };
+    }
+
+    /** Refreshes the local model list and gives the connection's Pi models the current provider. */
+    private async prepareLocal(models: MutableModels): Promise<void> {
+        const local = this.options.local ?? null;
+        if (local === null) {
+            return;
+        }
+
+        await local.refresh();
+        models.setProvider(local.provider());
+    }
+
     private session(connectionId: string): LoginSession {
         if (this.login === null || this.login.connectionId !== connectionId) {
             throw new ConnectionError(404, 'no_login', 'No sign-in is in progress for this connection.');
@@ -272,7 +315,7 @@ export class ConnectionManager {
         if (connection === undefined) {
             const vault = new CredentialVault(`${this.options.dataDirectory}/credentials`, connectionId, this.options.key);
             const models = createModels({ credentials: vault, authContext: NO_AMBIENT_AUTH });
-            for (const provider of Object.keys(CONNECTION_PROVIDERS) as ConnectionProvider[]) {
+            for (const provider of Object.keys(this.options.providers) as CredentialProvider[]) {
                 models.setProvider(this.options.providers[provider]());
             }
             connection = { vault, models };
@@ -285,7 +328,9 @@ export class ConnectionManager {
 
 function requireAuthMethod(provider: ConnectionProvider, method: 'oauth' | 'api_key'): void {
     if (CONNECTION_PROVIDERS[provider] !== method) {
-        const how = CONNECTION_PROVIDERS[provider] === 'oauth' ? 'a browser sign-in' : 'an API key';
+        const how = { oauth: 'a browser sign-in', api_key: 'an API key', none: "the administrator's configuration" }[
+            CONNECTION_PROVIDERS[provider]
+        ];
         throw new ConnectionError(422, 'unsupported_auth_method', `${provider} connects with ${how}.`);
     }
 }

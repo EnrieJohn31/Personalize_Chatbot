@@ -5,6 +5,7 @@ namespace App\Services\Connections;
 use App\Contracts\ConnectionGateway;
 use App\Data\Agent\ConnectionStatus;
 use App\Data\Agent\ConnectionTestResult;
+use App\Data\Agent\LocalModelStatus;
 use App\Data\Agent\LoginState;
 use App\Models\ProviderConnection;
 use App\Models\User;
@@ -14,10 +15,10 @@ use SensitiveParameter;
 
 /**
  * A user's provider connections (Build Plan task 3.1): ChatGPT through OpenAI's own "Sign in with
- * ChatGPT", and OpenCode Go and Zen through a key the user enters. The engine holds every
- * credential. Laravel keeps one connection record per provider with a mirrored, non-secret status,
- * which decides whether a run may use the connection, plus the user's choice of connection and
- * model for chat.
+ * ChatGPT", OpenCode Go and Zen through a key the user enters, and the administrator's local model
+ * server, which needs no credential of the user's. The engine holds every credential. Laravel keeps
+ * one connection record per provider with a mirrored, non-secret status, which decides whether a
+ * run may use the connection, plus the user's choice of connection and model for chat.
  */
 final class ProviderConnections
 {
@@ -27,6 +28,9 @@ final class ProviderConnections
     public const NOT_CONFIGURED = 'not_configured';
 
     public const REAUTH_REQUIRED = 'reauth_required';
+
+    /** The local model server is configured but did not answer. */
+    public const UNREACHABLE = 'unreachable';
 
     /** What the engine's login contract accepts as the name on the consent screen. */
     private const AGENT_NAME_PATTERN = '/\A[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}\z/';
@@ -73,6 +77,33 @@ final class ProviderConnections
     public function status(ProviderConnection $connection): ConnectionStatus
     {
         return $this->mirror($connection, $this->gateway->connectionStatus($connection->id, $connection->provider));
+    }
+
+    /**
+     * The administrator's local model server; its address is engine configuration only.
+     *
+     * @throws AgentGatewayException
+     */
+    public function localModel(): LocalModelStatus
+    {
+        return $this->gateway->localModel();
+    }
+
+    /**
+     * Brings the user's local-server record, if any, in line with what the server just answered,
+     * so a chat blocked while it was down works again once the Connections page sees it answer.
+     */
+    public function mirrorLocal(User $user, string $provider, LocalModelStatus $local): void
+    {
+        $connection = $this->find($user, $provider);
+
+        if ($connection !== null) {
+            $this->record($connection, match (true) {
+                ! $local->configured => self::NOT_CONFIGURED,
+                $local->reachable => self::CONNECTED,
+                default => self::UNREACHABLE,
+            });
+        }
     }
 
     /** @throws AgentGatewayException */
@@ -147,7 +178,10 @@ final class ProviderConnections
      */
     public function disconnectAll(User $user): void
     {
-        foreach ($user->providerConnections()->whereIn('provider', array_keys($this->providers))->cursor() as $connection) {
+        // The shared local model server holds nothing of the user's, so there is nothing to remove.
+        $withCredentials = array_keys(array_filter($this->providers, fn (array $provider): bool => $provider['auth'] !== 'none'));
+
+        foreach ($user->providerConnections()->whereIn('provider', $withCredentials)->cursor() as $connection) {
             $this->disconnect($user, $connection);
         }
     }
@@ -200,6 +234,7 @@ final class ProviderConnections
         $this->record($connection, match ($status->status) {
             'connected' => self::CONNECTED,
             'unreadable' => self::REAUTH_REQUIRED,
+            'unreachable' => self::UNREACHABLE,
             default => self::NOT_CONFIGURED,
         });
 
@@ -208,10 +243,12 @@ final class ProviderConnections
 
     private function record(ProviderConnection $connection, string $status): void
     {
+        $holdsCredential = $status !== self::NOT_CONFIGURED && $this->authMethod($connection->provider) !== 'none';
+
         $connection->forceFill([
             'status' => $status,
             // Names where the credential lives; it is never the credential itself.
-            'credential_reference' => $status === self::NOT_CONFIGURED ? null : "engine:{$connection->id}",
+            'credential_reference' => $holdsCredential ? "engine:{$connection->id}" : null,
         ]);
 
         if ($connection->isDirty()) {

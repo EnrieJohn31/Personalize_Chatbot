@@ -19,10 +19,10 @@
             "type": "string",
             "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         },
-        "provider": { "enum": ["openai", "opencode", "opencode-go"] },
+        "provider": { "enum": ["openai", "opencode", "opencode-go", "local"] },
         "status": {
-            "description": "unreadable: a sign-in is stored but this engine cannot decrypt it. Signing in again replaces it.",
-            "enum": ["connected", "not_connected", "unreadable"]
+            "description": "unreadable: a sign-in or key is stored but this engine cannot decrypt it; connecting again replaces it. unreachable: the local model server is configured but did not answer.",
+            "enum": ["connected", "not_connected", "unreadable", "unreachable"]
         },
         "expiresAt": {
             "description": "Unix time in milliseconds when the current access token expires. The engine renews it automatically.",

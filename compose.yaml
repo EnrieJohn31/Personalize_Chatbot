@@ -61,6 +61,15 @@ services:
             AGENT_DATA_DIR: /var/lib/agent
             # Pi's sign-in callback listener must accept the published port below.
             PI_OAUTH_CALLBACK_HOST: 0.0.0.0
+            # Optional OpenAI-compatible local model server (Ollama, LM Studio, llama.cpp, vLLM).
+            # Set by the administrator only; users cannot point the engine at other addresses.
+            LOCAL_LLM_URL: '${LOCAL_LLM_URL:-}'
+            LOCAL_LLM_NAME: '${LOCAL_LLM_NAME:-}'
+            LOCAL_LLM_API_KEY: '${LOCAL_LLM_API_KEY:-}'
+        # Lets the engine reach a model server on this computer as host.docker.internal on any
+        # Docker host (Docker Desktop provides the name already; Linux needs this mapping).
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
         expose:
             - '3101'
         ports:

@@ -6,6 +6,7 @@ use App\Contracts\AgentGateway;
 use App\Contracts\ConnectionGateway;
 use App\Data\Agent\ConnectionStatus;
 use App\Data\Agent\ConnectionTestResult;
+use App\Data\Agent\LocalModelStatus;
 use App\Data\Agent\LoginState;
 use App\Data\Agent\RunAcknowledgement;
 use App\Data\Agent\RunEvent;
@@ -139,6 +140,13 @@ final class PiGateway implements AgentGateway, ConnectionGateway
             'requestAuth' => $field('requestAuth'),
             'simulation' => $field('simulation'),
         ];
+    }
+
+    public function localModel(): LocalModelStatus
+    {
+        $response = $this->send('GET', '/internal/local-model', null, timeout: $this->connectionTimeout);
+
+        return $this->answer($response, fn (mixed $payload) => LocalModelStatus::fromPayload($payload));
     }
 
     public function connectionStatus(string $connectionId, string $provider): ConnectionStatus

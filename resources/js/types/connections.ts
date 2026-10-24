@@ -1,6 +1,10 @@
 /** Shapes of the Connections page props (ConnectionsController). */
 
-export type ConnectionProviderId = 'openai' | 'opencode-go' | 'opencode';
+export type ConnectionProviderId =
+    | 'openai'
+    | 'opencode-go'
+    | 'opencode'
+    | 'local';
 
 /** A ChatGPT browser sign-in, while it runs or until its sign-in window ends. */
 export type ChatGptSignIn = {
@@ -20,15 +24,29 @@ export type ChatGptSignIn = {
 export type ProviderConnectionCard = {
     provider: ConnectionProviderId;
     name: string;
-    /** `oauth`: the provider's browser sign-in; `api_key`: a key the user pastes. */
-    auth: 'oauth' | 'api_key';
-    /** Null when the engine could not be asked. */
-    status: 'connected' | 'not_connected' | 'unreadable' | null;
+    /**
+     * `oauth`: the provider's browser sign-in; `api_key`: a key the user pastes; `none`: the
+     * administrator's local model server, shared by every user.
+     */
+    auth: 'oauth' | 'api_key' | 'none';
+    /** Null when the engine could not be asked; `unreachable` only for the local server. */
+    status: 'connected' | 'not_connected' | 'unreadable' | 'unreachable' | null;
     expires_at: string | null;
     /** The provider's model catalog; empty until connected. */
     models: string[];
+    /** Empty when the local server lists no models. */
     test_model: string;
     login: ChatGptSignIn | null;
+    /** The local server's setup, only on the local card. */
+    local: LocalServer | null;
+};
+
+export type LocalServer = {
+    /** False until the administrator sets LOCAL_LLM_URL. */
+    configured: boolean;
+    base_url: string | null;
+    /** Why the server could not be read. */
+    error: string | null;
 };
 
 /** The connection and model chosen for chat replies. */

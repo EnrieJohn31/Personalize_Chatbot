@@ -69,6 +69,7 @@ test('connection examples satisfy their v1 schemas', () => {
         connectionLogin: 'connection-login.json',
         connectionStatus: 'connection-status.json',
         connectionTestResult: 'connection-test-result.json',
+        localModelStatus: 'local-model-status.json',
     };
     for (const [contract, file] of Object.entries(examples)) {
         assert.deepEqual(validate(contract, example(file)), [], file);

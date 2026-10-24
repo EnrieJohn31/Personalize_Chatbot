@@ -32,6 +32,8 @@ class AccountConnectionCleanupTest extends TestCase
         }
         $foreign = $other->providerConnections()->create(['provider' => 'openai', 'auth_method' => 'oauth']);
         $user->providerConnections()->create(['provider' => 'metadata-only', 'auth_method' => 'api_key']);
+        // The shared local model server holds nothing of the user's; only its record goes.
+        $user->providerConnections()->create(['provider' => 'local', 'auth_method' => 'none']);
 
         $this->actingAs($user)->delete(route('profile.destroy'), ['password' => 'password'])
             ->assertSessionHasNoErrors()->assertRedirect(route('home'));

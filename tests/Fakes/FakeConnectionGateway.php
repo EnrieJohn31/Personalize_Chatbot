@@ -5,6 +5,7 @@ namespace Tests\Fakes;
 use App\Contracts\ConnectionGateway;
 use App\Data\Agent\ConnectionStatus;
 use App\Data\Agent\ConnectionTestResult;
+use App\Data\Agent\LocalModelStatus;
 use App\Data\Agent\LoginState;
 use App\Services\Ai\AgentGatewayException;
 
@@ -44,11 +45,31 @@ final class FakeConnectionGateway implements ConnectionGateway
     /** @var array<string, AgentGatewayException> thrown by the named method instead of answering */
     public array $failures = [];
 
+    /** The administrator's local model server; null when none is configured. */
+    public ?LocalModelStatus $local = null;
+
     public function connectionStatus(string $connectionId, string $provider): ConnectionStatus
     {
         $this->call(__FUNCTION__, $connectionId, $provider);
 
         return $this->status($connectionId, $provider);
+    }
+
+    public function localModel(): LocalModelStatus
+    {
+        $this->call(__FUNCTION__, 'server');
+
+        return $this->local ?? new LocalModelStatus(false, null, null, false, [], null);
+    }
+
+    /**
+     * A configured local server listing these models, or not answering.
+     *
+     * @param  list<string>  $models
+     */
+    public function serveLocally(array $models = ['llama3.2:latest', 'qwen2.5:7b'], bool $reachable = true): void
+    {
+        $this->local = new LocalModelStatus(true, 'Ollama on this PC', 'http://host.docker.internal:11434/v1', $reachable, $reachable ? $models : [], $reachable ? null : 'Ollama on this PC could not be reached.');
     }
 
     public function startLogin(string $connectionId, string $provider, string $agentName): LoginState
@@ -129,6 +150,12 @@ final class FakeConnectionGateway implements ConnectionGateway
 
     private function status(string $connectionId, string $provider): ConnectionStatus
     {
+        if ($provider === 'local') {
+            $status = $this->local === null ? 'not_connected' : ($this->local->reachable ? 'connected' : 'unreachable');
+
+            return new ConnectionStatus($connectionId, 'local', $status, null, $this->local->models ?? []);
+        }
+
         return new ConnectionStatus(
             $connectionId,
             $provider,

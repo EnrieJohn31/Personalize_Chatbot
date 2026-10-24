@@ -113,6 +113,32 @@ class RunRequestFactoryTest extends TestCase
         $this->assertSame($connection->id, $this->factory()->forConversation($owner, $conversation->refresh())->connectionId);
     }
 
+    public function test_a_conversation_keeps_the_model_it_started_with_once_live_replies_are_on(): void
+    {
+        $owner = User::factory()->create();
+        $connection = $this->connection($owner, 'local');
+        DB::table('provider_connections')->where('id', $connection->id)->update(['status' => RunRequestFactory::READY_CONNECTION_STATUS]);
+        $conversation = $this->conversation($owner, ['Hello']);
+        DB::table('conversations')->where('id', $conversation->id)->update([
+            'provider_connection_id' => $connection->id, 'model_provider' => 'local', 'model' => 'qwen2.5:7b',
+        ]);
+        $conversation->refresh();
+
+        // Until live replies are turned on, every conversation uses the default profile.
+        $this->assertSame(['provider' => 'simulated', 'id' => 'simulated-echo'], $this->factory()->forConversation($owner, $conversation)->toArray()['model']);
+
+        config(['assistant.live_replies' => true]);
+        $request = $this->factory()->forConversation($owner, $conversation);
+        $this->assertSame(['provider' => 'local', 'id' => 'qwen2.5:7b'], $request->toArray()['model']);
+        $this->assertSame($connection->id, $request->connectionId);
+
+        // A conversation started before any choice was made keeps the default.
+        $this->assertSame('simulated', $this->factory()->forConversation($owner, $this->conversation($owner, ['Hi']))->modelProvider);
+
+        DB::table('provider_connections')->where('id', $connection->id)->update(['status' => 'unreachable']);
+        $this->assertNotDispatchable('connection_not_ready', $owner, $conversation->refresh());
+    }
+
     public function test_a_run_needs_a_pending_user_message(): void
     {
         $owner = User::factory()->create();

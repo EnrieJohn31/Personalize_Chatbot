@@ -1,5 +1,49 @@
 # Foundation validation
 
+## Local model connection and pre-3.2 refinements — 24 October 2026
+
+Requested by the user before task 3.2:
+- **Local model server.** An administrator-configured OpenAI-compatible server (Ollama, LM Studio, llama.cpp or vLLM), on the Docker host or the local network, offered to every user and selectable in "Use for chat" like ChatGPT and OpenCode.
+- **Refinements.**
+  - Each conversation records the chat choice it started with.
+  - Replies record the provider and model that wrote them, and the page shows it.
+  - Account errors link to Connections.
+  - Starting replies is rate-limited.
+  - `messages.content` is widened to `MEDIUMTEXT`.
+  - OPcache is enabled for the PHP CLI server.
+
+See [connections.md](connections.md), [chat-ui.md](chat-ui.md), [chat-history.md](chat-history.md), [the contracts](../contracts/README.md#provider-connections) and [setup.md](setup.md). Two additive migrations; no dependency or lockfile changed. Rebuilding the PHP image is needed for OPcache.
+
+| Check | Observed result |
+| --- | --- |
+| `composer ci:check` | Passed: formatting (130 files), lint (92 files), TypeScript, 22 frontend unit tests, Pint, PHPStan (no errors), and 232 Laravel tests / 1332 assertions |
+| Engine `npm test` | 61 tests passed, in an image rebuilt from the worktree |
+| `npm run build` | Passed |
+| Browser probe | 14/14 passed in four phases against a fake OpenAI-compatible server, the worktree's engine image and a worktree server, on an internal Docker network without internet access (details below) |
+| Test speed | The PHP suite took 480 s without OPcache and 45–54 s with `opcache.enable_cli=1` in the same worktree container |
+
+**New Laravel tests (18, counting data sets):**
+- **Connections (2).** Four cards, with the shared server asked about but no records created. The local card's listing, test and chat choice. Missing or down servers refused without a record, and the record following the server down and back up.
+- **Chat (6).** Conversations keep the choice they started with, and clients cannot set it. The chat header's `assistant` prop for new chats, older chats and a down server. A live run using the conversation's local model and recording it on the reply. The new 409 messages. The 20-per-minute run limit.
+- **Run requests (1).** The conversation's model is used only with live replies on; an unreachable record is `connection_not_ready`.
+- **Gateway and payloads (9).** The signed `GET /internal/local-model`, the example payloads, and 7 rejected payload shapes.
+- **Changed.** Account deletion skips the local record's engine disconnect.
+
+**Engine tests (6 new):** configuration rules for `LOCAL_LLM_URL`; listing and caching; unreachable and unconfigured servers; a streamed test message with and without a key (the placeholder `unused` when none is set); keys, sign-ins and disconnect refused or harmless for `local`.
+
+**Frontend tests (1 new):** account error codes reach the reducer, `needsConnectionFix` recognises them, and following the run again clears them.
+
+**Browser probe (14/14):**
+- **Server up (6).** The card shows **Available**, the address and two models, with no key or disconnect controls. A test message reached the fake server as a streamed `qwen2.5:7b` request. The server was offered and saved in "Use for chat". A new chat's header showed `Ollama on this PC · qwen2.5:7b` and kept it after the (simulated) reply, which had no model label. A conversation started earlier still showed the built-in assistant.
+- **Server stopped (3).** **Not answering** with the reason and fixes; the chat choice warned; the chat header turned amber with "not answering" in its tooltip.
+- **Server restarted (3).** The card and header recovered on the next visit. No horizontal scroll at 390px width.
+- **No `LOCAL_LLM_URL` (2).** **Not set up** with an example address.
+- **All phases.** No console errors.
+
+The first probe run found a real bug: Pi refuses to call a provider without an API key, so a keyless server (the normal Ollama and LM Studio setup) failed every test message with "No API key for provider: local". The engine test had always set a key. The engine now sends the placeholder, a new engine test covers it, and the probe passed. The screenshots also led to clearer wording for a server that is down ("not answering" rather than "connect again") and conditional `OLLAMA_HOST` advice.
+
+Not verified: a real Ollama, LM Studio, llama.cpp or vLLM server, and real replies from any connection (task 3.2). Remote CI was not inspected.
+
 ## Code and contributor review — 24 October 2026
 
 Reviewed the local changes in `d7bad7e` and `09da496`: connection ownership and request validation, encrypted credentials, signed engine calls, non-secret responses, the chat choice and conversation deletion. Both commits already had descriptive messages and the approved author/committer; they were preserved.

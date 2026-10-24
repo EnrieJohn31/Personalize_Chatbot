@@ -22,6 +22,8 @@ export type RunState = {
     /** True while the browser is reconnecting after a resumable stream error. */
     reconnecting: boolean;
     error: string | null;
+    /** The failure's code, for example `reauth_required`, so the page can offer the right next step. */
+    errorCode: string | null;
     /** Whether following the same run again can still succeed. */
     resumable: boolean;
 };
@@ -39,7 +41,12 @@ export type RunAction =
     | { type: 'event'; event: RunStreamEvent }
     | { type: 'stopping' }
     | { type: 'stopFailed'; message: string }
-    | { type: 'failed'; message: string; resumable: boolean };
+    | {
+          type: 'failed';
+          message: string;
+          resumable: boolean;
+          code?: string | null;
+      };
 
 export const initialRunState: RunState = {
     status: 'idle',
@@ -49,8 +56,24 @@ export const initialRunState: RunState = {
     lastSequence: 0,
     reconnecting: false,
     error: null,
+    errorCode: null,
     resumable: false,
 };
+
+/** Failures that the user fixes on the Connections page rather than by retrying. */
+export const CONNECTION_ERROR_CODES: readonly string[] = [
+    'connection_required',
+    'connection_not_ready',
+    'not_connected',
+    'reauth_required',
+    'credentials_unreadable',
+];
+
+export const needsConnectionFix = (code: string | null): boolean =>
+    code !== null && CONNECTION_ERROR_CODES.includes(code);
+
+const code = (data: Record<string, unknown>): string | null =>
+    typeof data.code === 'string' ? data.code : null;
 
 export const TERMINAL_EVENTS: readonly RunEventType[] = [
     'run.completed',
@@ -78,6 +101,7 @@ export function runReducer(state: RunState, action: RunAction): RunState {
                       ...state,
                       status: 'streaming',
                       error: null,
+                      errorCode: null,
                       resumable: false,
                   }
                 : { ...initialRunState, status: 'streaming', run: action.run };
@@ -95,6 +119,7 @@ export function runReducer(state: RunState, action: RunAction): RunState {
                 status: 'failed',
                 reconnecting: false,
                 error: action.message,
+                errorCode: action.code ?? null,
                 resumable: action.resumable,
             };
         case 'event':
@@ -112,7 +137,13 @@ function applyEvent(state: RunState, event: RunStreamEvent): RunState {
 
         return resumable
             ? { ...state, reconnecting: true }
-            : { ...state, status: 'failed', error: message, resumable: false };
+            : {
+                  ...state,
+                  status: 'failed',
+                  error: message,
+                  errorCode: code(event.data),
+                  resumable: false,
+              };
     }
 
     // EventSource replays events after reconnecting; apply each sequence once.
@@ -150,6 +181,7 @@ function applyEvent(state: RunState, event: RunStreamEvent): RunState {
                     typeof event.data.message === 'string'
                         ? event.data.message
                         : 'The reply could not be completed.',
+                errorCode: code(event.data),
                 resumable: false,
             };
         default:

@@ -38,7 +38,7 @@ Run these from the project root:
 | Full PHP/frontend checks (includes the frontend unit tests) | `docker compose exec --user sail laravel.test composer ci:check` |
 | Frontend unit tests only | `docker compose exec --user sail laravel.test npm run test` |
 | Chat page | Open `http://localhost:8080/chat` after signing in |
-| Connect ChatGPT or OpenCode | Open `http://localhost:8080/connections` after signing in |
+| Connect ChatGPT, OpenCode or the local model server | Open `http://localhost:8080/connections` after signing in |
 | Pi TypeScript check | `docker compose exec agent npm run check` |
 | Pi build and tests | `docker compose exec agent npm test` |
 | Engine signing and reachability | `docker compose exec --user sail laravel.test php artisan agent:check` |
@@ -62,6 +62,8 @@ Stop Vite with Ctrl+C before switching to built assets. If an interrupted develo
 - Each open reply stream occupies one of the four PHP CLI server workers until the reply finishes.
 - `AGENT_REQUEST_SIGNING_KEY` in `.env` is shared by Laravel and the engine. After adding or changing it, run `docker compose up -d agent` so the engine container receives the new value, then `php artisan agent:check`. Without a key, the engine's run endpoints return 503 and Laravel sends nothing.
 - `AGENT_CREDENTIAL_KEY` in `.env` is read only by the engine, which encrypts stored sign-ins and API keys with it. Keep it stable: changing it makes existing sign-ins unreadable, and users must sign in again. After adding it, run `docker compose up -d agent`.
+- `LOCAL_LLM_URL` (optional) points the engine at a local model server such as Ollama or LM Studio, offered to every user on the Connections page; `LOCAL_LLM_NAME`, `LOCAL_LLM_API_KEY` and `LOCAL_LLM_TEST_MODEL` go with it. Run `docker compose up -d agent` after changing them. See [the connections guide](connections.md#setup-and-upgrade) for addresses per server.
+- `ASSISTANT_LIVE_REPLIES` stays `false` until task 3.2; while it is off, every reply is simulated even when chat is set to a connected account.
 - Laravel sessions/cache use MySQL; queued work is synchronous for this phase. Redis and a queue worker are not required.
 - Email uses the log transport in local development: nothing is delivered to an inbox. After registering, find the verification link in `storage/logs/laravel.log`. The message is stored MIME-encoded, so the link is split across lines ending in `=`, and `=3D` stands for `=`; join those lines before opening it. The link expires after 60 minutes; use "Resend verification email" for a fresh one. Open it on the same host you signed in on (`localhost` and `127.0.0.1` have separate session cookies). No real mail service or provider credentials have been configured.
 
@@ -71,6 +73,6 @@ Stop Vite with Ctrl+C before switching to built assets. If an interrupted develo
 
 The Windows filesystem was observably slow during Composer extraction and initial checks. A future move of this single authoritative checkout into Ubuntu's Linux filesystem should improve bind-mount performance. Complete Ubuntu's user and Docker integration first; avoid maintaining two independently edited copies. Another option is Linux named volumes for dependencies, but that changes IDE indexing and has not been introduced here.
 
-Individual requests can take seconds because PHP's CLI development server runs without OPcache (`opcache.enable_cli=0`) and re-reads the framework from the bind mount. In a probe server, enabling it (`opcache.enable_cli=1`) cut warm requests from about 3.6 s to 220–440 ms; see [validation.md](validation.md). Adding that setting to `docker/php/php.ini` for development is suggested but not yet done; with `opcache.validate_timestamps` left on, code changes still apply immediately.
+PHP's CLI development server used to run without OPcache and re-read the framework from the bind mount on every request (about 3.6 s each). Since 24 October 2026 `docker/php/php.ini` enables it for the CLI (`opcache.enable_cli=1`) and checks file timestamps on every request, so code changes still apply immediately. It takes effect after rebuilding the PHP image: `docker compose up -d --build laravel.test`. It also speeds up the test suite (about 45 s instead of 8 minutes in a worktree container); see [validation.md](validation.md).
 
-Phase 2 is complete; the chat page and its simulated replies are described in [chat-ui.md](chat-ui.md). Task 3.1's ChatGPT sign-in is described in [connections.md](connections.md); its live check with a real account and real replies (task 3.2) come next. The starter dashboard remains a placeholder; its sidebar links to Chat. Production images, TLS, durable runs and real provider testing remain in the build plan.
+Phase 2 is complete; the chat page and its simulated replies are described in [chat-ui.md](chat-ui.md). Task 3.1's connections (ChatGPT, OpenCode and a local model server) are described in [connections.md](connections.md); their live checks and real replies (task 3.2) come next. The starter dashboard remains a placeholder; its sidebar links to Chat. Production images, TLS, durable runs and real provider testing remain in the build plan.

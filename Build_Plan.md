@@ -3,13 +3,13 @@
 Updated: 24 October 2026\
 Version: 12\
 Companion: [Blueprint.md](Blueprint.md), revision 14; [handoff.md](handoff.md) for the continuation record\
-Status: Phases 0–2 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page and simulated replies streamed through Laravel are implemented. Task 3.1's connections are implemented: ChatGPT sign-in, OpenCode Go/Zen keys, an encrypted credential store and a chat choice. The live check with a real account is pending. The user also asked for chat deletion and date sections, which are implemented. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md) and [validation](docs/validation.md).
+Status: Phases 0–2 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page and simulated replies streamed through Laravel are implemented. Task 3.1's connections are implemented: ChatGPT sign-in, OpenCode Go/Zen keys, an administrator-configured local model server, an encrypted credential store and a chat choice recorded per conversation. The live check with a real account is pending. The user also asked for chat deletion and date sections, which are implemented. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md) and [validation](docs/validation.md).
 
 ## Start here
 
 Build a reusable chatbot foundation with Laravel, React/Inertia, TypeScript, shadcn/ui, Lucide, MySQL and a private Node/Pi engine. Use Docker Compose/Sail for development. Keep Pi as the engine throughout this plan.
 
-**Next task: finish 3.1 — the operator connects a real ChatGPT or OpenCode account on the Connections page and sends a test message; then 3.2, which makes chat use the chosen connection.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
+**Next task: finish 3.1 — the operator connects a real ChatGPT or OpenCode account (or a real local model server) on the Connections page and sends a test message; then 3.2, which makes chat use each conversation's recorded connection.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
 
 Use **Blueprint.md for design decisions** and **this file for work order and progress**. Update both when a decision changes. Read the relevant blueprint sections before each phase; there is no need to reproduce the entire architecture in every task.
 
@@ -172,12 +172,12 @@ Keep a short progress record here as implementation proceeds:
 
 | Field | Current value |
 | --- | --- |
-| Current task | 3.1 — implemented; waiting for the operator's live sign-in and test message |
+| Current task | 3.1 — implemented (ChatGPT, OpenCode, local model server); waiting for the operator's live test message. Task 3.2's preparation is done |
 | Last completed task | 2.4 — simulated reply stream through Laravel and one React hook (Phase 2 complete) |
-| Actual checks run on the application | Review on 24 October: baseline `composer ci:check` passed (210 Laravel tests / 1107 assertions, 21 frontend tests, format/lint/types/Pint/PHPStan); 55 engine tests passed. After the account-cleanup fix: 32 targeted tests / 342 assertions, PHPStan and changed-file Pint passed. Live `agent:check` and migration-status checks passed — see docs/validation.md |
-| Git checkpoint and branches | Published to both `main` and `development` on 24 October: task 3.1 `d7bad7e`, chat/connection additions `09da496`, account-cleanup fix `ac5a7f9`, and review record `5345421`. Original commits and messages are preserved; this documentation records that publication |
-| Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key, connected on the Connections page |
-| Next checkpoint | Task 3.1: a live test message succeeds; then record persistence across an engine restart and refresh after the token expires |
+| Actual checks run on the application | Local model and refinements on 24 October: `composer ci:check` passed (232 Laravel tests / 1332 assertions, 22 frontend tests, format/lint/types/Pint/PHPStan); 61 engine tests passed; a 14-check browser probe against a fake local server passed — see docs/validation.md |
+| Git checkpoint and branches | Local, not pushed: "Add a local model connection and pre-3.2 refinements" on `development`. Last published to both `main` and `development` on 24 October: task 3.1 `d7bad7e`, chat/connection additions `09da496`, account-cleanup fix `ac5a7f9`, and review record `5345421` |
+| Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
+| Next checkpoint | Task 3.1: a live test message succeeds; then record persistence across an engine restart and refresh after the token expires. Then task 3.2 |
 
 For each completed task, append: `ID — result — verification/evidence — remaining issue, if any`. Record a commit reference when working in Git. Checkboxes remain open for partially implemented or unverified behavior.
 
@@ -219,6 +219,18 @@ For each completed task, append: `ID — result — verification/evidence — re
   - Remaining: real OpenCode keys are untested, and chat starts using the chosen connection in task 3.2.
 
 - Review correction — Found that account deletion left engine credentials behind. `ac5a7f9` disconnects all owned supported-provider records before deleting the account, requires confirmed removal and preserves the account on failure. Four new regression cases pass within the 32-test targeted run. Existing implementation commits and the complete history pass the contributor policy; local settings remain ignored. Task 3.1's live acceptance remains open.
+
+- User-requested local model connection and pre-3.2 refinements (during 3.1):
+  - **Local model server.** An administrator-configured OpenAI-compatible server (`LOCAL_LLM_URL`: Ollama, LM Studio, llama.cpp or vLLM, on the Docker host or the network) is a fourth Connections card, shared by every user and selectable in "Use for chat". Its address is engine configuration only.
+  - **Refinements.**
+    - Each conversation records the chat choice it started with, which `RunRequestFactory` uses once `ASSISTANT_LIVE_REPLIES` is on.
+    - Replies record and show their model; the chat header shows the account and model.
+    - Account errors link to Connections.
+    - Run starts are limited to 20 per minute.
+    - `messages.content` is `MEDIUMTEXT`.
+    - CLI OPcache is on in development.
+  - Verification: 18 new Laravel tests (232 total), 1 new frontend test, 6 new engine tests (61 total), and a 14-check browser probe against a fake local server (up, stopped, restarted, not configured) without internet access. The probe found and fixed keyless local servers being refused.
+  - Remaining: no real local server tested; replies stay simulated until task 3.2.
 
 - Publication — At the user's request, fast-forwarded `main` and atomically pushed the four reviewed commits through `5345421` to both remote branches. Fetched tips showed no divergence; the full contributor audit and diff checks passed, `.claude/` remained excluded, and both remote hashes matched. No application code changed or application tests reran during publication; remote CI results remain unverified.
 

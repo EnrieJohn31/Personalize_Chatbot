@@ -52,7 +52,7 @@ export default function Connections({
             <div className="w-full max-w-3xl space-y-6 px-4 py-6">
                 <Heading
                     title="Connections"
-                    description="Connect your own AI accounts and choose which one chat uses. Every sign-in and key stays encrypted on this server and is never sent back to your browser."
+                    description="Connect your own AI accounts or a local model server, and choose which one chat uses. Every sign-in and key stays encrypted on this server and is never sent back to your browser."
                 />
 
                 {!available && (

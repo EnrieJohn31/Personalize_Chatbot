@@ -11,6 +11,7 @@ import {
     isConnectionProvider,
     type ConnectionProvider,
 } from './auth/connection-manager.js';
+import { LocalModelServer, type LocalModelView } from './auth/local-model.js';
 import { loadConfig, type ServerConfig } from './config.js';
 import {
     CONTRACT_VERSION,
@@ -71,6 +72,8 @@ class HttpError extends Error {
 export interface ServerDependencies {
     /** Provider sign-ins; defaults to the real providers when a credential key is configured. */
     connections?: ConnectionManager | null;
+    /** The local model server; defaults to LOCAL_LLM_URL when set. */
+    local?: LocalModelServer | null;
 }
 
 // Loading both libraries proves the selected Pi packages work in this runtime. Run admission
@@ -82,6 +85,12 @@ export function createServer(config: ServerConfig = loadConfig(), dependencies: 
     }
 
     const registry = new RunRegistry(config.maxTrackedRuns, config.trackedRunTtlMs, config.now, config.maxEventsPerRun);
+    const local =
+        dependencies.local !== undefined
+            ? dependencies.local
+            : config.localModel === null
+              ? null
+              : new LocalModelServer(config.localModel, config.now);
     const connections =
         dependencies.connections !== undefined
             ? dependencies.connections
@@ -91,6 +100,7 @@ export function createServer(config: ServerConfig = loadConfig(), dependencies: 
                     dataDirectory: config.dataDirectory,
                     key: config.credentialKey,
                     providers: { openai: openaiProvider, opencode: opencodeProvider, 'opencode-go': opencodeGoProvider },
+                    local,
                     loginTimeoutMs: config.loginTimeoutMs,
                     testTimeoutMs: config.connectionTestTimeoutMs,
                     now: config.now,
@@ -127,6 +137,9 @@ export function createServer(config: ServerConfig = loadConfig(), dependencies: 
                 streamEvents(response, eventsPath[1]!, url.searchParams);
             } else if (connectionPath !== null) {
                 await routeConnection(request, response, connectionPath[1]!, connectionPath[2] ?? '', url.searchParams);
+            } else if (request.method === 'GET' && target === '/internal/local-model') {
+                await authenticate(request);
+                sendJson(response, 200, { contractVersion: CONTRACT_VERSION, ...(await localModelView()) });
             } else {
                 throw new HttpError(404, 'not_found', 'Not found');
             }
@@ -140,6 +153,17 @@ export function createServer(config: ServerConfig = loadConfig(), dependencies: 
             }
             sendError(response, error);
         }
+    }
+
+    /** The administrator's local model server as users see it; contacts only that configured server. */
+    async function localModelView(): Promise<LocalModelView> {
+        if (local === null) {
+            return { configured: false, name: null, baseUrl: null, reachable: false, models: [], error: null };
+        }
+
+        await local.refresh();
+
+        return local.view();
     }
 
     /**

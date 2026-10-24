@@ -1,4 +1,4 @@
-import { TriangleAlert } from 'lucide-react';
+import { Info, TriangleAlert } from 'lucide-react';
 import { ApiKeyForm } from '@/components/connections/api-key-form';
 import {
     ChatGptSignInSteps,
@@ -25,6 +25,7 @@ const SUMMARIES: Record<ConnectionProviderId, string> = {
         "OpenCode's subscription for open models. Paste your OpenCode API key; replies count toward your Go subscription.",
     opencode:
         "OpenCode's pay-as-you-go gateway to many models. Paste your OpenCode API key; replies are charged to your Zen balance, except on free models.",
+    local: 'A model server on this computer or your local network, such as Ollama, LM Studio, llama.cpp or vLLM. The administrator sets it up for everyone; replies stay on your network and cost nothing per message.',
 };
 
 export function ProviderCard({
@@ -70,6 +71,10 @@ function CardBody({
         return <ChatGptSignInSteps signIn={card.login} />;
     }
 
+    if (card.auth === 'none' && card.status !== 'connected') {
+        return <LocalServerProblem card={card} />;
+    }
+
     if (card.status === 'connected') {
         return <ConnectedTools card={card} />;
     }
@@ -101,6 +106,52 @@ function CardBody({
     );
 }
 
+/** The local server is either not set up yet or did not answer; both are fixed by the administrator. */
+function LocalServerProblem({ card }: { card: ProviderConnectionCard }) {
+    if (card.local === null || !card.local.configured) {
+        return (
+            <Alert>
+                <Info />
+                <AlertTitle>No local model server is set up</AlertTitle>
+                <AlertDescription>
+                    <p>
+                        An administrator adds the server&apos;s address to the
+                        server&apos;s <code>.env</code> file and restarts the
+                        engine, for example:
+                    </p>
+                    <code className="block rounded bg-muted px-2 py-1 text-xs break-all">
+                        LOCAL_LLM_URL=http://host.docker.internal:11434/v1
+                    </code>
+                    <p>
+                        Use <code>host.docker.internal</code> for a server on
+                        this computer, or its network address, such as{' '}
+                        <code>http://192.168.1.20:1234/v1</code>.
+                    </p>
+                </AlertDescription>
+            </Alert>
+        );
+    }
+
+    return (
+        <Alert variant="destructive">
+            <TriangleAlert />
+            <AlertTitle>{card.name} is not answering</AlertTitle>
+            <AlertDescription>
+                <p>
+                    {card.local.error ?? 'The server could not be reached.'}{' '}
+                    Check that it is running at{' '}
+                    <code className="break-all">{card.local.base_url}</code>.
+                </p>
+                <p>
+                    LM Studio needs its local server started. On Linux, or on
+                    another computer, the server must also listen on all
+                    addresses, for Ollama <code>OLLAMA_HOST=0.0.0.0</code>.
+                </p>
+            </AlertDescription>
+        </Alert>
+    );
+}
+
 function StatusBadge({
     card,
     signingIn,
@@ -116,11 +167,21 @@ function StatusBadge({
         return <Badge variant="secondary">Signing in</Badge>;
     }
 
+    if (card.auth === 'none' && card.status === 'not_connected') {
+        return <Badge variant="outline">Not set up</Badge>;
+    }
+
     switch (card.status) {
         case 'connected':
-            return <Badge>Connected</Badge>;
+            return (
+                <Badge>
+                    {card.auth === 'none' ? 'Available' : 'Connected'}
+                </Badge>
+            );
         case 'unreadable':
             return <Badge variant="destructive">Connect again</Badge>;
+        case 'unreachable':
+            return <Badge variant="destructive">Not answering</Badge>;
         default:
             return <Badge variant="outline">Not connected</Badge>;
     }

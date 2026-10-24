@@ -24,7 +24,7 @@ Route::middleware(['auth', 'verified'])->prefix('api/chat')->name('chat.')->scop
 
     // Stage A prototype run relay (task 2.4); ownership of {run} is checked in the controller.
     Route::post('conversations/{conversation}/runs', [ChatRunController::class, 'store'])
-        ->can('update', 'conversation')->name('runs.store');
+        ->can('update', 'conversation')->middleware('throttle:20,1')->name('runs.store');
     Route::get('runs/{run}/events', [ChatRunController::class, 'events'])->whereUuid('run')->name('runs.events');
     Route::delete('runs/{run}', [ChatRunController::class, 'destroy'])->whereUuid('run')->name('runs.destroy');
 

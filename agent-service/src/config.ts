@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { localModelConfig, type LocalModelConfig } from './auth/local-model.js';
 
 export const MIN_SIGNING_KEY_LENGTH = 32;
 
@@ -25,6 +26,8 @@ export interface ServerConfig {
     loginTimeoutMs: number;
     /** Upper bound for a user-requested connection test message. */
     connectionTestTimeoutMs: number;
+    /** The administrator's OpenAI-compatible local model server (LOCAL_LLM_URL), if any. */
+    localModel: LocalModelConfig | null;
     now: () => number;
     log: (message: string) => void;
 }
@@ -61,6 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
         dataDirectory: env.AGENT_DATA_DIR?.trim() || '/var/lib/agent',
         loginTimeoutMs: 10 * 60_000,
         connectionTestTimeoutMs: 60_000,
+        localModel: localModelConfig(env),
         now: Date.now,
         log: (message) => console.warn(message),
     };

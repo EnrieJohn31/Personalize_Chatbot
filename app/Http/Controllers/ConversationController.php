@@ -31,9 +31,28 @@ class ConversationController extends Controller
         );
     }
 
+    /**
+     * Starts a conversation. Unless the request names a connection, it keeps the owner's current
+     * chat choice, so changing that choice later does not change this conversation.
+     */
     public function store(SaveConversationRequest $request): ConversationResource
     {
-        return new ConversationResource($request->user()->conversations()->create($request->validated()));
+        /** @var User $user */
+        $user = $request->user();
+        $data = $request->validated();
+        $conversation = $user->conversations()->make($data);
+
+        $choice = $user->chatConnection;
+        if (! array_key_exists('provider_connection_id', $data) && $choice !== null && $user->chat_model !== null) {
+            $conversation->forceFill([
+                'provider_connection_id' => $choice->id,
+                'model_provider' => $choice->provider,
+                'model' => $user->chat_model,
+            ]);
+        }
+        $conversation->save();
+
+        return new ConversationResource($conversation);
     }
 
     public function show(ShowConversationRequest $request, Conversation $conversation): ConversationResource

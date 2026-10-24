@@ -120,6 +120,7 @@ export function useChatRun(
                     'The reply could not be started.',
                 ),
                 resumable: false,
+                code: caught instanceof ChatApiError ? caught.code : null,
             });
 
             return null;

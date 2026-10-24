@@ -1,0 +1,49 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:assistant-foundation:contracts:v1:local-model-status",
+    "title": "Local model server",
+    "description": "Engine to Laravel: answer to GET /internal/local-model. Describes the administrator-configured OpenAI-compatible server (LOCAL_LLM_URL) and its current model list. The address comes only from engine configuration.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "contractVersion",
+        "configured",
+        "name",
+        "baseUrl",
+        "reachable",
+        "models",
+        "error"
+    ],
+    "properties": {
+        "contractVersion": { "const": 1 },
+        "configured": { "type": "boolean" },
+        "name": {
+            "anyOf": [
+                { "type": "null" },
+                { "type": "string", "minLength": 1, "maxLength": 64 }
+            ]
+        },
+        "baseUrl": {
+            "anyOf": [
+                { "type": "null" },
+                { "type": "string", "pattern": "^https?://", "maxLength": 512 }
+            ]
+        },
+        "reachable": { "type": "boolean" },
+        "models": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+            }
+        },
+        "error": {
+            "description": "Why the server could not be read; null when it answered or is not configured.",
+            "anyOf": [
+                { "type": "null" },
+                { "type": "string", "maxLength": 500 }
+            ]
+        }
+    }
+}

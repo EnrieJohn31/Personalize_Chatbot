@@ -110,14 +110,73 @@ class ChatRunTest extends TestCase
         $saved = Message::query()->where('role', 'assistant')->sole();
         $this->assertSame('Simulated **reply**.', $saved->content);
         $this->assertSame($runId, $saved->canonical_content['run_id']);
+        $this->assertSame(['simulated', 'simulated-echo'], [$saved->canonical_content['provider'], $saved->canonical_content['model']]);
         $this->assertSame($saved->id, $events[5]['data']['message']['id']);
         $this->assertSame(2, $events[5]['data']['message']['sequence']);
+        // Built-in replies are not labelled with a model.
+        $this->assertNull($events[5]['data']['message']['model']);
         $this->assertArrayNotHasKey('canonical_content', $events[5]['data']['message']);
 
         // The finished run neither streams again nor blocks the next reply.
         $this->get("/api/chat/runs/$runId/events")->assertNoContent();
         app(ConversationRepository::class)->appendUserMessage($conversation, 'Follow-up');
         $this->postJson("/api/chat/conversations/$conversation->id/runs")->assertAccepted();
+    }
+
+    public function test_a_live_reply_uses_the_conversations_model_and_records_it(): void
+    {
+        config(['assistant.live_replies' => true]);
+        [$owner, $conversation] = $this->conversationWithQuestion();
+        $connection = $owner->providerConnections()->create(['provider' => 'local', 'auth_method' => 'none']);
+        $connection->forceFill(['status' => 'connected'])->save();
+        $conversation->forceFill(['provider_connection_id' => $connection->id, 'model_provider' => 'local', 'model' => 'qwen2.5:7b'])->save();
+        $this->engine->completes();
+
+        $runId = $this->actingAs($owner)->postJson("/api/chat/conversations/$conversation->id/runs")->assertAccepted()->json('data.id');
+        $submitted = $this->engine->submitted[0];
+        $this->assertSame(['local', 'qwen2.5:7b', $connection->id], [$submitted->modelProvider, $submitted->modelId, $submitted->connectionId]);
+
+        $this->assertSame('qwen2.5:7b', last($this->events($this->get("/api/chat/runs/$runId/events")))['data']['message']['model']);
+        $saved = Message::query()->where('role', 'assistant')->sole();
+        $this->assertSame(['local', 'qwen2.5:7b'], [$saved->canonical_content['provider'], $saved->canonical_content['model']]);
+        $this->getJson("/api/chat/conversations/$conversation->id")
+            ->assertJsonPath('messages.data.0.role', 'user')
+            ->assertJsonPath('messages.data.0.model', null)
+            ->assertJsonPath('messages.data.1.model', 'qwen2.5:7b');
+    }
+
+    public function test_a_conversation_whose_account_cannot_answer_points_to_connections(): void
+    {
+        config(['assistant.live_replies' => true]);
+        [$owner, $conversation] = $this->conversationWithQuestion();
+        $connection = $owner->providerConnections()->create(['provider' => 'openai', 'auth_method' => 'oauth']);
+        $conversation->forceFill(['provider_connection_id' => $connection->id, 'model_provider' => 'openai', 'model' => 'gpt-5.4-mini'])->save();
+        $this->actingAs($owner);
+
+        $this->postJson("/api/chat/conversations/$conversation->id/runs")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'connection_not_ready')
+            ->assertJsonPath('message', "This chat's account needs attention. Check it on the Connections page.");
+
+        $conversation->forceFill(['provider_connection_id' => null])->save();
+        $this->postJson("/api/chat/conversations/$conversation->id/runs")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'connection_required')
+            ->assertJsonPath('message', "This chat's account is no longer connected. Connect it again on the Connections page.");
+        $this->assertSame([], $this->engine->submitted);
+    }
+
+    public function test_starting_replies_is_rate_limited(): void
+    {
+        [$owner, $conversation] = $this->conversationWithQuestion();
+        app(ConversationRepository::class)->appendAssistantMessage($conversation, 'Answered.', '0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0e');
+        $this->actingAs($owner);
+
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            $this->postJson("/api/chat/conversations/$conversation->id/runs")->assertStatus(409);
+        }
+
+        $this->postJson("/api/chat/conversations/$conversation->id/runs")->assertTooManyRequests();
     }
 
     public function test_a_resumed_stream_skips_seen_events_but_still_saves_the_reply(): void

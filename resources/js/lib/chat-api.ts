@@ -16,6 +16,8 @@ export class ChatApiError extends Error {
     constructor(
         message: string,
         readonly status: number | null,
+        /** The server's error code, for example `connection_not_ready`, when it sent one. */
+        readonly code: string | null = null,
     ) {
         super(message);
     }
@@ -153,7 +155,18 @@ function toChatApiError(error: unknown): ChatApiError {
     return new ChatApiError(
         messageForStatus(response.status, response.data),
         response.status,
+        serverCode(response.data),
     );
+}
+
+function serverCode(body: string): string | null {
+    try {
+        const parsed = JSON.parse(body) as { code?: unknown };
+
+        return typeof parsed.code === 'string' ? parsed.code : null;
+    } catch {
+        return null;
+    }
 }
 
 function messageForStatus(status: number, body: string): string {

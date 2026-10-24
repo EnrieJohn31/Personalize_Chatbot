@@ -24,6 +24,8 @@ export type DisplayMessage = {
     role: ChatRole;
     content: string;
     status: MessageStatus | null;
+    /** The model that wrote a saved reply, shown beside its actions. */
+    model?: string | null;
 };
 
 const statusLabels: Record<MessageStatus, string> = {
@@ -49,7 +51,15 @@ export function ChatMessageItem({ message }: { message: DisplayMessage }) {
             )}
         >
             {message.status === null ? (
-                <CopyMessageButton content={message.content} />
+                <>
+                    <CopyMessageButton content={message.content} />
+                    {!isUser && message.model && (
+                        <span className="px-1 text-xs text-muted-foreground">
+                            <span className="sr-only">Written by </span>
+                            {message.model}
+                        </span>
+                    )}
+                </>
             ) : (
                 <span className="px-2 text-xs text-muted-foreground">
                     {statusLabels[message.status]}

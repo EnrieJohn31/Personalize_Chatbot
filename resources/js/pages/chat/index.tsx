@@ -28,6 +28,7 @@ import {
 import { titleFromMessage } from '@/lib/chat-composer';
 import type { RunStatus } from '@/lib/chat-run-state';
 import { isResponding, needsConnectionFix } from '@/lib/chat-run-state';
+import { showStartedConversation } from '@/lib/conversation-address';
 import type { ChatMessage, ChatPageProps, Conversation } from '@/types';
 
 const errorMessage = (caught: unknown): string =>
@@ -90,7 +91,7 @@ export default function ChatPage({
     const { status } = reply.state;
     const responding = isResponding(status);
 
-    // Resume a reply that is still being written, after a reload or a new conversation's first message.
+    // Resume a reply that is still being written after a reload or after opening the conversation.
     const resumableRunId =
         activeRun !== null && activeRun.conversation_id === conversation?.id
             ? activeRun.id
@@ -134,19 +135,16 @@ export default function ChatPage({
 
             const saved = await appendMessage(target.id, content);
 
-            if (conversation === null) {
-                // Start the reply, then open the conversation's own address, which resumes the
-                // stream. If starting fails, that page offers "Get a reply" for the saved message.
-                await reply.start(target.id);
-                router.visit(ChatPageController.show.url(target.id));
-
-                return true;
-            }
-
             setHistory((list) => [...list, saved]);
             sidebar.moveToTop({ ...target, updated_at: saved.created_at });
             setAnnouncement('Message sent.');
             setPending(null);
+
+            if (conversation === null) {
+                // A new chat gets its own address while this page stays, so the reply streams here.
+                showStartedConversation(router, target, saved);
+            }
+
             await requestReply(target.id);
 
             return true;

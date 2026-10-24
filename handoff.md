@@ -98,6 +98,12 @@ Replies still stream from the engine's deterministic simulation through a Stage 
     - A chat page restored from history is fetched again (`resources/js/lib/fresh-pages.ts`); a chat deleted meanwhile leads to a new chat with a notice. This also fixes Back losing messages sent before leaving a chat.
     - Verification: a 9-check browser probe failed 5 checks before the fix and passed 9/9 after; 3 new frontend unit tests (25 total); `composer ci:check` checks and 232 Laravel tests passed. See [docs/validation.md](docs/validation.md).
 
+- First live ChatGPT sign-in on 24 October 2026: it first failed with "Sign-in did not finish — fetch failed". The cause was the host's Kaspersky Anti-Virus "Scan encrypted connections". It re-signs `chatgpt.com` (always) and `auth.openai.com` (for one of its addresses) with its own root, which Node in the engine container rejects (`SELF_SIGNED_CERT_IN_CHAIN`). `api.openai.com` and `opencode.ai` were not intercepted. With Kaspersky paused, the sign-in succeeded. Live requests to `chatgpt.com` need the same: paused scanning, or an exclusion for `auth.openai.com`, `chatgpt.com` or Docker's `com.docker.backend.exe`.
+- Fixes on 24 October 2026 (user-reported):
+    - **A new chat refreshed on its first message.** The page made an Inertia visit to `/chat/{id}` after starting the reply, which remounted it mid-stream. It now takes the address on the client (`lib/conversation-address.ts`) and streams in place.
+    - **ChatGPT card.** It no longer shows "the current token is valid until …", which read as a sign-in that ends. It says the account stays connected until disconnected; access already renewed automatically.
+    - Verification: browser probe, failed before and 6/6 after; 27 frontend tests (2 new); format, lint, types and the production build. See [docs/validation.md](docs/validation.md).
+
 Publication review on 24 October 2026: reviewed `917cd5e` (local model connection and chat preparation) and `ea3be49` (PHP timestamp rechecking) with no blocking findings. Reran `composer ci:check`: 232 Laravel tests / 1332 assertions, 22 frontend tests, format/lint/types, Pint and PHPStan all passed. All 61 engine tests and the production frontend build passed. Live `agent:check` passed without starting a run; all 11 migrations were already applied, and CLI OPcache is enabled with timestamp validation and a two-second recheck. The reviewed engine source matches the running container. Earlier browser probes and performance measurements were not rerun; real provider acceptance and remote CI remain unverified. See [docs/validation.md](docs/validation.md).
 
 ## Resume this checkout
@@ -170,7 +176,7 @@ The remaining 3.1 step needs the operator; nothing in the repository can substit
 1. On [Connections](http://localhost:8080/connections), sign in with an eligible ChatGPT account, or paste an OpenCode API key into the Go or Zen card. A local server (for example Ollama with a pulled model) needs only `LOCAL_LLM_URL` and `docker compose up -d agent`.
 2. Choose **Send test message**. ChatGPT tests default to `gpt-5.4-mini`; OpenCode tests default to the free `beam-free`; local tests use the server's first model. Try another model if the provider refuses it.
 3. Run `docker compose restart agent` and confirm the page still shows **Connected**, which proves persistence.
-4. After the access token's expiry time, shown on the page, send another test message. A successful reply means the refresh works.
+4. After the access token's expiry, send another test message. A successful reply means the refresh works. The page no longer shows the expiry time; the engine's connection status still reports it as `expiresAt`.
 5. Record the dates and outcomes, but no tokens or personal data, in [docs/provider-matrix.md](docs/provider-matrix.md). Then check 3.1 in the Build Plan.
 
 **Acceptance (3.1):** a live request succeeds; credential persistence and expiry/re-authentication behavior are checked.

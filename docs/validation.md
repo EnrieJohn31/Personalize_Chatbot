@@ -1,5 +1,23 @@
 # Foundation validation
 
+## New chat refreshing on its first message; ChatGPT connection wording — 24 October 2026
+
+The user reported that the chat page refreshed when they sent a message, and that the Connections card's "the current token is valid until 06:11 PM" read as a sign-in that would end.
+
+- **Refresh.** On a new chat, the first message saved the message, started the reply and then made an Inertia visit to `/chat/{id}`. That server round trip remounted the page while the reply was streaming, and the new page picked the stream up again. Follow-ups in an existing chat were not affected. Now the page takes the conversation's address on the client (`router.push` with preserved state, `lib/conversation-address.ts`) and keeps streaming in place. Back and Forward still fetch the page again (`fresh-pages.ts`); the client visit is a `visit`-type navigation, which that handler ignores.
+- **Wording.** The card now says the account stays connected until it is disconnected and that access renews automatically. That was already the behavior: the engine reports `connected` while a credential is stored, and Pi refreshes the access token when it is used. Only the copy changed.
+
+| Check | Observed result |
+| --- | --- |
+| Browser probe, before the fix | Throwaway four-worker server on the main checkout with its own SQLite file, against the real engine's simulated replies. Failed: the first message in a new chat caused one Inertia page request to `/chat/{id}` and a remount of the page component (an attribute set on the composer was gone). The follow-up, reload, Back/Forward and console checks passed |
+| Browser probe, with the fix | 6/6 passed, with a warm-up chat first: no full reload, remount, Inertia page request or document load during either send. The first reply's draft grew in place, and the transcript showed both replies after a reload, Back returned to a new chat and Forward to the conversation, with no console errors. Without the warm-up, there was still no reload or remount, but the first cold PHP requests on the bind mount (about 2 s) outlasted the 1.4-second simulated reply, which then arrived at once |
+| `npm run check` | Passed: formatting for 134 files; lint for 96 files |
+| `npm run types:check` | Passed |
+| `npm run test` | All 27 frontend tests passed (2 new for `conversation-address.ts`) |
+| `npm run build` | Passed; the main checkout's `public/build` now serves the fix |
+
+PHP, engine and database code are unchanged; their suites were not repeated. The probe used simulated replies only, Chromium only. Live replies are task 3.2. A refresh after the ChatGPT access token's expiry remains unverified.
+
 ## Publication review of chat navigation fix — 24 October 2026
 
 Reviewed `b6afd9b` with no blocking findings. Checked JSON-write cache invalidation, the Inertia finish/history event handlers, remounting with fresh page props and the deleted-conversation 404 fallback against the installed Inertia source. No application code changed during this review.

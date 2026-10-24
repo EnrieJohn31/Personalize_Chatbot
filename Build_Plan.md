@@ -236,6 +236,9 @@ For each completed task, append: `ID — result — verification/evidence — re
 
 - Fix (user-reported) — Deleted chats reappeared until a reload, because Inertia reused a prefetched `/chat` and pages restored by Back/Forward that predated the JSON API deletions. Chat API writes and completed Inertia writes now clear the prefetch cache, and a chat page restored from history is fetched again; a deleted chat leads to a new chat with a notice. Back no longer loses recently sent messages either — a browser probe failed 5 of 9 checks before and passed 9/9 after; 3 new frontend unit tests — Firefox/Safari not checked.
 
+- 3.1 live sign-in — The operator's ChatGPT sign-in succeeded once the host's Kaspersky HTTPS scanning was paused; it had re-signed OpenAI's certificates, which the engine rejects ("fetch failed") — engine logs and a certificate-chain check from the engine container — a live test message, restart persistence and refresh after expiry are still to record in docs/provider-matrix.md.
+- Fixes (user-reported) — A new chat's first message no longer remounts the page through an Inertia visit; the page takes `/chat/{id}` on the client and streams in place. The ChatGPT card says the account stays connected until disconnected, instead of showing the access token's expiry — a browser probe failed before and passed 6/6 after; 2 new frontend unit tests — simulated replies and Chromium only.
+
 Publication review of local model changes on 24 October: no blocking findings across `917cd5e` and `ea3be49`; full application/engine checks and the frontend build passed. The contributor audit passed with approved author/committer identities, unchanged hooks and no prohibited attribution. Both branches were fast-forwarded and pushed atomically; remote hashes matched `ea3be49`. Live provider acceptance remains open, and remote CI results remain unverified.
 
 ## Completion boundaries

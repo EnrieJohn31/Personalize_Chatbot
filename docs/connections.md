@@ -75,6 +75,7 @@ Browser ──Inertia──▶ Laravel ──signed HTTP──▶ engine (Pi) �
   - The files are AES-256-GCM encrypted. The key is SHA-256 of `AGENT_CREDENTIAL_KEY`, and the connection ID is authenticated data, so a file moved to another connection fails.
   - Writes are serialized and atomic (private temporary file, then rename). The directory is `0700` and the files `0600`.
   - Pi refreshes a ChatGPT access token under the vault's lock when it has less than five minutes left.
+  - The ChatGPT card therefore says the account stays connected until the user disconnects it, without the access token's expiry time, which needs no action. The engine's status still reports `expiresAt`. A refresh token that OpenAI rejects (for example after a password change) shows up on the next test message or reply as `reauth_required`.
 - **No silent API billing.** The engine gives Pi an auth context without environment variables or files. `OPENAI_API_KEY` and `OPENCODE_API_KEY` are never used, even if set; a test proves Pi would otherwise use them.
 - **Page updates.** While a ChatGPT sign-in runs, the page reloads only its `connections` prop every two seconds after each answer, and pauses while any form submits. The page and its actions take Laravel's session lock (`->block()`), except the test message, which can take a minute. A poll therefore cannot overwrite an action's flashed answer.
 

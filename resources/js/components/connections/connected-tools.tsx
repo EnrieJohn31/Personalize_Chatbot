@@ -25,7 +25,6 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { formatTime } from '@/lib/utils';
 import type { ConnectionTest, ProviderConnectionCard } from '@/types';
 
 /**
@@ -64,12 +63,10 @@ export function ConnectedTools({ card }: { card: ProviderConnectionCard }) {
 
 function connectedNote(card: ProviderConnectionCard): string {
     switch (card.auth) {
+        // The short-lived access token behind the sign-in renews by itself whenever it is used,
+        // so its expiry time is not something the user needs to act on.
         case 'oauth':
-            return `Your ${card.name} account is connected. Access renews automatically${
-                card.expires_at === null
-                    ? '.'
-                    : `; the current token is valid until ${formatTime(card.expires_at)}.`
-            }`;
+            return `Your ${card.name} account stays connected until you disconnect it. Access renews automatically, so you do not need to sign in again.`;
         case 'none':
             return `${card.name} answers at ${card.local?.base_url ?? 'the configured address'} with ${card.models.length} ${
                 card.models.length === 1 ? 'model' : 'models'

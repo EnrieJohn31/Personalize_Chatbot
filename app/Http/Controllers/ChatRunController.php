@@ -11,6 +11,8 @@ use App\Services\Chat\ActiveRuns;
 use App\Services\Chat\ConversationRepository;
 use App\Services\Chat\RunNotDispatchable;
 use App\Services\Chat\RunRequestFactory;
+use App\Services\Connections\ProviderConnections;
+use Illuminate\Container\Attributes\Config;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,12 +33,19 @@ class ChatRunController extends Controller
         private readonly ActiveRuns $runs,
         private readonly RunRequestFactory $factory,
         private readonly ConversationRepository $repository,
+        private readonly ProviderConnections $connections,
+        #[Config('assistant.live_replies')] private readonly bool $liveReplies = false,
     ) {}
 
     public function store(Request $request, Conversation $conversation): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
+
+        // A conversation started before any choice was made answers with the current one from now on.
+        if ($this->liveReplies && $this->repository->applyChatChoice($user, $conversation)) {
+            $conversation->save();
+        }
 
         try {
             $run = $this->factory->forConversation($user, $conversation);
@@ -61,9 +70,11 @@ class ChatRunController extends Controller
             $this->runs->release($user, $run->runId);
             Log::warning('Run admission failed', ['run_id' => $run->runId, 'reason' => $exception->reason]);
 
-            return $exception->reason === 'model_unavailable'
-                ? $this->problem(503, 'assistant_unavailable', 'The assistant is not available right now.')
-                : $this->problem($exception->isRetryable() ? 503 : 502, 'engine_unavailable', 'The assistant could not start a reply. Try again.');
+            return match ($exception->reason) {
+                'model_unavailable' => $this->problem(503, 'assistant_unavailable', 'The assistant is not available right now.'),
+                'connection_required' => $this->problem(409, 'connection_required', "This chat's account is no longer connected. Connect it again on the Connections page."),
+                default => $this->problem($exception->isRetryable() ? 503 : 502, 'engine_unavailable', 'The assistant could not start a reply. Try again.'),
+            };
         }
 
         $this->runs->record($run->runId, $user, $conversation, $run->modelProvider, $run->modelId);
@@ -142,6 +153,10 @@ class ChatRunController extends Controller
                     $data = ['message' => (new MessageResource($message))->resolve()];
                 }
 
+                if ($event->type === 'run.failed' && is_string($data['code'] ?? null)) {
+                    $this->recordFailure($conversation, $data['code']);
+                }
+
                 if ($event->isTerminal()) {
                     $this->runs->finish($runId, $user);
                 }
@@ -178,6 +193,19 @@ class ChatRunController extends Controller
                 'message' => 'The conversation was deleted.',
                 'resumable' => false,
             ]);
+        }
+    }
+
+    /**
+     * A reply that failed because the sign-in was rejected or is gone marks the connection, so
+     * the chat header and Connections show it until the user signs in again.
+     */
+    private function recordFailure(Conversation $conversation, string $code): void
+    {
+        $connection = $conversation->providerConnection;
+
+        if ($connection !== null && $connection->provider === $conversation->model_provider) {
+            $this->connections->recordFailure($connection, $code);
         }
     }
 

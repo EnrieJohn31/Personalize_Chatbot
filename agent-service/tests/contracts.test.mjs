@@ -10,6 +10,7 @@ const paths = (contract, value) => validate(contract, value).map((issue) => issu
 
 test('shared examples satisfy their v1 schemas', () => {
     assert.deepEqual(validate('runRequest', runRequest), []);
+    assert.deepEqual(validate('runRequest', example('run-request-live.json')), []);
     assert.deepEqual(validate('runAcknowledgement', example('run-acknowledgement.json')), []);
     assert.deepEqual(validate('error', example('error.json')), []);
     for (const event of example('run-events.json')) {
@@ -27,6 +28,7 @@ test('run requests reject unknown fields, including browser-style credentials an
     assert.ok(paths('runRequest', { ...runRequest, credentials: { token: 'secret' } }).includes('/credentials'));
     assert.ok(paths('runRequest', { ...runRequest, tools: ['shell'] }).includes('/tools'));
     assert.ok(paths('runRequest', { ...runRequest, model: { ...runRequest.model, apiKey: 'secret' } }).includes('/model/apiKey'));
+    assert.ok(paths('runRequest', { ...runRequest, model: { ...runRequest.model, reasoning: 'max' } }).includes('/model/reasoning'));
 });
 
 test('run requests enforce identifiers, roles, sizes and limits', () => {

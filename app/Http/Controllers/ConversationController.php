@@ -42,13 +42,8 @@ class ConversationController extends Controller
         $data = $request->validated();
         $conversation = $user->conversations()->make($data);
 
-        $choice = $user->chatConnection;
-        if (! array_key_exists('provider_connection_id', $data) && $choice !== null && $user->chat_model !== null) {
-            $conversation->forceFill([
-                'provider_connection_id' => $choice->id,
-                'model_provider' => $choice->provider,
-                'model' => $user->chat_model,
-            ]);
+        if (! array_key_exists('provider_connection_id', $data)) {
+            $this->repository->applyChatChoice($user, $conversation);
         }
         $conversation->save();
 

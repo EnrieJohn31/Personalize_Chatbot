@@ -50,13 +50,30 @@ Network isolation remains required: the engine port is never published, and the 
 6. Bounded admission record: identical resubmission returns `duplicate: true`; the same run ID with a different payload is rejected.
 7. A newly admitted run starts executing immediately, whether or not anyone reads its events. A duplicate admission never starts a second execution.
 
-Until model execution (task 3.2) and the tool registry (task 3.3) exist, the engine admits only the deterministic `simulated` provider. It does that only when `AGENT_SIMULATION_ENABLED=true`, which development Compose sets explicitly. Every capability is refused until tools exist. The admission record is process-local, holds at most 256 runs for 15 minutes and is lost on restart; Laravel's durable claim (task 4.2) becomes the authority.
+The engine admits two kinds of model (task 3.2):
+- **`simulated`**, deterministic and only when `AGENT_SIMULATION_ENABLED=true`, which development Compose sets explicitly.
+- **A connection provider** (`openai`, `opencode`, `opencode-go`, `local`), only with the run's own `connectionId`, only when the credential store is configured, and for `local` only while `LOCAL_LLM_URL` is set. A run without its connection gets `422 connection_required`. The credential is looked up by that ID inside the engine; the request never carries one.
+
+`model.reasoning` (`low`, `medium` or `high`) is optional. The engine applies it only to models that reason and ignores it otherwise. Every capability is refused until the tool registry exists (task 3.3). The admission record is process-local, holds at most 256 runs for 15 minutes and is lost on restart; Laravel's durable claim (task 4.2) becomes the authority.
 
 ## Event stream
 
 `GET /internal/runs/{runId}/events?after={n}` first replays the run's retained events with a sequence above `n` (default 0), then follows the run live. It ends after the terminal event (`run.completed`, `run.failed` or `run.cancelled`). The response is `application/x-ndjson`, one event per line. Blank lines are heartbeats, sent every 15 seconds while the run is idle, and readers skip them. Reading never starts, repeats or cancels work. Several readers can follow the same run, and a reader that reconnects with its last sequence receives no duplicates.
 
 Each run keeps at most 2,000 events in engine memory, with the last slot reserved for a terminal event, so an overlong run ends with `run.failed` (`event_limit_exceeded`). Events are lost with the admission record (15 minutes, or an engine restart). Laravel's persisted event store (task 4.3) replaces this for durable replay.
+
+A live run (`runtime/live-run.ts`) builds a fresh Pi Agent on the connection's Pi `Models`:
+- **Setup.** It uses a short system prompt, the saved history as plain text and the conversation ID as the provider session ID, with output capped at 32,000 tokens.
+- **Events.** It emits `run.started`, `run.progress` (`preparing`, then `answering` with the first text), `assistant.delta`, `assistant.final` and `run.completed`.
+- **Text batching.** Streamed text is passed on at most every `runDeadlineMs / 1500` milliseconds (at least 100 ms) in pieces of at most 16,384 characters. A surrogate pair is never split, so a run within its deadline stays under the event limit.
+- **Before any model request,** the sign-in is resolved (and refreshed if needed).
+- **Failures** end the run with `run.failed` and one of these codes:
+  - `not_connected`, `reauth_required` or `credentials_unreadable`: the sign-in. Laravel marks the connection and links to Connections.
+  - `model_unavailable`: the model is not in the catalog.
+  - `provider_error`: the provider's own message, with network and TLS failures explained.
+  - `empty_reply`
+  - `deadline_exceeded`
+- **Stop** aborts the model request and ends the run with `run.cancelled`.
 
 The simulated run is deterministic: the same request always yields the same Markdown answer, which quotes the latest question. It emits `run.started`, `run.progress` (`answering`), `assistant.delta` chunks of about three words, `assistant.final` with the complete text, and `run.completed`. The deltas always add up to the final text. `AGENT_SIMULATION_CHUNK_DELAY_MS` (default 35, maximum 1000) sets the pause between chunks. Cancellation ends the run with `run.cancelled` and no final text; passing the run deadline ends it with `run.failed` (`deadline_exceeded`).
 
@@ -75,7 +92,7 @@ A connection ID is the UUID of Laravel's `provider_connections` record. Provider
 | `PUT /internal/connections/{id}/key`                    | `connection-key-request.schema.json` (OpenCode only)   | `connection-status.schema.json`      |
 | `POST /internal/connections/{id}/test`                  | `connection-test-request.schema.json`                  | `connection-test-result.schema.json` |
 
-- **Status.** It reads only the engine's encrypted store and never calls the provider. `unreadable` means a stored file cannot be decrypted, for example after the key changed. A new sign-in or key replaces it.
+- **Status.** It reads only the engine's encrypted store and never calls the provider. `unreadable` means a stored file cannot be decrypted, for example after the key changed. `reauth_required` means the provider rejected the stored sign-in's renewal during a test or a run since this engine started. A new sign-in or key replaces either, and a later successful renewal clears `reauth_required`; after an engine restart the next request finds a rejection again.
 - **Key.** It stores an API key (8–512 printable characters without spaces) for an API-key provider, replacing any earlier one. Different providers of the same connection keep separate credentials.
 - **Login states.** A sign-in moves through `starting` → `waiting_for_user` (with `authUrl`, the provider page the user opens) → `exchanging` → `connected`, `failed` or `cancelled`. Starting answers once the sign-in page is known; a pasted redirect or a cancel answers once the outcome is known. Either waits at most about 5 seconds, and the caller polls after that.
     - There is one sign-in at a time because the provider fixes the callback port. Starting again for the same connection returns its pending sign-in; another connection gets `409 login_in_progress`.
@@ -98,7 +115,8 @@ A connection ID is the UUID of Laravel's `provider_connections` record. Provider
 | 422  | `unsupported_contract_version`    | `contractVersion` is not 1                                                       | No                     |
 | 422  | `invalid_payload`                 | Schema or semantic violation, or a bad `after` cursor; `details` lists ≤10 paths | No                     |
 | 422  | `run_id_mismatch`                 | Cancel body and path run IDs differ                                              | No                     |
-| 422  | `model_unavailable`               | Provider not verified, or simulation disabled                                    | No                     |
+| 422  | `model_unavailable`               | Provider not verified or not configured, or simulation disabled                  | No                     |
+| 422  | `connection_required`             | A provider model without the run's own `connectionId`                            | No                     |
 | 422  | `unsupported_capability`          | The engine cannot enforce a requested capability                                 | No                     |
 | 503  | `request_auth_not_configured`     | Engine has no signing key                                                        | After configuration    |
 | 503  | `capacity_exhausted`              | Admission record is full                                                         | Yes, later             |

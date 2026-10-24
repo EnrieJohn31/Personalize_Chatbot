@@ -5,6 +5,7 @@ namespace Tests\Feature\Chat;
 use App\Contracts\AgentGateway;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\ProviderConnection;
 use App\Models\User;
 use App\Services\Ai\AgentGatewayException;
 use App\Services\Chat\ConversationRepository;
@@ -166,6 +167,52 @@ class ChatRunTest extends TestCase
         $this->assertSame([], $this->engine->submitted);
     }
 
+    public function test_a_conversation_without_a_model_answers_with_the_current_choice_from_its_first_live_reply(): void
+    {
+        config(['assistant.reasoning' => 'high']);
+        [$owner, $conversation] = $this->conversationWithQuestion();
+        $connection = $this->connected($owner);
+        $owner->forceFill(['chat_connection_id' => $connection->id, 'chat_model' => 'gpt-6-luna'])->save();
+
+        $this->actingAs($owner)->postJson("/api/chat/conversations/$conversation->id/runs")->assertAccepted();
+
+        $submitted = $this->engine->submitted[0];
+        $this->assertSame(['openai', 'gpt-6-luna', $connection->id, 'high'], [$submitted->modelProvider, $submitted->modelId, $submitted->connectionId, $submitted->modelReasoning]);
+        $this->assertSame([$connection->id, 'openai', 'gpt-6-luna'], [$conversation->fresh()->provider_connection_id, $conversation->fresh()->model_provider, $conversation->fresh()->model]);
+    }
+
+    public function test_a_reply_rejected_for_its_sign_in_marks_the_connection_and_blocks_the_next_reply(): void
+    {
+        [$owner, $conversation] = $this->conversationWithQuestion();
+        $connection = $this->connected($owner);
+        $conversation->forceFill(['provider_connection_id' => $connection->id, 'model_provider' => 'openai', 'model' => 'gpt-6-luna'])->save();
+
+        // An ordinary provider error is not a sign-in problem.
+        $runId = $this->startWith($owner, $conversation, ['provider_error', 'You exceeded your current quota.']);
+        $this->assertSame('run.failed', last($this->events($this->get("/api/chat/runs/$runId/events")))['event']);
+        $this->assertSame('connected', $connection->refresh()->status);
+
+        $runId = $this->startWith($owner, $conversation, ['reauth_required', 'The sign-in has expired or was revoked. Sign in again.']);
+        $failed = last($this->events($this->get("/api/chat/runs/$runId/events")));
+        $this->assertSame(['run.failed', 'reauth_required'], [$failed['event'], $failed['data']['code']]);
+        $this->assertSame('reauth_required', $connection->refresh()->status);
+        $this->assertSame(0, Message::query()->where('role', 'assistant')->count());
+
+        $this->postJson("/api/chat/conversations/$conversation->id/runs")
+            ->assertStatus(409)->assertJsonPath('code', 'connection_not_ready');
+    }
+
+    public function test_an_engine_refusing_a_run_without_its_connection_points_to_connections(): void
+    {
+        [$owner, $conversation] = $this->conversationWithQuestion();
+        $this->engine->submitFailure = AgentGatewayException::rejected(422, 'connection_required', "openai/gpt-6-luna needs the run's own provider connection.");
+
+        $this->actingAs($owner)->postJson("/api/chat/conversations/$conversation->id/runs")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'connection_required')
+            ->assertJsonPath('message', "This chat's account is no longer connected. Connect it again on the Connections page.");
+    }
+
     public function test_starting_replies_is_rate_limited(): void
     {
         [$owner, $conversation] = $this->conversationWithQuestion();
@@ -289,6 +336,26 @@ class ChatRunTest extends TestCase
         app(ConversationRepository::class)->appendUserMessage($conversation, 'What is the plan?');
 
         return [$owner, $conversation];
+    }
+
+    private function connected(User $owner): ProviderConnection
+    {
+        $connection = $owner->providerConnections()->create(['provider' => 'openai', 'auth_method' => 'oauth']);
+        $connection->forceFill(['status' => 'connected'])->save();
+
+        return $connection;
+    }
+
+    /**
+     * Starts a reply that the engine ends with this failure, and returns its run ID.
+     *
+     * @param  array{string, string}  $failure  code and message
+     */
+    private function startWith(User $owner, Conversation $conversation, array $failure): string
+    {
+        $this->engine->script = [['run.started'], ['run.failed', ['code' => $failure[0], 'message' => $failure[1]]]];
+
+        return $this->actingAs($owner)->postJson("/api/chat/conversations/$conversation->id/runs")->assertAccepted()->json('data.id');
     }
 
     /**

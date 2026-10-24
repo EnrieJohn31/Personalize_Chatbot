@@ -29,8 +29,17 @@ export type ProviderConnectionCard = {
      * administrator's local model server, shared by every user.
      */
     auth: 'oauth' | 'api_key' | 'none';
-    /** Null when the engine could not be asked; `unreachable` only for the local server. */
-    status: 'connected' | 'not_connected' | 'unreadable' | 'unreachable' | null;
+    /**
+     * Null when the engine could not be asked; `unreachable` only for the local server;
+     * `reauth_required` after the provider rejected the stored sign-in or key.
+     */
+    status:
+        | 'connected'
+        | 'not_connected'
+        | 'unreadable'
+        | 'unreachable'
+        | 'reauth_required'
+        | null;
     expires_at: string | null;
     /** The provider's model catalog; empty until connected. */
     models: string[];

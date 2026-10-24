@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { createModels, ModelsError, type AuthInteraction, type MutableModels, type Provider } from '@earendil-works/pi-ai';
+import {
+    createModels,
+    ModelsError,
+    type Api,
+    type AuthInteraction,
+    type Model,
+    type MutableModels,
+    type Provider,
+} from '@earendil-works/pi-ai';
 import { CredentialVault, UnreadableCredentialsError } from './credential-vault.js';
 import { installationId } from './installation.js';
 import type { LocalModelServer } from './local-model.js';
@@ -49,8 +57,11 @@ export interface LoginView {
 
 export interface ConnectionStatus {
     provider: ConnectionProvider;
-    /** `unreachable`: the local model server is configured but did not answer. */
-    status: 'connected' | 'not_connected' | 'unreadable' | 'unreachable';
+    /**
+     * `unreachable`: the local model server is configured but did not answer. `reauth_required`:
+     * the provider rejected the stored sign-in's renewal since this engine started.
+     */
+    status: 'connected' | 'not_connected' | 'unreadable' | 'unreachable' | 'reauth_required';
     expiresAt: number | null;
     models: string[];
 }
@@ -58,6 +69,18 @@ export interface ConnectionStatus {
 export interface TestFailure {
     code: 'not_connected' | 'reauth_required' | 'credentials_unreadable' | 'provider_error' | 'timeout';
     message: string;
+}
+
+/** Why a run cannot use its connection's model; `model_unavailable` when the catalog lacks it. */
+export interface RunModelFailure {
+    code: TestFailure['code'] | 'model_unavailable';
+    message: string;
+}
+
+/** A connection's model, ready for a chat run: the sign-in has been resolved. */
+export interface RunModel {
+    models: MutableModels;
+    model: Model<Api>;
 }
 
 export interface ConnectionTestResult {
@@ -98,6 +121,8 @@ interface Connection {
     models: MutableModels;
 }
 
+const rejectionKey = (connectionId: string, provider: ConnectionProvider): string => `${connectionId}:${provider}`;
+
 const shorten = (message: string): string =>
     message.length > MAX_MESSAGE_LENGTH ? `${message.slice(0, MAX_MESSAGE_LENGTH - 1)}…` : message;
 
@@ -112,6 +137,9 @@ export class ConnectionManager {
     // One vault per connection for the life of the process: all of a connection's writes, including
     // Pi's token refresh, must go through the same serialized store. Bounded by Laravel's records.
     private readonly connections = new Map<string, Connection>();
+    // Sign-ins whose renewal the provider rejected since this engine started. The credential stays
+    // stored until it is replaced, so without this its status would still read as connected.
+    private readonly rejected = new Set<string>();
     private login: LoginSession | null = null;
     private installation: Promise<string> | null = null;
 
@@ -137,7 +165,12 @@ export class ConnectionManager {
         session.start(
             (interaction) => models.login(provider, 'oauth', interaction, { getDeviceId: () => deviceId, agentName }),
             this.options.loginTimeoutMs,
-            (outcome) => this.options.log(`Connection ${connectionId}: ${provider} sign-in ${outcome}`),
+            (outcome) => {
+                if (outcome === 'completed') {
+                    this.rejected.delete(rejectionKey(connectionId, provider));
+                }
+                this.options.log(`Connection ${connectionId}: ${provider} sign-in ${outcome}`);
+            },
         );
         await session.ready(STEP_WAIT_MS);
 
@@ -178,7 +211,12 @@ export class ConnectionManager {
                 return { provider, status: 'not_connected', expiresAt: null, models: catalog };
             }
 
-            return { provider, status: 'connected', expiresAt: credential.type === 'oauth' ? credential.expires : null, models: catalog };
+            return {
+                provider,
+                status: this.rejected.has(rejectionKey(connectionId, provider)) ? 'reauth_required' : 'connected',
+                expiresAt: credential.type === 'oauth' ? credential.expires : null,
+                models: catalog,
+            };
         } catch (error) {
             if (error instanceof UnreadableCredentialsError) {
                 return { provider, status: 'unreadable', expiresAt: null, models: catalog };
@@ -198,6 +236,7 @@ export class ConnectionManager {
             await this.login.cancel('The connection was removed.');
         }
         await this.connection(connectionId).models.logout(provider);
+        this.rejected.delete(rejectionKey(connectionId, provider));
 
         return this.status(connectionId, provider);
     }
@@ -206,6 +245,7 @@ export class ConnectionManager {
     async saveKey(connectionId: string, provider: ConnectionProvider, apiKey: string): Promise<ConnectionStatus> {
         requireAuthMethod(provider, 'api_key');
         await this.connection(connectionId).vault.modify(provider, async () => ({ type: 'api_key', key: apiKey }));
+        this.rejected.delete(rejectionKey(connectionId, provider));
 
         return this.status(connectionId, provider);
     }
@@ -236,12 +276,12 @@ export class ConnectionManager {
             error,
         });
 
-        try {
-            // Request paths report auth problems only as stream errors, so resolve the sign-in first.
-            if ((await models.getAuth(provider, { signal })) === undefined) {
-                return result(null, { code: 'not_connected', message: 'Connect the account before testing it.' });
-            }
+        const unauthorized = await this.checkAuth(connectionId, provider, models, signal);
+        if (unauthorized !== null) {
+            return result(null, signal.aborted ? timeout : unauthorized);
+        }
 
+        try {
             const message = await models.completeSimple(
                 model,
                 { messages: [{ role: 'user', content: TEST_PROMPT, timestamp: Date.now() }] },
@@ -265,6 +305,68 @@ export class ConnectionManager {
         } catch (error) {
             return result(null, signal.aborted ? timeout : authFailure(error));
         }
+    }
+
+    /**
+     * The connection's model for a chat run. The sign-in is resolved (and refreshed if needed)
+     * first, because request paths report auth problems only as stream errors.
+     */
+    async runModel(
+        connectionId: string,
+        provider: ConnectionProvider,
+        modelId: string,
+        signal: AbortSignal,
+    ): Promise<RunModel | RunModelFailure> {
+        const { models } = this.connection(connectionId);
+        if (provider === 'local') {
+            const local = this.options.local ?? null;
+            if (local === null) {
+                return { code: 'not_connected', message: 'No local model server is set up.' };
+            }
+            await this.prepareLocal(models);
+            const view = local.view();
+            if (!view.reachable) {
+                return { code: 'provider_error', message: view.error ?? `${view.name ?? 'The local model server'} could not be reached.` };
+            }
+        }
+
+        const model = models.getModel(provider, modelId);
+        if (model === undefined) {
+            return { code: 'model_unavailable', message: `The ${provider} catalog has no model ${modelId}.` };
+        }
+
+        return (await this.checkAuth(connectionId, provider, models, signal)) ?? { models, model };
+    }
+
+    /**
+     * Resolves the stored sign-in, refreshing it if needed, and remembers whether the provider
+     * still accepts it. Request paths report auth problems only as stream errors, so this runs first.
+     */
+    private async checkAuth(
+        connectionId: string,
+        provider: ConnectionProvider,
+        models: MutableModels,
+        signal: AbortSignal,
+    ): Promise<TestFailure | null> {
+        const key = rejectionKey(connectionId, provider);
+
+        try {
+            if ((await models.getAuth(provider, { signal })) === undefined) {
+                return { code: 'not_connected', message: 'This account is not connected.' };
+            }
+        } catch (error) {
+            const failure = authFailure(error);
+            if (failure.code === 'reauth_required') {
+                this.rejected.add(key);
+            }
+
+            return failure;
+        }
+
+        // Only a working renewal or a new sign-in gets past a rejected one.
+        this.rejected.delete(key);
+
+        return null;
     }
 
     /** The shared local server's state; it needs no credential, so every user sees the same status. */

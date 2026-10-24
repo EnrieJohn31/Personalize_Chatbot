@@ -14,7 +14,8 @@ The engine keeps every sign-in and key encrypted. Laravel and the browser only e
 **Status:**
 - Implemented, and tested with fakes and live-engine browser probes on a network without internet access. The local server was probed with a fake OpenAI-compatible server, including stopping and restarting it.
 - No real sign-in, key or local server has been used yet, so live access is unverified; see the [provider matrix](provider-matrix.md).
-- Chat replies still come from the built-in simulation. Task 3.2 makes chat use the chosen connection; until then `ASSISTANT_LIVE_REPLIES` stays `false`.
+- Since task 3.2, chat replies come from the connection and model each conversation records ([chat-ui.md](chat-ui.md)). `ASSISTANT_LIVE_REPLIES=false` switches every chat back to the built-in simulation.
+- When a reply or a test message finds a ChatGPT sign-in whose renewal was rejected, the engine reports the connection as `reauth_required` until the user signs in again. The card then shows **Sign in again**, and chat stops using it.
 
 ## Using it
 
@@ -63,7 +64,7 @@ Browser ──Inertia──▶ Laravel ──signed HTTP──▶ engine (Pi) �
 - **Connection records.** `ProviderConnections` finds or creates one `provider_connections` row per user and provider when the user first connects; viewing the page creates none.
   - It mirrors the engine's status into the row: `connected`, `not_configured` or `reauth_required`.
   - `credential_reference` holds `engine:{id}`, a pointer, never a secret. Only `connected` lets `RunRequestFactory` use the connection for a live model.
-- **Chat choice.** It is stored on the user as `chat_connection_id` and `chat_model`. Saving checks the engine's current status, so the connection must be connected and the model in its catalog. Task 3.2 reads it.
+- **Chat choice.** It is stored on the user as `chat_connection_id` and `chat_model`. Saving checks the engine's current status, so the connection must be connected and the model in its catalog. Each new conversation records it, and runs use that record (task 3.2).
 - **ChatGPT sign-in.** The engine's `ConnectionManager` runs Pi's `login()`. It passes the installation's stable UUID (`installation-id` in the data volume, sent to OpenAI as the agent host ID) and the application name (`APP_NAME`, reduced to `[A-Za-z0-9 ._-]`) as the consent-screen name.
   - Pi races its callback listener against a pasted address. The engine checks a pasted address against the pending sign-in's `redirect_uri` and `state` first, so a mistyped or stale address is refused without ending the sign-in.
   - Only one sign-in runs at a time, because OpenAI fixes the callback port. A second user gets `login_in_progress`. An unfinished sign-in is cancelled after 10 minutes.
@@ -120,7 +121,8 @@ docker compose exec --user sail laravel.test php artisan agent:check   # provide
 - The engine keeps one Pi `Models` object per connection it has seen, for the life of the process. That is bounded by the number of connection records.
 - Pi's legacy `openai-codex` provider reuses the Codex CLI's OAuth client and is deliberately not used.
 - The local server is shared: everyone on this installation can use it, and there is no per-user quota beyond the run limit. Its traffic is plain HTTP unless the server offers HTTPS, so keep it on a trusted network.
-- Local models report no context window or output limit through the OpenAI API. The engine assumes 32,768 and 8,192 tokens; task 3.2 may need to make these configurable for larger models.
+- Local models report no context window or output limit through the OpenAI API. The engine assumes 32,768 and 8,192 tokens, which are not configurable yet.
+- Security software that inspects HTTPS (for example an antivirus "scan encrypted connections" setting) re-signs provider traffic with its own certificate, which the engine rejects. Sign-ins, tests and replies then fail with "fetch failed" or a certificate error. Exclude the provider hosts from scanning, or give the engine the security product's root certificate (`NODE_EXTRA_CA_CERTS`).
 
 ## Checks
 

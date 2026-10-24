@@ -31,6 +31,7 @@ import {
 } from './contracts.js';
 import { readBoundedBody } from './http/body.js';
 import { readSignatureHeaders, signatureMatches, type SignatureFailure } from './http/service-auth.js';
+import { runLive } from './runtime/live-run.js';
 import type { RunExecution } from './runtime/run-execution.js';
 import { RunRegistry, type TrackedStatus } from './runtime/run-registry.js';
 import { runSimulation } from './simulation/simulated-run.js';
@@ -52,9 +53,9 @@ const CONNECTION_ROUTES = new Set([
 const SEQUENCE = /^(0|[1-9][0-9]{0,6})$/;
 const JSON_CONTENT_TYPE = /^application\/json\s*(;\s*charset=utf-8\s*)?$/i;
 
-// Provider sign-in exists (task 3.1), but runs still execute the simulation until task 3.2 and
-// no tool registry exists until task 3.3. Until then only the deterministic development
-// provider is admitted, and no capability can be enforced.
+// Runs use the deterministic development provider, or since task 3.2 a connected provider's
+// model through the run's own connection. No tool registry exists until task 3.3, so no
+// capability can be enforced yet.
 const SIMULATED_PROVIDER = 'simulated';
 const SUPPORTED_CAPABILITIES = new Set<string>();
 
@@ -77,8 +78,8 @@ export interface ServerDependencies {
 }
 
 // Loading both libraries proves the selected Pi packages work in this runtime. Run admission
-// is authenticated and validated here; admitted runs execute the deterministic simulation
-// until real Pi model execution is added in Phase 3.
+// is authenticated and validated here; admitted runs execute the deterministic simulation or a
+// Pi Agent on the run's connection (runtime/live-run.ts).
 export function createServer(config: ServerConfig = loadConfig(), dependencies: ServerDependencies = {}) {
     if (typeof Agent !== 'function' || typeof createModels !== 'function') {
         throw new Error('The installed Pi packages do not expose the expected API.');
@@ -286,9 +287,7 @@ export function createServer(config: ServerConfig = loadConfig(), dependencies: 
         if (new Set(run.messages.map((message) => message.id)).size !== run.messages.length) {
             throw invalidPayload([{ path: '/messages', message: 'message IDs must be unique' }]);
         }
-        if (run.model.provider !== SIMULATED_PROVIDER || !config.simulationEnabled) {
-            throw new HttpError(422, 'model_unavailable', `No verified provider can run ${run.model.provider}/${run.model.id}.`);
-        }
+        admitModel(run);
 
         const unsupported = run.capabilities.filter((capability) => !SUPPORTED_CAPABILITIES.has(capability));
         if (unsupported.length > 0) {
@@ -313,13 +312,39 @@ export function createServer(config: ServerConfig = loadConfig(), dependencies: 
         sendAcknowledgement(response, run.runId, admission.status, admission.outcome === 'duplicate');
     }
 
+    /**
+     * The simulation runs only when enabled. A provider model runs only on the run's own
+     * connection: the credential is looked up by that ID and never comes from the request.
+     */
+    function admitModel(run: RunRequest): void {
+        const { provider, id } = run.model;
+        const unavailable = new HttpError(422, 'model_unavailable', `No verified provider can run ${provider}/${id}.`);
+
+        if (provider === SIMULATED_PROVIDER) {
+            if (!config.simulationEnabled) {
+                throw unavailable;
+            }
+
+            return;
+        }
+        if (!isConnectionProvider(provider) || connections === null || (provider === 'local' && local === null)) {
+            throw unavailable;
+        }
+        if (run.connectionId === null) {
+            throw new HttpError(422, 'connection_required', `${provider}/${id} needs the run's own provider connection.`);
+        }
+    }
+
     function execute(run: RunRequest, execution: RunExecution): void {
-        runSimulation(run, execution, { chunkDelayMs: config.simulationChunkDelayMs, now: config.now }).catch(
-            (error: unknown) => {
-                config.log(`Run ${run.runId} failed: ${error instanceof Error ? error.message : String(error)}`);
-                execution.emit('run.failed', { code: 'internal_error', message: 'The engine could not complete the run.' });
-            },
-        );
+        const work =
+            run.model.provider === SIMULATED_PROVIDER || connections === null
+                ? runSimulation(run, execution, { chunkDelayMs: config.simulationChunkDelayMs, now: config.now })
+                : runLive(run, execution, { connections, log: config.log });
+
+        work.catch((error: unknown) => {
+            config.log(`Run ${run.runId} failed: ${error instanceof Error ? error.message : String(error)}`);
+            execution.emit('run.failed', { code: 'internal_error', message: 'The engine could not complete the run.' });
+        });
     }
 
     /** Replays events after `after`, then follows the run until its terminal event (NDJSON). */

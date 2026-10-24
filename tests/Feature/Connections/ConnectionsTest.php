@@ -333,6 +333,21 @@ class ConnectionsTest extends TestCase
             ->assertInertiaFlash('connectionTest.error_code', 'reauth_required');
 
         $this->assertSame('reauth_required', $connection->refresh()->status);
+
+        // The engine keeps reporting the rejection, so viewing the page does not undo it, even
+        // while the earlier sign-in is still reported as finished.
+        $this->engine->statuses['openai'] = 'reauth_required';
+        $this->get('/connections')->assertInertia(fn (Assert $page) => $page
+            ->where('connections.providers.0.status', 'reauth_required')
+            ->where('connections.providers.0.models', []));
+        $this->assertSame('reauth_required', $connection->refresh()->status);
+        $this->put('/connections/chat', ['provider' => 'openai', 'model_id' => 'gpt-5.4-mini'])
+            ->assertSessionHasErrors(['chat' => 'Connect ChatGPT first.']);
+
+        // Signing in again replaces the rejected sign-in.
+        $this->post('/connections/openai/login');
+        $this->post('/connections/openai/login/callback', ['redirect_url' => self::REDIRECT])->assertSessionHasNoErrors();
+        $this->assertSame('connected', $connection->refresh()->status);
     }
 
     public function test_chat_uses_a_chosen_connected_model_until_it_is_disconnected(): void

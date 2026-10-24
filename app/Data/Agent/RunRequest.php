@@ -32,6 +32,9 @@ final readonly class RunRequest
 
     public const MODEL_ID_PATTERN = '/\A[A-Za-z0-9][A-Za-z0-9._:\/-]{0,127}\z/';
 
+    /** Reasoning efforts the contract accepts; models that do not reason ignore them. */
+    public const REASONING_LEVELS = ['low', 'medium', 'high'];
+
     private const CAPABILITY_PATTERN = '/\A[a-z][a-z0-9_]{0,63}\z/';
 
     /** Inclusive [minimum, maximum] for each limit. */
@@ -58,6 +61,7 @@ final readonly class RunRequest
         public array $capabilities,
         public array $messages,
         public array $limits,
+        public ?string $modelReasoning = null,
     ) {
         self::require(self::isUuid($runId), 'runId must be a lowercase UUID.');
         self::require(self::isUuid($conversationId), 'conversationId must be a lowercase UUID.');
@@ -67,6 +71,7 @@ final readonly class RunRequest
         self::require($profileVersion >= 1 && $profileVersion <= 1_000_000, 'profileVersion is out of range.');
         self::require(preg_match(self::SLUG_PATTERN, $modelProvider) === 1, 'modelProvider must be a slug.');
         self::require(preg_match(self::MODEL_ID_PATTERN, $modelId) === 1, 'modelId has an unsupported format.');
+        self::require($modelReasoning === null || in_array($modelReasoning, self::REASONING_LEVELS, true), 'modelReasoning must be low, medium or high.');
 
         self::require(count($capabilities) <= self::MAX_CAPABILITIES, 'Too many capabilities.');
         self::require(count(array_unique($capabilities)) === count($capabilities), 'Capabilities must be unique.');
@@ -104,7 +109,11 @@ final readonly class RunRequest
             'conversationId' => $this->conversationId,
             'userId' => $this->userId,
             'profile' => ['id' => $this->profileId, 'version' => $this->profileVersion],
-            'model' => ['provider' => $this->modelProvider, 'id' => $this->modelId],
+            'model' => [
+                'provider' => $this->modelProvider,
+                'id' => $this->modelId,
+                ...($this->modelReasoning === null ? [] : ['reasoning' => $this->modelReasoning]),
+            ],
             'connectionId' => $this->connectionId,
             'capabilities' => $this->capabilities,
             'messages' => array_map(fn (array $message): array => [

@@ -487,7 +487,13 @@ test('an expired sign-in is renewed before a test, or reported when renewal fail
     assert.equal(result.body.error.code, 'reauth_required');
     assert.equal(revoked.fake.refreshes, 1);
     assert.equal(revoked.fake.core.state.callCount, 0, 'no model request without a valid sign-in');
-    // The credential is kept, so a later renewal can still be retried.
+    // The credential is kept, so a later renewal can still be retried, but the status says it was rejected.
+    const status = await call(revoked, 'GET', statusPath(id));
+    assert.deepEqual(validate('connectionStatus', status.body), []);
+    assert.equal(status.body.status, 'reauth_required');
+
+    // A new sign-in replaces the rejected one.
+    await connect(revoked, id, 'again');
     assert.equal((await call(revoked, 'GET', statusPath(id))).body.status, 'connected');
 });
 

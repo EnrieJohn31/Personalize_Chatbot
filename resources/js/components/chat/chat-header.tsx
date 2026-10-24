@@ -75,7 +75,7 @@ function AssistantLabel({ assistant }: { assistant: ChatAssistant }) {
             ? `${assistant.name} is not answering. Open Connections to check it.`
             : `${assistant.name} is not connected. Open Connections to fix it.`
         : assistant.provider !== null && !assistant.live
-          ? 'Replies still come from the built-in assistant until live replies are turned on.'
+          ? 'Live replies are switched off on this server, so the built-in assistant answers.'
           : 'New chats use the model chosen on the Connections page.';
 
     return (

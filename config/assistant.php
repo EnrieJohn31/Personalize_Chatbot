@@ -47,9 +47,12 @@ return [
         ],
     ],
 
-    // Whether runs use each conversation's chosen connection and model. Until the engine executes
-    // live models (task 3.2) every reply comes from the default profile below.
-    'live_replies' => (bool) env('ASSISTANT_LIVE_REPLIES', false),
+    // Whether runs use each conversation's chosen connection and model (task 3.2). When off, every
+    // reply comes from the default profile below; a switch to fall back without changing choices.
+    'live_replies' => (bool) env('ASSISTANT_LIVE_REPLIES', true),
+
+    // Reasoning effort requested from models that reason: low, medium or high. Others ignore it.
+    'reasoning' => env('ASSISTANT_REASONING', 'medium'),
 
     // Versioned default profile copied into each server-created run snapshot. The simulated
     // provider needs no connection and is only admitted when the engine enables simulation.

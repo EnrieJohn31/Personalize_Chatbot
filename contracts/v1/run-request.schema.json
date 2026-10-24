@@ -49,6 +49,10 @@
                 "id": {
                     "type": "string",
                     "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+                },
+                "reasoning": {
+                    "description": "Requested reasoning effort. The engine applies it only to models that reason; others ignore it.",
+                    "enum": ["low", "medium", "high"]
                 }
             }
         },

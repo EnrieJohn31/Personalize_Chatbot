@@ -97,6 +97,21 @@ function CardBody({
                     </AlertDescription>
                 </Alert>
             )}
+            {card.status === 'reauth_required' && (
+                <Alert variant="destructive">
+                    <TriangleAlert />
+                    <AlertTitle>
+                        {card.auth === 'oauth'
+                            ? 'The sign-in has expired or was revoked'
+                            : 'The key was rejected'}
+                    </AlertTitle>
+                    <AlertDescription>
+                        {card.auth === 'oauth'
+                            ? `${card.name} no longer accepts this sign-in. Sign in again to keep using it.`
+                            : `${card.name} no longer accepts this key. Paste a new one to keep using it.`}
+                    </AlertDescription>
+                </Alert>
+            )}
             {card.auth === 'oauth' ? (
                 <ChatGptStart ended={card.login} />
             ) : (
@@ -180,6 +195,12 @@ function StatusBadge({
             );
         case 'unreadable':
             return <Badge variant="destructive">Connect again</Badge>;
+        case 'reauth_required':
+            return (
+                <Badge variant="destructive">
+                    {card.auth === 'oauth' ? 'Sign in again' : 'Key rejected'}
+                </Badge>
+            );
         case 'unreachable':
             return <Badge variant="destructive">Not answering</Badge>;
         default:

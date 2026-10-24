@@ -5,7 +5,7 @@ namespace App\Data\Agent;
 /** Engine-held sign-in state of one provider connection (contracts/v1/connection-status.schema.json). */
 final readonly class ConnectionStatus
 {
-    public const STATUSES = ['connected', 'not_connected', 'unreadable', 'unreachable'];
+    public const STATUSES = ['connected', 'not_connected', 'unreadable', 'unreachable', 'reauth_required'];
 
     private const MAX_MODELS = 500;
 

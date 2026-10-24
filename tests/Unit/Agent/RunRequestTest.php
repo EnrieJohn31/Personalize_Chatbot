@@ -10,13 +10,22 @@ use PHPUnit\Framework\TestCase;
 
 class RunRequestTest extends TestCase
 {
-    public function test_serialization_matches_the_shared_contract_example_exactly(): void
+    public function test_serialization_matches_the_shared_contract_examples_exactly(): void
     {
-        $example = self::contract('examples/run-request.json');
-        $request = self::fromContract($example);
+        foreach (['examples/run-request.json', 'examples/run-request-live.json'] as $path) {
+            $example = self::contract($path);
+            $request = self::fromContract($example);
 
-        $this->assertSame($example, $request->toArray());
-        $this->assertSame($example, json_decode($request->toJson(), true, flags: JSON_THROW_ON_ERROR));
+            $this->assertSame($example, $request->toArray(), $path);
+            $this->assertSame($example, json_decode($request->toJson(), true, flags: JSON_THROW_ON_ERROR), $path);
+        }
+    }
+
+    public function test_reasoning_levels_match_the_v1_schema(): void
+    {
+        $schema = self::contract('run-request.schema.json');
+
+        $this->assertSame(RunRequest::REASONING_LEVELS, $schema['properties']['model']['properties']['reasoning']['enum']);
     }
 
     public function test_bounds_match_the_v1_schema(): void
@@ -66,6 +75,7 @@ class RunRequestTest extends TestCase
             'user ID with trailing newline' => [fn (array $c) => [...$c, 'userId' => "42\n"]],
             'connection that is not a UUID' => [fn (array $c) => [...$c, 'connectionId' => 'credential-reference']],
             'model ID with spaces' => [fn (array $c) => [...$c, 'model' => ['provider' => 'simulated', 'id' => 'two words']]],
+            'unknown reasoning level' => [fn (array $c) => [...$c, 'model' => [...$c['model'], 'reasoning' => 'max']]],
             'duplicate capabilities' => [fn (array $c) => [...$c, 'capabilities' => ['lookup_reference', 'lookup_reference']]],
             'capability with uppercase' => [fn (array $c) => [...$c, 'capabilities' => ['Lookup']]],
             'no messages' => [fn (array $c) => [...$c, 'messages' => []]],
@@ -126,6 +136,7 @@ class RunRequestTest extends TestCase
             capabilities: $contract['capabilities'],
             messages: $contract['messages'],
             limits: $contract['limits'],
+            modelReasoning: $contract['model']['reasoning'] ?? null,
         );
     }
 }

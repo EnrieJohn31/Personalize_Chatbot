@@ -32,6 +32,7 @@ final class RunRequestFactory
         #[Config('assistant.profile')] private readonly array $profile,
         #[Config('assistant.limits')] private readonly array $limits,
         #[Config('assistant.live_replies')] private readonly bool $liveReplies = false,
+        #[Config('assistant.reasoning')] private readonly string $reasoning = 'medium',
     ) {}
 
     /**
@@ -92,6 +93,7 @@ final class RunRequestFactory
                 'maxToolCalls' => $this->limits['max_tool_calls'],
                 'runDeadlineMs' => $this->limits['run_deadline_ms'],
             ],
+            modelReasoning: $connectionId === null ? null : $this->reasoning,
         );
     }
 

@@ -38,13 +38,16 @@ export interface RunMessage {
     content: string;
 }
 
+/** Reasoning effort a run may request; models that do not reason ignore it. */
+export type ReasoningLevel = 'low' | 'medium' | 'high';
+
 export interface RunRequest {
     contractVersion: typeof CONTRACT_VERSION;
     runId: string;
     conversationId: string;
     userId: string;
     profile: { id: string; version: number };
-    model: { provider: string; id: string };
+    model: { provider: string; id: string; reasoning?: ReasoningLevel };
     connectionId: string | null;
     capabilities: string[];
     messages: RunMessage[];

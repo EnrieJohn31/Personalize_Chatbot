@@ -1,6 +1,6 @@
-# Chat page and replies — tasks 2.3–2.4
+# Chat page and replies — tasks 2.3–2.4 and 3.2
 
-Implemented: 23 October 2026. The signed-in chat interface over the task 2.1 history endpoints (task 2.3), with replies streamed from the engine through Laravel (task 2.4). In development the engine's deterministic simulated provider writes the replies; chat calls no model until task 3.2 uses the ChatGPT connection from [task 3.1](connections.md).
+Implemented: 23 October 2026. The signed-in chat interface over the task 2.1 history endpoints (task 2.3), with replies streamed from the engine through Laravel (task 2.4). Since 24 October 2026 (task 3.2) a conversation's replies come from the account and model it records, through a connection from [task 3.1](connections.md). A conversation without one uses the engine's deterministic simulated provider, as before.
 
 ## Routes and data
 
@@ -26,7 +26,12 @@ After the first render, the page uses the `/api/chat` endpoints described in [ch
 - **One reply per user.** `ActiveRuns` keeps a cache-backed slot per user (Blueprint section 12) and records who owns each run. Entries expire with the run deadline plus a minute. They are cleared when a run finishes, or when admission fails.
 - **Server-sent events.** Each engine event is relayed as `id: <engine sequence>`, `event: <type>`, `data: {"runId": …, …}`. `run.completed` carries the saved message instead of empty data. The browser's `EventSource` resumes with `Last-Event-ID` after a dropped connection. The relay always reads the engine stream from the start, so it knows the final text, and forwards only events after that ID. Relay problems use a separate `stream.error` event with `{code, message, resumable}` and no ID.
 - **Saving.** When the relay sees `run.completed`, it saves `assistant.final` through `ConversationRepository::appendAssistantMessage`. That method is idempotent per run (`canonical_content.run_id`), so several readers save one message. It also records the run's `provider` and `model` in `canonical_content`; the message resource exposes the model as `model`, or null for built-in (simulated) replies and user messages.
-- **Which model.** `RunRequestFactory::modelFor()` uses the conversation's recorded `model_provider` and `model` when `ASSISTANT_LIVE_REPLIES` is on, and the default profile otherwise. The setting stays `false` until task 3.2 makes the engine run real models, so every reply is still simulated. The relay ignores the browser disconnecting, so a reply is still saved if the tab closes once its stream has opened. A run whose stream nobody opens is not saved; opening the conversation within the run's retention resumes and saves it. Cancelled or failed runs save nothing.
+- **Which model.** `RunRequestFactory::modelFor()` uses the conversation's recorded `model_provider` and `model` while `ASSISTANT_LIVE_REPLIES` is on (the default), and the default profile otherwise.
+  - A conversation started before any choice was made records the user's current choice at its first reply (`ConversationRepository::applyChatChoice`).
+  - Provider models get the reasoning effort `ASSISTANT_REASONING` (`medium` by default); models that do not reason ignore it.
+  - The engine runs the model through the run's own connection; see [the contracts](../contracts/README.md#event-stream).
+- **Account failures.** A reply that fails with `reauth_required`, `credentials_unreadable` or `not_connected` marks the conversation's connection, as a failed test message does. The chat header then turns amber, the next reply is refused with `409 connection_not_ready`, and the page offers **Open Connections**. Other provider errors (for example a quota) leave the connection alone and show the provider's message.
+- **Disconnects.** The relay ignores the browser disconnecting, so a reply is still saved if the tab closes once its stream has opened. A run whose stream nobody opens is not saved; opening the conversation within the run's retention resumes and saves it. Cancelled or failed runs save nothing.
 - **Failures.** An interrupted engine stream is resumable: the browser reconnects automatically and shows "Reconnecting…". A contract violation is not resumable: the relay asks the engine to stop the run and frees the user's slot.
 
 ## Behavior
@@ -60,7 +65,7 @@ After the first render, the page uses the `/api/chat` endpoints described in [ch
 
 ## Not included yet
 
-Real model replies (task 3.x), tool use, reply editing or regeneration, single-message deletion and uploads. User-message writes are still not idempotent: retrying after an ambiguous network failure can save the same text twice (see [chat-history.md](chat-history.md)). Durable execution independent of any reader, server-side event retention, interruption detection after an engine restart, and heartbeats from Laravel to the browser arrive with Phases 4–5.
+Tool use (task 3.3), bounded context beyond the latest 50 messages (task 3.4), a per-chat reasoning choice, reply editing or regeneration, single-message deletion and uploads. User-message writes are still not idempotent: retrying after an ambiguous network failure can save the same text twice (see [chat-history.md](chat-history.md)). Durable execution independent of any reader, server-side event retention, interruption detection after an engine restart, and heartbeats from Laravel to the browser arrive with Phases 4–5.
 
 ## Main files
 

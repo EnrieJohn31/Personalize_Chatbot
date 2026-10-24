@@ -195,13 +195,24 @@ final class ProviderConnections
     {
         $result = $this->gateway->testConnection($connection->id, $connection->provider, $modelId);
 
-        match ($result->errorCode) {
+        if ($result->ok) {
+            // A working reply proves the sign-in works, including after an earlier rejection.
+            $this->record($connection, self::CONNECTED);
+        } elseif ($result->errorCode !== null) {
+            $this->recordFailure($connection, $result->errorCode);
+        }
+
+        return $result;
+    }
+
+    /** Records what a failed test message or chat reply revealed about the connection's sign-in. */
+    public function recordFailure(ProviderConnection $connection, string $code): void
+    {
+        match ($code) {
             'reauth_required', 'credentials_unreadable' => $this->record($connection, self::REAUTH_REQUIRED),
             'not_connected' => $this->record($connection, self::NOT_CONFIGURED),
             default => null,
         };
-
-        return $result;
     }
 
     /** Chooses the connection and model chat replies use; null for both returns to the built-in default. */
@@ -233,7 +244,7 @@ final class ProviderConnections
     {
         $this->record($connection, match ($status->status) {
             'connected' => self::CONNECTED,
-            'unreadable' => self::REAUTH_REQUIRED,
+            'unreadable', 'reauth_required' => self::REAUTH_REQUIRED,
             'unreachable' => self::UNREACHABLE,
             default => self::NOT_CONFIGURED,
         });

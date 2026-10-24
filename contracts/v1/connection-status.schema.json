@@ -21,8 +21,14 @@
         },
         "provider": { "enum": ["openai", "opencode", "opencode-go", "local"] },
         "status": {
-            "description": "unreadable: a sign-in or key is stored but this engine cannot decrypt it; connecting again replaces it. unreachable: the local model server is configured but did not answer.",
-            "enum": ["connected", "not_connected", "unreadable", "unreachable"]
+            "description": "unreadable: a sign-in or key is stored but this engine cannot decrypt it; connecting again replaces it. unreachable: the local model server is configured but did not answer. reauth_required: the provider rejected the stored sign-in's renewal since this engine started; signing in again replaces it.",
+            "enum": [
+                "connected",
+                "not_connected",
+                "unreadable",
+                "unreachable",
+                "reauth_required"
+            ]
         },
         "expiresAt": {
             "description": "Unix time in milliseconds when the current access token expires. The engine renews it automatically.",

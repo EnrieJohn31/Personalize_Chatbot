@@ -187,8 +187,8 @@ export function ChatChoice({
 
             <p className="flex items-start gap-2 text-xs text-muted-foreground">
                 <Info className="mt-0.5 size-3.5 shrink-0" />
-                Replies from a connected account arrive with the next update;
-                until then the built-in assistant answers every chat.
+                Each new chat keeps the account and model chosen here, so
+                changing them later does not change earlier chats.
                 {connected.length === 0 &&
                     ' Connect an account below to choose it here.'}
             </p>

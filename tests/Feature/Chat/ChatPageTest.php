@@ -101,14 +101,14 @@ class ChatPageTest extends TestCase
     {
         $owner = User::factory()->create();
         $this->actingAs($owner)->get('/chat')->assertInertia(fn (Assert $page) => $page
-            ->where('assistant', ['provider' => null, 'name' => 'Built-in assistant', 'model' => null, 'ready' => true, 'live' => false]));
+            ->where('assistant', ['provider' => null, 'name' => 'Built-in assistant', 'model' => null, 'ready' => true, 'live' => true]));
 
         $connection = $owner->providerConnections()->create(['provider' => 'local', 'auth_method' => 'none']);
         $connection->forceFill(['status' => 'connected'])->save();
         $owner->forceFill(['chat_connection_id' => $connection->id, 'chat_model' => 'qwen2.5:7b'])->save();
         $owner->refresh();
         $this->get('/chat')->assertInertia(fn (Assert $page) => $page
-            ->where('assistant', ['provider' => 'local', 'name' => 'Local model', 'model' => 'qwen2.5:7b', 'ready' => true, 'live' => false]));
+            ->where('assistant', ['provider' => 'local', 'name' => 'Local model', 'model' => 'qwen2.5:7b', 'ready' => true, 'live' => true]));
 
         // A conversation shows what it started with, not the current choice.
         $older = $this->conversation($owner, ['Hello']);

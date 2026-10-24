@@ -113,8 +113,9 @@ class RunRequestFactoryTest extends TestCase
         $this->assertSame($connection->id, $this->factory()->forConversation($owner, $conversation->refresh())->connectionId);
     }
 
-    public function test_a_conversation_keeps_the_model_it_started_with_once_live_replies_are_on(): void
+    public function test_a_conversation_uses_the_model_it_started_with_unless_live_replies_are_off(): void
     {
+        config(['assistant.live_replies' => false]);
         $owner = User::factory()->create();
         $connection = $this->connection($owner, 'local');
         DB::table('provider_connections')->where('id', $connection->id)->update(['status' => RunRequestFactory::READY_CONNECTION_STATUS]);
@@ -124,16 +125,17 @@ class RunRequestFactoryTest extends TestCase
         ]);
         $conversation->refresh();
 
-        // Until live replies are turned on, every conversation uses the default profile.
+        // With live replies switched off, every conversation uses the default profile.
         $this->assertSame(['provider' => 'simulated', 'id' => 'simulated-echo'], $this->factory()->forConversation($owner, $conversation)->toArray()['model']);
 
-        config(['assistant.live_replies' => true]);
+        config(['assistant.live_replies' => true, 'assistant.reasoning' => 'high']);
         $request = $this->factory()->forConversation($owner, $conversation);
-        $this->assertSame(['provider' => 'local', 'id' => 'qwen2.5:7b'], $request->toArray()['model']);
+        $this->assertSame(['provider' => 'local', 'id' => 'qwen2.5:7b', 'reasoning' => 'high'], $request->toArray()['model']);
         $this->assertSame($connection->id, $request->connectionId);
 
-        // A conversation started before any choice was made keeps the default.
-        $this->assertSame('simulated', $this->factory()->forConversation($owner, $this->conversation($owner, ['Hi']))->modelProvider);
+        // A conversation without a model uses the default, which needs no connection or reasoning.
+        $default = $this->factory()->forConversation($owner, $this->conversation($owner, ['Hi']));
+        $this->assertSame(['provider' => 'simulated', 'id' => 'simulated-echo'], $default->toArray()['model']);
 
         DB::table('provider_connections')->where('id', $connection->id)->update(['status' => 'unreachable']);
         $this->assertNotDispatchable('connection_not_ready', $owner, $conversation->refresh());

@@ -43,6 +43,29 @@ class ConversationRepository
         ];
     }
 
+    /**
+     * Records the owner's current chat choice on a conversation that has no model yet, so its
+     * replies keep that model even when the choice changes later. Unsaved; returns whether it
+     * applied. A conversation linked to another connection keeps its link and the default model.
+     */
+    public function applyChatChoice(User $user, Conversation $conversation): bool
+    {
+        $choice = $user->chatConnection;
+        $linked = $conversation->provider_connection_id;
+
+        if ($conversation->model_provider !== null || $choice === null || $user->chat_model === null || ($linked !== null && $linked !== $choice->id)) {
+            return false;
+        }
+
+        $conversation->forceFill([
+            'provider_connection_id' => $choice->id,
+            'model_provider' => $choice->provider,
+            'model' => $user->chat_model,
+        ]);
+
+        return true;
+    }
+
     public function appendUserMessage(Conversation $conversation, string $content): Message
     {
         return DB::transaction(function () use ($conversation, $content): Message {

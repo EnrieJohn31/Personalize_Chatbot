@@ -1,4 +1,4 @@
-import { http } from '@inertiajs/react';
+import { http, router } from '@inertiajs/react';
 import ChatRunController from '@/actions/App/Http/Controllers/ChatRunController';
 import ConversationController from '@/actions/App/Http/Controllers/ConversationController';
 import MessageController from '@/actions/App/Http/Controllers/MessageController';
@@ -134,6 +134,13 @@ async function request<T>(
         body = response.data;
     } catch (error) {
         throw toChatApiError(error);
+    } finally {
+        // These writes bypass Inertia's router, so its prefetched pages (such as /chat from the
+        // main menu) would still show the data from before them. Even a failed write may have
+        // changed something.
+        if (method !== 'get') {
+            router.flushAll();
+        }
     }
 
     return JSON.parse(body) as T;

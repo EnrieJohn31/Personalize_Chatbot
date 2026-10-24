@@ -1,12 +1,17 @@
-import { createInertiaApp } from '@inertiajs/react';
+import { createInertiaApp, router } from '@inertiajs/react';
+import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { keepPagesFresh } from '@/lib/fresh-pages';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+
+// Registered before the first page, which a browser Back or Forward can also restore.
+keepPagesFresh(router, () => toast.info('That conversation has been deleted.'));
 
 void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),

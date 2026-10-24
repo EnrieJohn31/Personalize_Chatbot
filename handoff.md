@@ -93,6 +93,11 @@ Replies still stream from the engine's deterministic simulation through a Stage 
 
 - Review on 24 October 2026: the two implementation commits already had descriptive messages and the approved human identity. The existing `composer ci:check` passed with 210 Laravel tests / 1107 assertions and 21 frontend tests; all 55 engine tests passed. A code review found that account deletion removed database records without clearing engine credentials. Fixed in `ac5a7f9`: disconnect every owned supported-provider record first, require confirmed removal, and preserve the account/session if cleanup fails. Four new regression cases pass within 32 targeted account/connection tests / 342 assertions; changed-file Pint and PHPStan also pass. Signed live connectivity and the applied migration status were verified without making a provider request. See [docs/validation.md](docs/validation.md) for the review's scope and limits.
 
+- Fix on 24 October 2026 (user-reported): deleted chats reappeared until a reload. Inertia reused a prefetched `/chat` (main-menu Chat link, 30 s) and pages restored by Back/Forward, neither of which knew about the chat page's JSON API writes.
+    - Chat API writes and completed Inertia writes now clear the prefetch cache.
+    - A chat page restored from history is fetched again (`resources/js/lib/fresh-pages.ts`); a chat deleted meanwhile leads to a new chat with a notice. This also fixes Back losing messages sent before leaving a chat.
+    - Verification: a 9-check browser probe failed 5 checks before the fix and passed 9/9 after; 3 new frontend unit tests (25 total); `composer ci:check` checks and 232 Laravel tests passed. See [docs/validation.md](docs/validation.md).
+
 Publication review on 24 October 2026: reviewed `917cd5e` (local model connection and chat preparation) and `ea3be49` (PHP timestamp rechecking) with no blocking findings. Reran `composer ci:check`: 232 Laravel tests / 1332 assertions, 22 frontend tests, format/lint/types, Pint and PHPStan all passed. All 61 engine tests and the production frontend build passed. Live `agent:check` passed without starting a run; all 11 migrations were already applied, and CLI OPcache is enabled with timestamp validation and a two-second recheck. The reviewed engine source matches the running container. Earlier browser probes and performance measurements were not rerun; real provider acceptance and remote CI remain unverified. See [docs/validation.md](docs/validation.md).
 
 ## Resume this checkout
@@ -219,6 +224,8 @@ Use the build plan's individual acceptance checks; this table does not replace t
 - `.setup/` contains ignored downloads, temporary probes and dependency backups. It is not application source and is not included in a new clone. The persistence probe fixture was cleaned up.
 
 ## Git branches and contributor requirements
+
+Latest local checkpoint (not pushed): **"Keep deleted chats from reappearing after navigation"** on `development`, developed in a temporary worktree and fast-forwarded. Publication needs the user's explicit request.
 
 Latest published implementation checkpoints: **`917cd5e` — Add a local model connection and pre-3.2 refinements**, and **`ea3be49` — Recheck PHP file timestamps every 2 seconds in development**. At the user's request, both were reviewed and atomically pushed to `main` and `development` on 24 October 2026, preserving their original messages and history. Both remote hashes were verified as `ea3be49c464d6f6bc8716190d0a310819a8110be` before adding this review/publication record.
 

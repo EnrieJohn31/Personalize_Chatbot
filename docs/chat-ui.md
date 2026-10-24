@@ -50,6 +50,10 @@ After the first render, the page uses the `/api/chat` endpoints described in [ch
   - **One conversation.** Delete it from its menu or from the header, after a confirmation dialog.
   - **Several conversations.** **Select** switches the list to checkboxes, and the title toggles its checkbox as well. A bar shows the count, Select all or Clear, and **Delete selected**.
   - **After deleting.** Deletion is permanent and stops a reply that is still being written. Deleting the open conversation returns to a new chat. A toast confirms, and the status region announces it.
+- **Fresh data.** Inertia reuses page data it already holds: a page prefetched by hovering a `prefetch` link (such as Chat in the main menu) for 30 seconds, and the copy kept in browser history for Back and Forward. The chat page's writes go through the JSON API, which Inertia does not see, so without help a deleted or renamed chat could reappear until a reload.
+  - Every chat API write clears Inertia's prefetch cache (`lib/chat-api.ts`), as does every completed Inertia write.
+  - A chat page restored by Back or Forward is fetched again from the server (`lib/fresh-pages.ts`, registered in `app.tsx`), so it shows current conversations and messages.
+  - If its conversation was deleted meanwhile, the page returns to a new chat with the notice "That conversation has been deleted."
 - **Header.** Sidebar toggle, title, a label with the account and model that answer (linking to Connections, amber with a warning when that account is not connected or the local server is not answering), Rename and Delete for an existing conversation, and a Light/Dark/System theme menu backed by the existing appearance setting.
 - **Accessibility.** Icon-only controls have labels and tooltips, messages carry screen-reader speaker labels, and a polite status region announces sending, reply progress ("The assistant is replying", "Reply complete", "Reply stopped"), renames and failures. It never reads the streamed text. A reply being written is marked `aria-busy`. Errors use `role="alert"`.
 - **Mobile.** The page is a full-height flex column, so the composer stays at the bottom. The viewport meta adds `interactive-widget=resizes-content`, which lets Chrome on Android shrink the layout above the on-screen keyboard. Safari ignores the hint and logs a console note. Upload controls are not shown.
@@ -73,6 +77,7 @@ Real model replies (task 3.x), tool use, reply editing or regeneration, single-m
 | `resources/js/components/chat/` | Sidebar, header, message list, message, Markdown, composer, rename and delete dialogs |
 | `resources/js/hooks/use-conversations.ts`, `lib/conversation-groups.ts` | Sidebar list, later pages, renames, deletions and date sections |
 | `resources/js/lib/chat-api.ts`, `chat-composer.ts` | API calls and testable composer rules |
+| `resources/js/lib/fresh-pages.ts` | Keeps prefetched and history-restored pages from showing data older than the latest change |
 | `tests/Feature/Chat/ChatPageTest.php`, `ChatRunTest.php`, `tests/Feature/Agent/PiGatewayEventsTest.php`, `tests/Unit/Agent/RunEventTest.php`, `resources/js/lib/*.test.ts` | Page, relay, gateway, event and frontend rule tests |
 
 ## Checks

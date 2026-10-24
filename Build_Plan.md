@@ -174,8 +174,8 @@ Keep a short progress record here as implementation proceeds:
 | --- | --- |
 | Current task | 3.1 — implemented (ChatGPT, OpenCode, local model server); waiting for the operator's live test message. Task 3.2's preparation is done |
 | Last completed task | 2.4 — simulated reply stream through Laravel and one React hook (Phase 2 complete) |
-| Actual checks run on the application | Publication review on 24 October: reran `composer ci:check` (232 Laravel tests / 1332 assertions, 22 frontend tests, format/lint/types/Pint/PHPStan), all 61 engine tests and the production frontend build; all passed. Signed live connectivity, all 11 applied migrations and active OPcache settings verified. The earlier 14-check browser probe was not repeated — see docs/validation.md |
-| Git checkpoint and branches | Published to both `main` and `development` on 24 October: local model and chat preparation `917cd5e`, then PHP timestamp rechecking `ea3be49`. Original commits and messages preserved; this documentation records their review and publication |
+| Actual checks run on the application | Stale-chat fix on 24 October: `composer ci:check` checks and 232 Laravel tests / 1332 assertions, 25 frontend tests, and a 9-check browser probe (4/9 before the fix, 9/9 after) passed. Engine unchanged (61 tests at the publication review) — see docs/validation.md |
+| Git checkpoint and branches | Local, not pushed: "Keep deleted chats from reappearing after navigation" on `development`. Last published to both `main` and `development` on 24 October: local model and chat preparation `917cd5e`, then PHP timestamp rechecking `ea3be49` |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
 | Next checkpoint | Task 3.1: a live test message succeeds; then record persistence across an engine restart and refresh after the token expires. Then task 3.2 |
 
@@ -233,6 +233,8 @@ For each completed task, append: `ID — result — verification/evidence — re
   - Remaining: no real local server tested; replies stay simulated until task 3.2.
 
 - Publication — At the user's request, fast-forwarded `main` and atomically pushed the four reviewed commits through `5345421` to both remote branches. Fetched tips showed no divergence; the full contributor audit and diff checks passed, `.claude/` remained excluded, and both remote hashes matched. No application code changed or application tests reran during publication; remote CI results remain unverified.
+
+- Fix (user-reported) — Deleted chats reappeared until a reload, because Inertia reused a prefetched `/chat` and pages restored by Back/Forward that predated the JSON API deletions. Chat API writes and completed Inertia writes now clear the prefetch cache, and a chat page restored from history is fetched again; a deleted chat leads to a new chat with a notice. Back no longer loses recently sent messages either — a browser probe failed 5 of 9 checks before and passed 9/9 after; 3 new frontend unit tests — Firefox/Safari not checked.
 
 Publication review of local model changes on 24 October: no blocking findings across `917cd5e` and `ea3be49`; full application/engine checks and the frontend build passed. The contributor audit passed with approved author/committer identities, unchanged hooks and no prohibited attribution. Both branches were fast-forwarded and pushed atomically; remote hashes matched `ea3be49`. Live provider acceptance remains open, and remote CI results remain unverified.
 

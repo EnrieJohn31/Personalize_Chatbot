@@ -1,5 +1,23 @@
 # Foundation validation
 
+## Deleted chats reappearing until a reload — 24 October 2026
+
+The user reported that deleted chats only disappeared after a refresh. A browser probe reproduced it on an internal Docker network, with a worktree server (four PHP workers, like the development container) and twelve seeded conversations. Every deletion succeeded on the server; the page showed stale data in three ways:
+- **Prefetch cache.** Hovering Chat in the main menu prefetches `/chat`, and Inertia reuses that response for 30 seconds. The chat page deletes through the JSON API, which never clears it. Within that window, deleting the open chat (which then opens `/chat`) or returning through the Chat link showed the deleted chats again.
+- **Back and Forward.** Inertia restores a page from the copy saved in browser history without asking the server. A chat deleted meanwhile came back, and going back to a deleted chat showed it as if it still existed.
+- **Same cause, unreported.** Going back to a chat also lost the messages sent there before leaving.
+
+Fix: chat API writes, and completed Inertia writes, clear Inertia's prefetch cache. A chat page restored from history is fetched again; a 404 (deleted meanwhile) leads to a new chat with a notice. No server code changed.
+
+| Check | Observed result |
+| --- | --- |
+| Browser probe, before the fix | 4/9 passed. Failed: Back after leaving, the prefetched Chat link, deleting the open chat from the header, Back to a deleted chat, and Back losing sent messages |
+| Browser probe, with the fix | 9/9 passed, with no console errors. A reload showed exactly the list the page had shown. Deleting took about 1 s from confirming to the dialog closing |
+| Frontend unit tests | 25 passed (3 new for `fresh-pages.ts`: which writes clear the cache, which restores are refetched, and the 404 path) |
+| `composer ci:check` | Formatting (132 files), lint (94 files), TypeScript and PHPStan passed; the PHP suite rerun separately: 232 tests / 1332 assertions |
+
+The first probe runs used a single-worker PHP server, where requests queued for about 5 s each and the probe moved on before refreshes finished; a trace showed this, and the probe server was given four workers and step waits on the page heading. Not checked: Firefox and Safari, and returning with Back from another website. Inertia reports that case with the same history event, unless the browser restores the page from its back-forward cache, which shows the page exactly as it was left. Changes made in another tab still appear only after a reload or the next visit.
+
 ## Publication review of local model changes — 24 October 2026
 
 Reviewed `917cd5e` and `ea3be49`: administrator-only local-server configuration, signed endpoints and strict response parsing, credential-free local connections, account cleanup, per-conversation model selection, reply metadata, rate limiting, migrations and development PHP caching. No blocking findings; no application code changed during this review.

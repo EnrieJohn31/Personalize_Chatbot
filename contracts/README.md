@@ -65,7 +65,7 @@ Each run keeps at most 2,000 events in engine memory, with the last slot reserve
 
 A live run (`runtime/live-run.ts`) builds a fresh Pi Agent on the connection's Pi `Models`:
 
-- **Setup.** It uses a short system prompt, the saved history as plain text and the conversation ID as the provider session ID, with output capped at 32,000 tokens.
+- **Setup.** It uses a short system prompt, the saved history as plain text and the conversation ID as the provider session ID, with output capped at 32,000 tokens per model request (or the model's smaller maximum). Text across all rounds is also bounded by the final-answer limit of 200,000 UTF-16 units; exceeding it aborts the request and fails explicitly rather than saving a shortened success.
 - **Events.** It emits `run.started`, `run.progress` (`preparing`, then `answering` with the first text), `assistant.delta`, `assistant.final` and `run.completed`.
 - **Tools.** It offers the model only the tools the run's capabilities permit, through `tools/executor.ts`.
     - A call that runs emits `run.progress` (`retrieving`), `tool.started`, a `source.added` per record used, and `tool.finished`. A refused call emits only `tool.finished` (`blocked` or `invalid_arguments`).
@@ -79,6 +79,7 @@ A live run (`runtime/live-run.ts`) builds a fresh Pi Agent on the connection's P
     - `provider_error`: the provider's own message, with network and TLS failures explained.
     - `empty_reply`
     - `deadline_exceeded`
+    - `output_limit_exceeded`: the aggregate reply exceeded the text limit; no final answer is saved.
 - **Stop** aborts the model request and ends the run with `run.cancelled`.
 
 The simulated run is deterministic: the same request always yields the same Markdown answer, which quotes the latest question. It emits `run.started`, `run.progress` (`answering`), `assistant.delta` chunks of about three words, `assistant.final` with the complete text, and `run.completed`. The deltas always add up to the final text. `AGENT_SIMULATION_CHUNK_DELAY_MS` (default 35, maximum 1000) sets the pause between chunks. Cancellation ends the run with `run.cancelled` and no final text; passing the run deadline ends it with `run.failed` (`deadline_exceeded`).

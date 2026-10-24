@@ -1,15 +1,15 @@
 # Build Plan: Laravel + Pi Chatbot
 
 Updated: 24 October 2026\
-Version: 14\
-Companion: [Blueprint.md](Blueprint.md), revision 15; [handoff.md](handoff.md) for the continuation record\
+Version: 15\
+Companion: [Blueprint.md](Blueprint.md), revision 16; [handoff.md](handoff.md) for the continuation record\
 Status: Phases 0–2 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page and replies streamed through Laravel are implemented. Task 3.1's connections are implemented: ChatGPT sign-in, OpenCode Go/Zen keys, an administrator-configured local model server, an encrypted credential store and a chat choice recorded per conversation. The ChatGPT sign-in works live; only its refresh after token expiry remains to check. Task 3.2 answers chats live through a Pi Agent per run, verified with ChatGPT. The user also asked for chat deletion and date sections, which are implemented. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md) and [validation](docs/validation.md).
 
 ## Start here
 
 Build a reusable chatbot foundation with Laravel, React/Inertia, TypeScript, shadcn/ui, Lucide, MySQL and a private Node/Pi engine. Use Docker Compose/Sail for development. Keep Pi as the engine throughout this plan.
 
-**Next task: 3.3 — the sample lookup tool. Task 3.1 closes once the operator records a ChatGPT refresh after token expiry.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
+**Next task: 3.4 — bounded context and budgets. Task 3.3's sample lookup is implemented and its live acceptance is recorded. Task 3.1 closes once the operator records a ChatGPT refresh after token expiry.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
 
 Use **Blueprint.md for design decisions** and **this file for work order and progress**. Update both when a decision changes. Read the relevant blueprint sections before each phase; there is no need to reproduce the entire architecture in every task.
 
@@ -78,7 +78,7 @@ Phases 0–3 deliver **Stage A: the connectivity prototype**. Phases 4–6 deliv
 | --- | --- | --- | --- |
 | [ ] | 3.1 | Implement the chosen Pi provider's supported login/credential-store integration in the container. | A live request succeeds; credential persistence and expiry/re-authentication behavior are checked. Record refresh behavior as verified or still untested. |
 | [x] | 3.2 | Construct a fresh Pi Agent per run and map its text/error events into the application protocol. | A real answer streams through Laravel; auth and provider errors appear as honest outcomes. |
-| [ ] | 3.3 | Register `lookup_reference` with a schema, permission, timeout and size limit against invented fixtures. | Pi calls it, receives a matching result and answers using that result; denied access and invalid arguments do not execute the lookup. |
+| [x] | 3.3 | Register `lookup_reference` with a schema, permission, timeout and size limit against invented fixtures. | Pi calls it, receives a matching result and answers using that result; denied access and invalid arguments do not execute the lookup. |
 | [ ] | 3.4 | Load the permitted canonical transcript and enforce context, output, model-round and tool budgets. | A follow-up remembers the relevant history, and an oversized case gets bounded handling rather than an uncontrolled request. |
 | [ ] | 3.5 | Connect the prototype Stop action to Pi and the tool/provider abort signal. | Later steps stop; active-call cancellation delay and any transport limitation are recorded. |
 
@@ -172,12 +172,12 @@ Keep a short progress record here as implementation proceeds:
 
 | Field | Current value |
 | --- | --- |
-| Current task | 3.3 — sample lookup tool. 3.1 waits only for the operator's ChatGPT refresh-after-expiry check |
-| Last completed task | 3.2 — live replies through a Pi Agent per run, verified with ChatGPT `gpt-6-luna` |
-| Actual checks run on the application | Task 3.2 on 24 October: 69 engine tests, 237 Laravel tests / 1366 assertions, 27 frontend tests, Pint, PHPStan, formatting, lint and types passed; two live `gpt-6-luna` runs streamed through Laravel's gateway — see docs/validation.md |
-| Git checkpoint and branches | Local, not pushed: `93f3085` (new-chat streaming and ChatGPT card wording) and `3ca251e` (task 3.2) with its documentation record, on `development`. Last published to both branches: `b6afd9b` — Keep deleted chats from reappearing after navigation |
+| Current task | 3.4 — bounded context and budgets. 3.1 waits for the operator's ChatGPT refresh-after-expiry check |
+| Last completed task | 3.3 — permitted sample lookup, with earlier live acceptance on ChatGPT `gpt-6-luna` |
+| Actual checks run on the application | Review on 24 October: 247 Laravel tests / 1388 assertions, 28 frontend tests, formatting, lint, types, Pint, PHPStan and the production build passed. All 84 engine tests passed after three review fixes. Signed live connectivity and the attribution audit passed. Real provider and browser acceptance were not rerun — see docs/validation.md |
+| Git checkpoint and branches | Reviewed locally on `development`: `93f3085`, `3ca251e`, `5d7b7f0`, `8ed22bb`, plus review safeguards and documentation. Publication pending; last published review record is `70263bc` |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
-| Next checkpoint | Task 3.3: Pi calls `lookup_reference` and answers with its result; denied and invalid calls do not run it. Task 3.1: a ChatGPT refresh after token expiry, recorded in docs/provider-matrix.md |
+| Next checkpoint | Task 3.4: follow-up context and oversized-history handling within a model-aware budget. Task 3.1: a ChatGPT refresh after token expiry, recorded in docs/provider-matrix.md |
 
 For each completed task, append: `ID — result — verification/evidence — remaining issue, if any`. Record a commit reference when working in Git. Checkboxes remain open for partially implemented or unverified behavior.
 
@@ -248,6 +248,9 @@ For each completed task, append: `ID — result — verification/evidence — re
   - Remaining: a live reply in the browser, Stop and rejection against OpenAI, OpenCode and local servers live; tools are task 3.3.
 
 Publication review of local model changes on 24 October: no blocking findings across `917cd5e` and `ea3be49`; full application/engine checks and the frontend build passed. The contributor audit passed with approved author/committer identities, unchanged hooks and no prohibited attribution. Both branches were fast-forwarded and pushed atomically; remote hashes matched `ea3be49`. Live provider acceptance remains open, and remote CI results remain unverified.
+
+- 3.3 — Added the permitted `lookup_reference` tool over invented records, checked execution, model-round/tool budgets and source events in `8ed22bb`. Earlier live acceptance with and without permission is recorded in docs/validation.md; context budgeting and live Stop acceptance remain tasks 3.4–3.5.
+- Review of tasks 3.2–3.3 — Reproduced and fixed argument disclosure through validation events, truncation notices exceeding tool result caps, and multi-round replies being silently shortened on completion. All 84 engine tests pass after the fixes; application/static/build checks and signed connectivity pass. Task 3.4 remains open: the review's hard character ceiling does not implement model-aware context or token budgeting.
 
 ## Completion boundaries
 

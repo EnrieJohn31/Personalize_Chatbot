@@ -350,6 +350,30 @@ test('without the capability no tool is offered and a requested call does not ru
     assert.doesNotMatch(refused.content[0].text, /SAMPLE-001\]/);
 });
 
+test('text across model rounds stops at the final size limit without saving a shortened success', async () => {
+    const engine = await start({ providerOptions: { tokenSize: { min: 20_000, max: 20_000 } } });
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([
+        fauxAssistantMessage([
+            fauxText('a'.repeat(120_000)),
+            fauxToolCall('lookup_reference', { query: 'SAMPLE-001' }, { id: 'call_1' }),
+        ], { stopReason: 'toolUse' }),
+        fauxAssistantMessage('b'.repeat(100_000)),
+    ]);
+
+    const events = await runToEnd(engine, withTools(connectionId));
+    const streamed = ofType(events, 'assistant.delta').map((event) => event.data.text).join('');
+
+    assert.equal(failure(events)?.code, 'output_limit_exceeded');
+    assert.ok(streamed.length > 0 && streamed.length <= 200_000);
+    assert.equal(ofType(events, 'tool.started').length, 1);
+    assert.equal(ofType(events, 'assistant.final').length, 0);
+    assert.equal(ofType(events, 'run.completed').length, 0);
+    assert.ok(events.every((event) => validate('runEvent', event).length === 0));
+    assert.equal(events.at(-1).type, 'run.failed');
+});
+
 test('invalid arguments are refused before the lookup runs', async () => {
     const engine = await start();
     const connectionId = randomUUID();
@@ -364,6 +388,29 @@ test('invalid arguments are refused before the lookup runs', async () => {
     assert.equal(ofType(events, 'tool.started').length, 0);
     assert.equal(ofType(events, 'tool.finished')[0].data.outcome, 'invalid_arguments');
     assert.equal(toolResults(engine.fake.calls.at(-1).context)[0].isError, true);
+    assert.equal(ofType(events, 'run.completed').length, 1);
+});
+
+test('tool validation details stay with the model and never enter browser events', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([
+        fauxAssistantMessage([
+            fauxToolCall('lookup_reference', { query: 'SAMPLE-001', privateNote: 'private-argument-marker' }, { id: 'call_1' }),
+        ], { stopReason: 'toolUse' }),
+        engine.fake.reply(() => fauxAssistantMessage('The lookup did not run.')),
+    ]);
+
+    const events = await runToEnd(engine, withTools(connectionId));
+    const [refused] = toolResults(engine.fake.calls.at(-1).context);
+
+    assert.equal(refused.isError, true);
+    assert.match(refused.content[0].text, /private-argument-marker/, 'Pi includes the supplied arguments in its validation error');
+    assert.equal(ofType(events, 'tool.started').length, 0);
+    assert.equal(ofType(events, 'tool.finished')[0].data.outcome, 'invalid_arguments');
+    assert.doesNotMatch(JSON.stringify(events), /private-argument-marker|Received arguments/);
+    assert.ok(events.every((event) => validate('runEvent', event).length === 0));
     assert.equal(ofType(events, 'run.completed').length, 1);
 });
 

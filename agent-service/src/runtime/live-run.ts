@@ -9,7 +9,7 @@ import type { RunExecution } from './run-execution.js';
 /** The contract's bounds for one `assistant.delta` and for `assistant.final` text. */
 const MAX_DELTA_LENGTH = 16_384;
 const MAX_FINAL_LENGTH = 200_000;
-/** Keeps a complete answer within MAX_FINAL_LENGTH characters for any tokenizer in practice. */
+/** Per-request token ceiling; the character budget below also bounds text across model rounds. */
 const MAX_OUTPUT_TOKENS = 32_000;
 /** Streamed text is passed on in batches, so even a run that uses its whole deadline stays far below the per-run event limit. */
 const DELTA_BUDGET = 1_500;
@@ -65,8 +65,13 @@ export async function runLive(run: RunRequest, execution: RunExecution, options:
             return;
         }
 
-        const { last, text } = await answerWith(prepared, run, execution, signal);
+        const { last, text, outputLimitExceeded } = await answerWith(prepared, run, execution, signal);
         if (stopped()) {
+            return;
+        }
+        if (outputLimitExceeded || text.length > MAX_FINAL_LENGTH) {
+            execution.emit('run.failed', { code: 'output_limit_exceeded', message: 'The reply exceeded its size limit. Ask for a shorter answer.' });
+
             return;
         }
         if (last.stopReason === 'error') {
@@ -82,7 +87,7 @@ export async function runLive(run: RunRequest, execution: RunExecution, options:
             return;
         }
 
-        execution.emit('assistant.final', { text: text.length > MAX_FINAL_LENGTH ? safeSlice(text, MAX_FINAL_LENGTH) : text });
+        execution.emit('assistant.final', { text });
         execution.emit('run.completed');
     } finally {
         clearTimeout(timer);
@@ -98,7 +103,7 @@ async function answerWith(
     run: RunRequest,
     execution: RunExecution,
     signal: AbortSignal,
-): Promise<{ last: AssistantMessage; text: string }> {
+): Promise<{ last: AssistantMessage; text: string; outputLimitExceeded: boolean }> {
     let stage: 'preparing' | 'retrieving' | 'answering' = 'preparing';
     const enter = (next: typeof stage): void => {
         if (stage !== next) {
@@ -143,15 +148,30 @@ async function answerWith(
     const texts: string[] = [];
     let last: AssistantMessage | null = null;
     let current = '';
+    let streamedLength = 0;
+    let outputLimitExceeded = false;
 
     agent.subscribe((event) => {
         if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
-            enter('answering');
-            if (current === '' && texts.length > 0) {
-                deltas.add(TURN_SEPARATOR);
+            if (outputLimitExceeded) {
+                return;
             }
-            current += event.assistantMessageEvent.delta;
-            deltas.add(event.assistantMessageEvent.delta);
+            const delta = event.assistantMessageEvent.delta;
+            if (delta === '') {
+                return;
+            }
+            const separator = current === '' && texts.length > 0 ? TURN_SEPARATOR : '';
+            if (streamedLength + separator.length + delta.length > MAX_FINAL_LENGTH) {
+                outputLimitExceeded = true;
+                agent.abort();
+
+                return;
+            }
+
+            enter('answering');
+            streamedLength += separator.length + delta.length;
+            current += delta;
+            deltas.add(separator + delta);
         }
         if (event.type === 'message_end' && event.message.role === 'assistant') {
             last = event.message;
@@ -162,7 +182,7 @@ async function answerWith(
             current = '';
         }
         if (event.type === 'tool_execution_end') {
-            tools.finish(event.toolCallId, event.toolName, event.isError, resultText(event.result));
+            tools.finish(event.toolCallId, event.toolName, event.isError);
         }
     });
 
@@ -178,17 +198,8 @@ async function answerWith(
     return {
         last: last ?? { ...assistantMessage(model, ''), stopReason: 'error', errorMessage: 'The model returned no answer.' },
         text: texts.join(TURN_SEPARATOR),
+        outputLimitExceeded,
     };
-}
-
-/** The text Pi returned to the model for a tool call. */
-function resultText(result: unknown): string {
-    const content = (result as { content?: { type: string; text?: string }[] } | undefined)?.content ?? [];
-
-    return content
-        .filter((block) => block.type === 'text')
-        .map((block) => block.text ?? '')
-        .join('');
 }
 
 /**

@@ -81,9 +81,9 @@ test('a permitted call reports start, sources and outcome; refused calls never s
     const { tools, events, execute } = executor(['lookup_reference']);
     tools.beforeToolCall(call('call-1'));
     const result = await execute('call-1', { query: 'SAMPLE-001' });
-    tools.finish('call-1', 'lookup_reference', false, result.content[0].text);
-    tools.finish('call-x', 'Not A Tool!', true, 'Tool Not A Tool! not found');
-    tools.finish('call-y', 'lookup_reference', true, 'Validation failed for tool "lookup_reference"');
+    tools.finish('call-1', 'lookup_reference', false);
+    tools.finish('call-x', 'Not A Tool!', true);
+    tools.finish('call-y', 'lookup_reference', true);
 
     assert.equal(result.isError, undefined);
     assert.match(result.content[0].text, /SAMPLE-001/);
@@ -92,8 +92,8 @@ test('a permitted call reports start, sources and outcome; refused calls never s
     assert.ok(all.every((event) => validate('runEvent', event).length === 0), JSON.stringify(all));
     assert.deepEqual(all.slice(2).map((event) => [event.data.outcome, event.data.message]), [
         ['ok', null],
-        ['blocked', 'Tool Not A Tool! not found'],
-        ['invalid_arguments', 'Validation failed for tool "lookup_reference"'],
+        ['blocked', 'The requested tool is not available in this conversation.'],
+        ['invalid_arguments', 'The tool arguments do not match its schema.'],
     ]);
 });
 
@@ -120,6 +120,15 @@ test('timeouts, failures and oversized results end with explicit outcomes', asyn
     const large = fakeTool(async () => ({ text: '😀'.repeat(200), sources: [] }));
     const shortened = await executor(['fake_lookup'], { registry: [large] }).execute('call-1', { query: 'x' });
     const [kept, note] = shortened.content[0].text.split('\n');
-    assert.equal(kept.length, 100, 'cut on a character boundary');
+    assert.ok(shortened.content[0].text.length <= large.maxResultLength, 'the notice counts toward the size cap');
+    assert.equal(kept, '😀'.repeat(kept.length / 2), 'cut on a character boundary');
     assert.equal(note, '[Result shortened to fit the tool size limit.]');
+});
+
+test('a result cap smaller than the truncation notice is still enforced', async () => {
+    const tiny = fakeTool(async () => ({ text: 'x'.repeat(100), sources: [] }), { maxResultLength: 8 });
+    const result = await executor(['fake_lookup'], { registry: [tiny] }).execute('call-1', { query: 'x' });
+
+    assert.equal(result.details.outcome, 'ok');
+    assert.ok(result.content[0].text.length <= tiny.maxResultLength);
 });

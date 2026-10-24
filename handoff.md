@@ -4,7 +4,9 @@ Updated: 24 October 2026. Read this file first when resuming work.
 
 ## Where we stopped
 
-**Phase 2 (tasks 2.1–2.4) is implemented. Task 3.2 is done: chat replies come from each conversation's chosen account and model through a fresh Pi Agent per run, verified live with the operator's ChatGPT connection on `gpt-6-luna`. Task 3.1's connections (ChatGPT, OpenCode Go/Zen, a local model server) are implemented; the operator's ChatGPT sign-in works live and survived an engine restart. Its remaining acceptance item is a refresh after the access token expires. Next build task: 3.3, the sample lookup tool.**
+**Phase 2 (tasks 2.1–2.4) is implemented. Task 3.2 is done: chat replies come from each conversation's chosen account and model through a fresh Pi Agent per run, verified live with the operator's ChatGPT connection on `gpt-6-luna`. Task 3.1's connections (ChatGPT, OpenCode Go/Zen, a local model server) are implemented; the operator's ChatGPT sign-in works live and survived an engine restart. Its remaining acceptance item is a refresh after the access token expires. Task 3.3 is done: replies can call the read-only `lookup_reference` tool on invented records, through the engine's checked tool executor, verified live on `gpt-6-luna`. Next build task: 3.4, bounded context and budgets.**
+
+Review on 24 October 2026 corrected three issues: tool validation arguments reaching browser events, truncation notices exceeding tool result caps, and oversized multi-round replies being silently shortened on completion. All 84 engine tests pass after the fixes; 247 Laravel tests, 28 frontend tests, static checks, the production build and signed connectivity passed. Earlier live acceptance notes were preserved, not rerun. See [the review evidence](docs/validation.md).
 
 The application provides:
 
@@ -15,7 +17,7 @@ The application provides:
 - A Connections page in the main menu: per-user ChatGPT sign-in and OpenCode Go/Zen keys, encrypted inside the engine, a shared local model server (`LOCAL_LLM_URL`), and a choice of which connection and model chat uses.
 - Each conversation records the choice it started with; the chat header shows it and links to Connections.
 
-Replies stream through a Stage A Laravel relay. They come from the conversation's account and model (`ASSISTANT_LIVE_REPLIES`, default `true`, with `ASSISTANT_REASONING` default `medium`), or from the engine's deterministic simulation when the conversation has none. Tools, bounded context and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the connections guide](docs/connections.md).
+Replies stream through a Stage A Laravel relay. They come from the conversation's account and model (`ASSISTANT_LIVE_REPLIES`, default `true`, with `ASSISTANT_REASONING` default `medium`), or from the engine's deterministic simulation when the conversation has none. Live replies may use the tools in `ASSISTANT_CAPABILITIES` (default `lookup_reference`; see [tools](docs/tools.md)). Bounded context and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the connections guide](docs/connections.md).
 
 | Document                                             | Use it for                                                               |
 | ---------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -122,6 +124,21 @@ Replies stream through a Stage A Laravel relay. They come from the conversation'
         - Live on the operator's stack: two `gpt-6-luna` runs at reasoning `medium` through Laravel's gateway. "17 times 3 is 51." in 6.0 s, and a Markdown list that streamed in 10 pieces.
         - See [docs/validation.md](docs/validation.md) and [docs/provider-matrix.md](docs/provider-matrix.md).
 
+- Task 3.3 on 24 October 2026: the `lookup_reference` tool (`8ed22bb`).
+    - **Engine.**
+        - `tools/registry.ts` registers it statically with a TypeBox schema, the `lookup_reference` capability, a read effect, a 10 s timeout and a 4,000-character cap.
+        - `tools/executor.ts` offers only permitted tools. Each call is checked for permission, repeats and `maxToolCalls` before running, and for permission and arguments again when it runs, with an explicit outcome.
+        - `live-run.ts` withdraws the tools before the last of `maxModelRounds`, or once the budget is used.
+        - New run events `tool.started`, `tool.finished` and `source.added` carry identifiers, outcomes and source metadata only.
+    - **Laravel.**
+        - Profile version 2 grants it through `ASSISTANT_CAPABILITIES`.
+        - `RunEvent` validates the new events, and the relay passes them on.
+        - The page shows "Looking up references…".
+    - **Verification.**
+        - 81 engine tests (12 new), 247 Laravel tests, 28 frontend tests, Pint, PHPStan, formatting, lint, types and the build.
+        - Live on `gpt-6-luna`: the model looked up the sample warehouse and answered "SAMPLE-002 … weekdays from 07:00 to 15:00 … booked one working day in advance" from the fixture. With no tools permitted, it said it lacked the details.
+        - See [docs/tools.md](docs/tools.md) and [docs/validation.md](docs/validation.md).
+
 Publication review on 24 October 2026: reviewed `917cd5e` (local model connection and chat preparation) and `ea3be49` (PHP timestamp rechecking) with no blocking findings. Reran `composer ci:check`: 232 Laravel tests / 1332 assertions, 22 frontend tests, format/lint/types, Pint and PHPStan all passed. All 61 engine tests and the production frontend build passed. Live `agent:check` passed without starting a run; all 11 migrations were already applied, and CLI OPcache is enabled with timestamp validation and a two-second recheck. The reviewed engine source matches the running container. Earlier browser probes and performance measurements were not rerun; real provider acceptance and remote CI remain unverified. See [docs/validation.md](docs/validation.md).
 
 ## Resume this checkout
@@ -194,7 +211,7 @@ docker compose down
 
 Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal at `mysql:3306`; the engine is internal at `http://agent:3101`, and only its sign-in callback is published, on `127.0.0.1:1455`. Health reports `providerAuth` (`configured` once the engine has its credential key), `requestAuth` and `simulation`. Existing local secrets stay in ignored `.env`; preserve the application key and MySQL volume. Do not use `docker compose down -v` for routine shutdown.
 
-## Next: close 3.1, then 3.3
+## Next: close 3.1, then 3.4
 
 **3.1 (operator).** A live request succeeded and the ChatGPT sign-in survived an engine restart (task 3.2's live runs). One item remains:
 
@@ -202,21 +219,20 @@ Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal
 - Record the date and outcome, with no tokens or personal data, in [docs/provider-matrix.md](docs/provider-matrix.md). Then check 3.1 in the Build Plan.
 - If HTTPS scanning (Kaspersky) is back on, sign-ins and requests to `chatgpt.com` or `auth.openai.com` can fail with "fetch failed". The live chat runs used `api.openai.com`, which was not intercepted.
 
-**3.3 (build): a sample lookup tool.** Register `lookup_reference` with a schema, permission, timeout and size limit against invented fixtures. Pi must call it, receive a matching result and answer with it; denied access and invalid arguments must not run the lookup. Starting points:
+**3.4 (build): bounded context and budgets.** Load permitted canonical history within the selected model's context budget, reserve output capacity and give oversized requests explicit handling. Verify a follow-up remembers relevant history and an oversized transcript never becomes an uncontrolled provider request. Starting points:
 
-- The run request's `capabilities` (currently always refused by `SUPPORTED_CAPABILITIES` in `server.ts`).
-- `RunRequestFactory`'s profile capabilities.
-- The Pi Agent's `tools`, `beforeToolCall` and `afterToolCall` hooks in `runtime/live-run.ts`.
-- The contract's tool event types (`run-event.schema.json`), which the page does not show yet.
-- `limits.maxModelRounds` and `maxToolCalls`, which travel with every run but are not yet enforced.
+- `RunRequestFactory` currently sends the latest 50 messages; add model-aware context selection and budget checks.
+- `runtime/live-run.ts` already enforces model rounds, a per-request token ceiling and the aggregate 200,000-unit text ceiling. Exceeding the text ceiling aborts the model and fails with `output_limit_exceeded`; no shortened answer is saved as complete.
+- `tools/executor.ts` already enforces capability, argument, repeat, tool-count, timeout and result-size checks. Keep truncation notices inside the size cap and validation arguments out of browser events.
+- Keep source metadata separate from tool result text; the page shows retrieval progress but does not yet list sources.
 
-Then 3.4 (bounded context and budgets) and 3.5 (Stop through to the tool and provider abort signal; the provider abort already works).
+Then 3.5: verify Stop during a real provider/tool call and record cancellation delay and transport limits. Fake-provider abort checks already pass. Task 3.4 stays open despite the review's hard output ceiling; model-aware context and configurable token budgets are still missing.
 
 ## Remaining work in order
 
 | Tasks        | Remaining result                                                                                                                |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| 3.1, 3.3–3.5 | ChatGPT refresh after token expiry (operator), sample lookup tool (start here), bounded history and budgets, Stop through tools |
+| 3.1, 3.4–3.5 | ChatGPT refresh after token expiry (operator), bounded history and budgets (start here), live Stop through tools |
 | 4.1–4.4      | Durable runs/events, claims, idempotency and transactional final saves                                                          |
 | 5.1–5.4      | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                                                |
 | 6.1–6.3      | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation                              |
@@ -230,8 +246,8 @@ Use the build plan's individual acceptance checks; this table does not replace t
 - Laravel owns users, permissions and durable MySQL state. Node/Pi owns active model/tool execution; it does not write the application database directly. Browser application requests go through Laravel.
 - Preserve the agreed Pi architecture. Redis, another agent framework, vector storage, WebSockets and a queue worker are not Phase 2 prerequisites.
 - User-message writes are not idempotent: a repeated successful message POST appends again. Replies avoid duplicates differently: a run starts only for an unanswered user message, and each run's reply is saved once. Concurrent append load testing remains unverified.
-- The engine executes admitted runs as simulations; its admission record and events are process-local (256 runs, 2,000 events each, 15 minutes) and are lost on restart. Laravel's durable claims and event store in tasks 4.2–4.3 become the authority. Signed requests could be replayed within the 60-second window; that is tolerated because admission, cancellation and reading are idempotent. Overlapping-key rotation is not implemented.
-- Until tasks 3.2–3.3, the engine admits only the `simulated` provider, and only with `AGENT_SIMULATION_ENABLED=true`, which development Compose sets explicitly. It refuses every capability. Only a connection with status `connected` may back a live model. Since task 3.1, a successful sign-in sets that status, and disconnecting or a failed refresh clears it.
+- The engine executes admitted runs with the selected live connection or the explicit simulation. Its admission record and events are process-local (256 runs, 2,000 events each, 15 minutes) and are lost on restart. Laravel's durable claims and event store in tasks 4.2–4.3 become the authority. Signed requests could be replayed within the 60-second window; that is tolerated because admission, cancellation and reading are idempotent. Overlapping-key rotation is not implemented.
+- Since tasks 3.2–3.3, the engine admits supported connected providers and the `lookup_reference` capability. Simulation still requires `AGENT_SIMULATION_ENABLED=true`. Only a connection with status `connected` may back a live model; a successful sign-in sets that status, and disconnecting or a failed refresh clears it.
 - ChatGPT sign-in limits:
     - One sign-in runs at a time engine-wide, because OpenAI fixes the callback port. Sign-ins in progress are lost on an engine restart; stored ones survive.
     - Port 1455 must be free on the host, or the engine container cannot start. The Codex CLI also uses it during its own login.
@@ -253,7 +269,7 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 ## Git branches and contributor requirements
 
-Latest local checkpoints (not pushed): **`93f3085` — Stream a new chat's first reply in place and keep ChatGPT shown as connected**, and **`3ca251e` — Answer chats with the chosen account through a Pi Agent per run** (task 3.2), followed by its documentation record. Both were developed in parallel sibling worktrees and fast-forwarded into `development`. Publication needs the user's explicit request.
+Latest local checkpoints reviewed for the requested publication: **`93f3085`** (first-message streaming), **`3ca251e`** (live Pi replies), **`5d7b7f0`** (task 3.2 evidence) and **`8ed22bb`** (the sample lookup tool), followed by the review safeguards and documentation. The three review fixes and actual checks are recorded in [docs/validation.md](docs/validation.md). Publication is pending. The four pending task 3.3 documentation files from the sibling `Chatbot-task-3.3` worktree were incorporated here; that worktree and its local edits were preserved.
 
 Latest published implementation checkpoint: **`b6afd9b` — Keep deleted chats from reappearing after navigation**. Reviewed and atomically pushed to `main` and `development` at the user's request on 24 October 2026. Both remote hashes matched `b6afd9b5788f93e6aa86e95edc720b7b4c1ea2cf` before adding this review record. Formatting, lint, TypeScript, all 25 frontend tests and the production build passed; no blocking findings. The history restore and cache invalidation behavior was checked against the installed Inertia implementation. PHP, engine and browser checks were not repeated; their previous results remain dated evidence in [docs/validation.md](docs/validation.md).
 

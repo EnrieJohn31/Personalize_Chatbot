@@ -1,12 +1,12 @@
 # Blueprint: Laravel Chatbot Foundation
 
 Updated: 24 October 2026\
-Revision: 15 — Local model connections and preparation for real replies reviewed and published; live verification pending\
-Status: Phase 2 is complete. Provider sign-in/key storage, connection selection, chat deletion and date sections are published to `main` and `development`, along with the administrator-configured local model connection, per-conversation model choice, larger message storage and development PHP cache settings. Account deletion disconnects owned provider credentials before removing the database account. Task 3.1 still needs verification with a real account or local model server; chat replies remain simulated, and real model execution and durable runs remain. No provider or throughput benchmark has been produced.
+Revision: 16 — Live replies and the sample lookup tool implemented and reviewed\
+Status: Phase 2 and tasks 3.2–3.3 are implemented. Conversations use their recorded connection and model through a fresh Pi Agent, with an allowed read-only sample lookup. Earlier live acceptance records cover ChatGPT replies, lookup use and credential persistence across an engine restart. Task 3.1 still needs refresh-after-expiry acceptance; task 3.4 adds bounded context and configurable budgets, followed by live Stop acceptance in 3.5 and durable runs in Phase 4. Review fixes keep tool arguments out of browser events, count truncation notices inside tool result limits and fail oversized replies explicitly. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
 
-Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 3.1. Refresh it alongside the build plan after each implementation session.
+Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 3.4 while closing task 3.1's remaining acceptance item. Refresh it alongside the build plan after each implementation session.
 
 ## 1. Goal and agreed foundation
 
@@ -197,6 +197,13 @@ Implementation record, 24 October 2026 (task 3.2): each run gets a fresh Pi Agen
 - **Events.** Streamed text maps to the existing run events in bounded batches.
 - **Failures** are reported as explicit codes. A rejected renewal is remembered by the engine (`reauth_required`), so Laravel's mirrored status cannot silently return to connected.
 - **No silent fallback.** A missing or rejected sign-in fails the run; it never falls back to another account or to API billing.
+
+Implementation record, 24 October 2026 (task 3.3): the section 9 tool boundary exists for read-only tools ([tools](docs/tools.md)).
+- **Registration.** Statically in `agent-service/src/tools/registry.ts`, with a name, schema, capability, effect, timeout and result-size cap.
+- **Checks.** `tools/executor.ts` offers only tools in the run's capability snapshot. Each call is checked for permission, repeats and the tool budget before running, and for permission and arguments again when it runs, with an explicit outcome for every call.
+- **Rounds.** The model rounds bound the loop: tools are withdrawn before the last round.
+- **Sources.** Source metadata (evidence ID, title, locator, checked date) travels as `source.added` events, apart from the text the model reads.
+- **First tool.** `lookup_reference` reads five invented records. Laravel grants it through the default profile (version 2).
 
 Use only Pi as the primary agent engine for this path. The Laravel AI SDK can be revisited if a future requirement changes; do not wrap one complete agent loop inside another.
 

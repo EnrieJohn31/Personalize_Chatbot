@@ -1,5 +1,63 @@
 # Foundation validation
 
+## Pre-push review of tasks 3.2–3.3 — 24 October 2026
+
+Reviewed the four commits from `93f3085` through `8ed22bb`, covering first-message streaming, live replies and the sample lookup. Three reproducible defects were fixed:
+
+- Pi's validation error includes received tool arguments. The executor forwarded that text in `tool.finished`. Browser events now use a fixed explanation; the detailed result stays with the model.
+- Shortening a tool result to its cap and then appending the notice exceeded the cap. The notice now consumes the same budget, including when the cap is smaller than the notice, without splitting surrogate pairs.
+- Text from several model rounds could exceed the final-answer limit and be silently shortened while reporting success. The engine now aborts before streaming beyond 200,000 UTF-16 units and reports `output_limit_exceeded`, without a final answer or completion event. Context/token budgeting is still task 3.4.
+
+Regression evidence: the three tool privacy/size cases failed before their fixes, and the multi-round output case separately failed before its guard. All pass afterward, including the existing valid lookup, stream/final equality, capability, duplicate-call, deadline and Stop coverage.
+
+| Check rerun in this review | Observed result |
+| --- | --- |
+| `composer ci:check` | 247 Laravel tests / 1388 assertions; 28 frontend tests; formatting (136 files), lint (96 files), TypeScript, Pint (123 files) and PHPStan (91 files) passed |
+| Engine `npm test`, after fixes | TypeScript build and all 84 tests passed |
+| Production frontend build | Passed; existing optional `fontaine` warning remains non-fatal. About 156 seconds on the Windows bind mount |
+| Live `php artisan agent:check` | Passed: configured authentication, valid signatures accepted and unsigned requests rejected; no provider run started |
+| Contributor checks | Full reachable-history audit passed; approved human author/committer and `.githooks` active; no new contribution credits, co-author trailers, tracked credentials, dependencies or `.claude/` files |
+
+No dependency or migration changed. The task 3.3 acceptance notes below were preserved from the existing sibling-worktree documentation, alongside the previous task 3.2 notes; these real provider calls and browser probes were not rerun in this review. Refresh after token expiry, model-aware context budgets, real Stop acceptance, durable runs and remote CI results remain outstanding. Keep the existing Linux-filesystem relocation suggestion as a future build-speed optimization.
+
+## Task 3.3: the `lookup_reference` tool — 24 October 2026
+
+A live reply can call the first engine tool, a read-only lookup in five invented records. The engine's tool executor checks each call, the run's tool and round budgets bound it, and new run events report each call and the sources it used. See [tools](tools.md) and [the contracts](../contracts/README.md#event-stream).
+
+Contract changes:
+- New run event types: `tool.started`, `tool.finished` and `source.added`.
+- `capabilities` may now contain `lookup_reference`.
+- The default profile is version 2, granting it through `ASSISTANT_CAPABILITIES`.
+
+No migration and no dependency changed.
+
+| Check | Observed result |
+| --- | --- |
+| Engine `npm test` | 81 passed (12 new; details below) |
+| Laravel tests | 247 passed / 1388 assertions. New: the tool example stream, 8 rejected tool-event shapes, a relayed lookup run that saves only its answer, and the profile's capability snapshot |
+| Frontend | 28 tests (1 new: the retrieving stage), formatting, lint (96 files), TypeScript and the production build passed |
+| Static checks | Pint and PHPStan passed |
+| Live acceptance | On the operator's stack after rebuilding the engine, two runs on `openai` / `gpt-6-luna` at reasoning `medium` through Laravel's signed gateway (no chat rows written). Details below |
+
+**Live acceptance:**
+- **With the tool permitted:** asked for "the reference code for our sample warehouse, and when are deliveries accepted there", the model called `lookup_reference` by itself (3.96 s) and received the warehouse record with two weaker matches. It answered from the fixture in 8.9 s: "The sample warehouse reference code is **SAMPLE-002**. Deliveries are accepted **weekdays from 07:00 to 15:00** and must be **booked one working day in advance**."
+- **Events:** `tool.started`, three `source.added` and `tool.finished` (`ok`). All passed Laravel's event checks, including the provider's composite call ID with a `|`.
+- **With no tools permitted** (`ASSISTANT_CAPABILITIES` empty): no tool events. The model said it did not have the warehouse details instead of inventing them.
+
+**New engine tests:**
+- The registry's contract.
+- Lookup matching: a code, keywords, none, at most three.
+- Executor checks: permission, repeated call IDs, the budget, arguments re-checked at execution, timeout, failure without leaking the error, and the size cap at a character boundary.
+- End to end on Pi's faux provider:
+  - the result reaching the next request and the answer;
+  - text before and after the lookup joined;
+  - a call without permission not running;
+  - invalid arguments refused;
+  - repeats and calls over the budget blocked;
+  - the last round offered no tools.
+
+Not checked: a lookup shown in the browser (the label and relay are covered by tests), and a tool timeout or Stop during a tool against a real provider. Remote CI was not inspected.
+
 ## Task 3.2: live replies through a Pi Agent per run — 24 October 2026
 
 Chat replies now come from each conversation's recorded connection and model. The engine builds a fresh Pi Agent per run on the run's own connection and maps its stream to the existing run events. See [chat-ui.md](chat-ui.md), [connections.md](connections.md) and [the contracts](../contracts/README.md#engine-admission-order).

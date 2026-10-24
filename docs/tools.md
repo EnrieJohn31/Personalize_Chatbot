@@ -24,7 +24,7 @@ Laravel profile ──capabilities──▶ run request ──▶ engine admissi
   - The executor then refuses tools that are not permitted, repeated call IDs, and calls beyond the run's `maxToolCalls` (6).
   - When the call runs, permission and arguments are checked again.
   - The run is bounded by the timeout; a slow tool is abandoned even if it ignores the abort signal.
-  - Results over the cap are shortened at a character boundary, with a note to the model.
+  - Results over the cap are shortened at a character boundary, with a note to the model. The note counts toward the same size cap.
   - Internal errors are not passed on: the model sees "could not complete".
 - **Rounds.** Each model request is a round. Before the run's last round (`maxModelRounds`, 4), or once the tool budget is used up, the tools are withdrawn. Pi tells the model, which then has to answer with what it has; no request goes beyond the last round. A run allowed only one round offers no tools.
 - **Outcomes.** Every call the model makes ends with an explicit result for the model and a `tool.finished` event. Its outcome is `ok`, `blocked`, `invalid_arguments`, `failed` or `timeout`.
@@ -38,7 +38,7 @@ Laravel profile ──capabilities──▶ run request ──▶ engine admissi
 | `source.added` | `{toolCallId, evidenceId, title, locator, checkedAt}` | Each record a successful lookup returned |
 | `tool.finished` | `{toolCallId, name, outcome, message}` | Every call the model made, run or refused |
 
-Events never carry tool arguments or result text. Source metadata is kept apart from the text the model reads, as the Blueprint requires. Laravel validates each event (`App\Data\Agent\RunEvent`) and relays it. The chat page shows "Looking up references…" while a lookup runs; it does not list sources yet.
+Events never carry tool arguments or result text. Validation failures use a fixed explanation in browser events; Pi's detailed validation error, which includes the arguments, stays in the model's tool result. Source metadata is kept apart from the text the model reads, as the Blueprint requires. Laravel validates each event (`App\Data\Agent\RunEvent`) and relays it. The chat page shows "Looking up references…" while a lookup runs; it does not list sources yet.
 
 ## `lookup_reference`
 

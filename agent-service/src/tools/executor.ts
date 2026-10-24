@@ -88,11 +88,16 @@ export class ToolExecutor {
      * Reports how a call ended. A call Pi refused before the checks above named a tool that is not
      * offered, or had arguments that do not match the tool's schema.
      */
-    finish(toolCallId: string, name: string, isError: boolean, resultText: string): void {
+    finish(toolCallId: string, name: string, isError: boolean): void {
         const refused: ToolOutcome = this.permitted(name) === undefined ? 'blocked' : 'invalid_arguments';
+        // Pi's validation errors include the received arguments. Keep them in the model's
+        // tool result; browser events carry only a fixed explanation and the outcome.
+        const refusalMessage = refused === 'blocked'
+            ? 'The requested tool is not available in this conversation.'
+            : 'The tool arguments do not match its schema.';
         const settled = this.settled.get(toolCallId) ?? {
             outcome: isError ? refused : 'ok',
-            message: isError ? resultText : null,
+            message: isError ? refusalMessage : null,
         };
 
         this.execution.emit('tool.finished', {
@@ -134,7 +139,13 @@ export class ToolExecutor {
                 this.execution.emit('source.added', { toolCallId: eventId(toolCallId), ...source });
             }
 
-            return result('ok', output.text.length > tool.maxResultLength ? `${safeSlice(output.text, tool.maxResultLength)}${SHORTENED}` : output.text);
+            // The notice is part of the returned text, so it also consumes the size budget.
+            const notice = safeSlice(SHORTENED, tool.maxResultLength);
+            const text = output.text.length > tool.maxResultLength
+                ? `${safeSlice(output.text, tool.maxResultLength - notice.length)}${notice}`
+                : output.text;
+
+            return result('ok', text);
         } catch {
             return timeout.aborted && signal?.aborted !== true
                 ? result('timeout', `${tool.name} did not finish within ${tool.timeoutMs / 1000} seconds.`)

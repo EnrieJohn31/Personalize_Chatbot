@@ -21,6 +21,7 @@ See [connections.md](connections.md), [chat-ui.md](chat-ui.md), [chat-history.md
 | `npm run build` | Passed |
 | Browser probe | 14/14 passed in four phases against a fake OpenAI-compatible server, the worktree's engine image and a worktree server, on an internal Docker network without internet access (details below) |
 | Test speed | The PHP suite took 480 s without OPcache and 45–54 s with `opcache.enable_cli=1` in the same worktree container |
+| Development server speed | In the real `laravel.test` container, `GET /up` took 1.5–6.1 s with `opcache.revalidate_freq=0` (the first committed setting). With `2` it took 0.17–0.30 s within a burst and 1.7 s when the 2-second recheck fell due. The setting was corrected to `2` |
 
 **New Laravel tests (18, counting data sets):**
 - **Connections (2).** Four cards, with the shared server asked about but no records created. The local card's listing, test and chat choice. Missing or down servers refused without a record, and the record following the server down and back up.

@@ -175,7 +175,7 @@ Keep a short progress record here as implementation proceeds:
 | Current task | 3.4 — bounded context and budgets. 3.1 waits for the operator's ChatGPT refresh-after-expiry check |
 | Last completed task | 3.3 — permitted sample lookup, with earlier live acceptance on ChatGPT `gpt-6-luna` |
 | Actual checks run on the application | Review on 24 October: 247 Laravel tests / 1388 assertions, 28 frontend tests, formatting, lint, types, Pint, PHPStan and the production build passed. All 84 engine tests passed after three review fixes. Signed live connectivity and the attribution audit passed. Real provider and browser acceptance were not rerun — see docs/validation.md |
-| Git checkpoint and branches | Reviewed locally on `development`: `93f3085`, `3ca251e`, `5d7b7f0`, `8ed22bb`, plus review safeguards and documentation. Publication pending; last published review record is `70263bc` |
+| Git checkpoint and branches | Tasks 3.2–3.3 and review fixes published atomically to `main` and `development` at `9263393` on 24 October. Both remote hashes matched; original implementation commits/messages were preserved. This publication record follows that checkpoint |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
 | Next checkpoint | Task 3.4: follow-up context and oversized-history handling within a model-aware budget. Task 3.1: a ChatGPT refresh after token expiry, recorded in docs/provider-matrix.md |
 

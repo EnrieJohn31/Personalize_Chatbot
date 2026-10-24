@@ -20,6 +20,8 @@ Regression evidence: the three tool privacy/size cases failed before their fixes
 
 No dependency or migration changed. The task 3.3 acceptance notes below were preserved from the existing sibling-worktree documentation, alongside the previous task 3.2 notes; these real provider calls and browser probes were not rerun in this review. Refresh after token expiry, model-aware context budgets, real Stop acceptance, durable runs and remote CI results remain outstanding. Keep the existing Linux-filesystem relocation suggestion as a future build-speed optimization.
 
+Publication: review fixes committed as `9263393` with the approved human author and committer; the complete saved history passed the contributor audit. The requested atomic push advanced both `main` and `development`, preserving all four original commits. `git ls-remote --heads origin main development` confirmed both at `9263393f362352cea3aaa91305838ed63549c745` before adding this publication record. Signed connectivity passed again after the fixes.
+
 ## Task 3.3: the `lookup_reference` tool — 24 October 2026
 
 A live reply can call the first engine tool, a read-only lookup in five invented records. The engine's tool executor checks each call, the run's tool and round budgets bound it, and new run events report each call and the sources it used. See [tools](tools.md) and [the contracts](../contracts/README.md#event-stream).

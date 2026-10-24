@@ -1,7 +1,7 @@
 # Build Plan: Laravel + Pi Chatbot
 
 Updated: 24 October 2026\
-Version: 13\
+Version: 14\
 Companion: [Blueprint.md](Blueprint.md), revision 15; [handoff.md](handoff.md) for the continuation record\
 Status: Phases 0–2 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page and simulated replies streamed through Laravel are implemented. Task 3.1's connections are implemented: ChatGPT sign-in, OpenCode Go/Zen keys, an administrator-configured local model server, an encrypted credential store and a chat choice recorded per conversation. The live check with a real account is pending. The user also asked for chat deletion and date sections, which are implemented. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md) and [validation](docs/validation.md).
 
@@ -174,8 +174,8 @@ Keep a short progress record here as implementation proceeds:
 | --- | --- |
 | Current task | 3.1 — implemented (ChatGPT, OpenCode, local model server); waiting for the operator's live test message. Task 3.2's preparation is done |
 | Last completed task | 2.4 — simulated reply stream through Laravel and one React hook (Phase 2 complete) |
-| Actual checks run on the application | Stale-chat fix on 24 October: `composer ci:check` checks and 232 Laravel tests / 1332 assertions, 25 frontend tests, and a 9-check browser probe (4/9 before the fix, 9/9 after) passed. Engine unchanged (61 tests at the publication review) — see docs/validation.md |
-| Git checkpoint and branches | Local, not pushed: "Keep deleted chats from reappearing after navigation" on `development`. Last published to both `main` and `development` on 24 October: local model and chat preparation `917cd5e`, then PHP timestamp rechecking `ea3be49` |
+| Actual checks run on the application | Navigation-fix publication review on 24 October: formatting (132 files), lint (94 files), TypeScript, all 25 frontend tests and the production build passed. PHP, engine and browser checks were not repeated for this frontend-only change; their earlier results remain in docs/validation.md |
+| Git checkpoint and branches | Published to both `main` and `development` on 24 October: `b6afd9b` — Keep deleted chats from reappearing after navigation. Original commit and message preserved; this documentation records its review and publication |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
 | Next checkpoint | Task 3.1: a live test message succeeds; then record persistence across an engine restart and refresh after the token expires. Then task 3.2 |
 

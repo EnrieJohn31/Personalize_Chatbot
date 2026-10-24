@@ -1,5 +1,19 @@
 # Foundation validation
 
+## Publication review of chat navigation fix — 24 October 2026
+
+Reviewed `b6afd9b` with no blocking findings. Checked JSON-write cache invalidation, the Inertia finish/history event handlers, remounting with fresh page props and the deleted-conversation 404 fallback against the installed Inertia source. No application code changed during this review.
+
+| Check | Observed result |
+| --- | --- |
+| `npm run check` | Passed: formatting for 132 files; lint for 94 files, no warnings or errors |
+| `npm run types:check` | Passed |
+| `npm run test` | All 25 frontend tests passed, including the three navigation/cache cases |
+| `npm run build` | Passed; the existing optional font fallback warning remains non-fatal |
+| Contributor policy and publication | Full-history audit and all eight changed files reviewed; approved human author/committer, no prohibited credits or trailers, unchanged hooks/identities and ignored local settings. Both branches pushed atomically and their hashes verified as `b6afd9b` |
+
+PHP, engine, database and dependency files are unchanged; their suites were not repeated. The earlier nine-check browser probe below was not rerun. Firefox, Safari, cross-site browser-cache restoration and remote CI results remain unverified. Task 3.1's real-provider acceptance is still open. No new optimization is needed for this focused fix; retain the existing frontend build-time follow-up.
+
 ## Deleted chats reappearing until a reload — 24 October 2026
 
 The user reported that deleted chats only disappeared after a refresh. A browser probe reproduced it on an internal Docker network, with a worktree server (four PHP workers, like the development container) and twelve seeded conversations. Every deletion succeeded on the server; the page showed stale data in three ways:

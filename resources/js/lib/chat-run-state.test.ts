@@ -26,6 +26,24 @@ const reduce = (...actions: RunAction[]): RunState =>
 const following: RunAction = { type: 'following', run };
 
 describe('runReducer', () => {
+    test('a lookup shows as retrieving until the answer text arrives', () => {
+        const looking = reduce(
+            following,
+            event('run.started', 1),
+            event('run.progress', 2, { stage: 'retrieving' }),
+        );
+        expect([looking.status, looking.stage]).toEqual([
+            'streaming',
+            'retrieving',
+        ]);
+
+        const answering = runReducer(
+            looking,
+            event('assistant.delta', 3, { text: 'The code is ' }),
+        );
+        expect(answering.stage).toBe('answering');
+    });
+
     test('deltas accumulate into the draft while streaming', () => {
         const state = reduce(
             following,

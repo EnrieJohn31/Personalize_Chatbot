@@ -8,6 +8,9 @@ final readonly class RunEvent
     public const TYPES = [
         'run.started',
         'run.progress',
+        'tool.started',
+        'tool.finished',
+        'source.added',
         'assistant.delta',
         'assistant.final',
         'run.completed',
@@ -20,6 +23,14 @@ final readonly class RunEvent
     private const PROGRESS_STAGES = ['preparing', 'retrieving', 'answering'];
 
     private const CODE_PATTERN = '/\A[a-z][a-z0-9_]{0,63}\z/';
+
+    private const TOOL_CALL_ID_PATTERN = '/\A[\x21-\x7e]{1,256}\z/';
+
+    private const TOOL_NAME_PATTERN = '/\A[a-z][a-z0-9_]{0,63}\z/';
+
+    private const TOOL_OUTCOMES = ['ok', 'blocked', 'invalid_arguments', 'failed', 'timeout'];
+
+    private const EVIDENCE_ID_PATTERN = '/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,63}\z/';
 
     /** @param  array<string, mixed>  $data */
     public function __construct(
@@ -74,8 +85,56 @@ final readonly class RunEvent
             'assistant.delta' => array_keys($data) === ['text'] && is_string($text) && $text !== '' && mb_strlen($text) <= 16_384,
             'assistant.final' => array_keys($data) === ['text'] && is_string($text) && mb_strlen($text) <= 200_000,
             'run.failed' => self::validFailure($data),
+            'tool.started' => self::hasExactly($data, ['name', 'toolCallId'])
+                && self::isToolCallId($data['toolCallId'])
+                && is_string($data['name']) && preg_match(self::TOOL_NAME_PATTERN, $data['name']) === 1,
+            'tool.finished' => self::validToolFinished($data),
+            'source.added' => self::validSource($data),
             default => false,
         };
+    }
+
+    /** @param  array<mixed>  $data */
+    private static function validToolFinished(array $data): bool
+    {
+        $message = $data['message'] ?? null;
+
+        return self::hasExactly($data, ['message', 'name', 'outcome', 'toolCallId'])
+            && self::isToolCallId($data['toolCallId'])
+            && is_string($data['name']) && $data['name'] !== '' && mb_strlen($data['name']) <= 128
+            && in_array($data['outcome'], self::TOOL_OUTCOMES, true)
+            && ($message === null || (is_string($message) && $message !== '' && mb_strlen($message) <= 500));
+    }
+
+    /** @param  array<mixed>  $data */
+    private static function validSource(array $data): bool
+    {
+        $title = $data['title'] ?? null;
+        $locator = $data['locator'] ?? null;
+
+        return self::hasExactly($data, ['checkedAt', 'evidenceId', 'locator', 'title', 'toolCallId'])
+            && self::isToolCallId($data['toolCallId'])
+            && is_string($data['evidenceId']) && preg_match(self::EVIDENCE_ID_PATTERN, $data['evidenceId']) === 1
+            && is_string($title) && $title !== '' && mb_strlen($title) <= 200
+            && is_string($locator) && $locator !== '' && mb_strlen($locator) <= 500
+            && is_string($data['checkedAt']) && preg_match('/\A\d{4}-\d{2}-\d{2}\z/', $data['checkedAt']) === 1;
+    }
+
+    /**
+     * @param  array<mixed>  $data
+     * @param  list<string>  $keys  sorted
+     */
+    private static function hasExactly(array $data, array $keys): bool
+    {
+        $present = array_keys($data);
+        sort($present);
+
+        return $present === $keys;
+    }
+
+    private static function isToolCallId(mixed $value): bool
+    {
+        return is_string($value) && preg_match(self::TOOL_CALL_ID_PATTERN, $value) === 1;
     }
 
     /** @param  array<mixed>  $data */

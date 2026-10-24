@@ -1,0 +1,83 @@
+[
+    {
+        "contractVersion": 1,
+        "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f",
+        "sequence": 1,
+        "type": "run.started",
+        "data": {}
+    },
+    {
+        "contractVersion": 1,
+        "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f",
+        "sequence": 2,
+        "type": "run.progress",
+        "data": { "stage": "preparing" }
+    },
+    {
+        "contractVersion": 1,
+        "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f",
+        "sequence": 3,
+        "type": "run.progress",
+        "data": { "stage": "retrieving" }
+    },
+    {
+        "contractVersion": 1,
+        "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f",
+        "sequence": 4,
+        "type": "tool.started",
+        "data": { "toolCallId": "call_sample_1", "name": "lookup_reference" }
+    },
+    {
+        "contractVersion": 1,
+        "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f",
+        "sequence": 5,
+        "type": "source.added",
+        "data": {
+            "toolCallId": "call_sample_1",
+            "evidenceId": "ref-sample-office",
+            "title": "Sample office",
+            "locator": "fixture://reference/offices#SAMPLE-001",
+            "checkedAt": "2026-10-01"
+        }
+    },
+    {
+        "contractVersion": 1,
+        "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f",
+        "sequence": 6,
+        "type": "tool.finished",
+        "data": {
+            "toolCallId": "call_sample_1",
+            "name": "lookup_reference",
+            "outcome": "ok",
+            "message": null
+        }
+    },
+    {
+        "contractVersion": 1,
+        "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f",
+        "sequence": 7,
+        "type": "run.progress",
+        "data": { "stage": "answering" }
+    },
+    {
+        "contractVersion": 1,
+        "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f",
+        "sequence": 8,
+        "type": "assistant.delta",
+        "data": { "text": "The sample office's reference code is SAMPLE-001." }
+    },
+    {
+        "contractVersion": 1,
+        "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f",
+        "sequence": 9,
+        "type": "assistant.final",
+        "data": { "text": "The sample office's reference code is SAMPLE-001." }
+    },
+    {
+        "contractVersion": 1,
+        "runId": "0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f",
+        "sequence": 10,
+        "type": "run.completed",
+        "data": {}
+    }
+]

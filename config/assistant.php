@@ -56,14 +56,16 @@ return [
 
     // Versioned default profile copied into each server-created run snapshot. The simulated
     // provider needs no connection and is only admitted when the engine enables simulation.
+    // Capabilities are the tools a run may use; the engine refuses any it cannot enforce.
+    // Version 2 (task 3.3) permits the read-only `lookup_reference` sample tool.
     'profile' => [
         'id' => 'default',
-        'version' => 1,
+        'version' => 2,
         'model' => [
             'provider' => env('ASSISTANT_MODEL_PROVIDER', 'simulated'),
             'id' => env('ASSISTANT_MODEL_ID', 'simulated-echo'),
         ],
-        'capabilities' => [],
+        'capabilities' => array_values(array_filter(array_map('trim', explode(',', (string) env('ASSISTANT_CAPABILITIES', 'lookup_reference'))))),
     ],
 
     // Blueprint section 12 starting bounds; prototype values, not measured capacity.

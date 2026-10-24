@@ -14,7 +14,8 @@ Status: **ChatGPT works live: the operator signed in, and live chat runs on `gpt
 | Credential persistence | Implemented: one AES-256-GCM file per connection in the private `agent-data` volume, keyed from `AGENT_CREDENTIAL_KEY`, authenticated with the connection ID, with serialized atomic writes. Verified with fakes and invented credentials |
 | Not used | Pi's legacy `openai-codex` provider, which reuses the Codex CLI's OAuth client. `OPENAI_API_KEY` and `OPENCODE_API_KEY` are also never used: the engine's auth context hides environment variables and files, so there is no silent API billing |
 | Streaming | Implemented (task 3.2): a fresh Pi Agent per run on the run's own connection, with batched deltas, honest failure codes and Stop. Verified live with ChatGPT (below) and with Pi's faux provider |
-| Tool calling / budgets | Not implemented (tasks 3.3–3.4) |
+| Tool calling | Implemented (task 3.3): `lookup_reference` through the engine's tool executor, with the run's tool and round budgets. Verified with Pi's faux provider; live result below. See [tools](tools.md) |
+| Context / output budgets | Not implemented (task 3.4) |
 
 ## ChatGPT (`openai`)
 

@@ -31,9 +31,10 @@ class RunRequestFactoryTest extends TestCase
         $this->assertMatchesRegularExpression(RunRequest::UUID_PATTERN, $snapshot['runId']);
         $this->assertSame($conversation->id, $snapshot['conversationId']);
         $this->assertSame((string) $owner->id, $snapshot['userId']);
-        $this->assertSame(['id' => 'default', 'version' => 1], $snapshot['profile']);
+        $this->assertSame(['id' => 'default', 'version' => 2], $snapshot['profile']);
         $this->assertSame(['provider' => 'simulated', 'id' => 'simulated-echo'], $snapshot['model']);
-        $this->assertSame([], $snapshot['capabilities']);
+        // The profile's permitted tools, from server configuration; the browser never chooses them.
+        $this->assertSame(['lookup_reference'], $snapshot['capabilities']);
         $this->assertSame(['maxModelRounds' => 4, 'maxToolCalls' => 6, 'runDeadlineMs' => 180_000], $snapshot['limits']);
         $this->assertSame(
             [['user', 'Hello'], ['assistant', 'Hi there.'], ['user', 'A follow-up question']],

@@ -245,7 +245,11 @@ export default function ChatPage({
                   setAll: setSelectedIds,
               };
 
-    const draft = draftStatus[status];
+    // While a tool runs (the engine's `retrieving` stage) the reply says it is looking things up.
+    const draft =
+        status === 'streaming' && reply.state.stage === 'retrieving'
+            ? 'retrieving'
+            : draftStatus[status];
     // Only a reply for this conversation is shown, and a stopped or failed one only if text arrived.
     const replyHere =
         reply.state.run === null ||

@@ -35,6 +35,7 @@ import { runLive } from './runtime/live-run.js';
 import type { RunExecution } from './runtime/run-execution.js';
 import { RunRegistry, type TrackedStatus } from './runtime/run-registry.js';
 import { runSimulation } from './simulation/simulated-run.js';
+import { SUPPORTED_CAPABILITIES } from './tools/registry.js';
 
 const UUID = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
 const CANCEL_PATH = new RegExp(`^/internal/runs/${UUID}/cancel$`);
@@ -54,10 +55,9 @@ const SEQUENCE = /^(0|[1-9][0-9]{0,6})$/;
 const JSON_CONTENT_TYPE = /^application\/json\s*(;\s*charset=utf-8\s*)?$/i;
 
 // Runs use the deterministic development provider, or since task 3.2 a connected provider's
-// model through the run's own connection. No tool registry exists until task 3.3, so no
-// capability can be enforced yet.
+// model through the run's own connection. A run may request only capabilities the tool
+// registry can enforce (task 3.3).
 const SIMULATED_PROVIDER = 'simulated';
-const SUPPORTED_CAPABILITIES = new Set<string>();
 
 class HttpError extends Error {
     constructor(

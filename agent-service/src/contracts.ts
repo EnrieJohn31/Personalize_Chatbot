@@ -87,6 +87,9 @@ export const TERMINAL_EVENT_TYPES = ['run.completed', 'run.failed', 'run.cancell
 export type RunEventType =
     | 'run.started'
     | 'run.progress'
+    | 'tool.started'
+    | 'tool.finished'
+    | 'source.added'
     | 'assistant.delta'
     | 'assistant.final'
     | (typeof TERMINAL_EVENT_TYPES)[number];

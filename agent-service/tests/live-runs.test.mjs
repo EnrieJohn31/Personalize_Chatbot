@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
-import { createFauxCore, createProvider, fauxAssistantMessage } from '@earendil-works/pi-ai';
+import { createFauxCore, createProvider, fauxAssistantMessage, fauxText, fauxToolCall, getCurrentTools } from '@earendil-works/pi-ai';
 import { ConnectionManager } from '../dist/auth/connection-manager.js';
 import { loadConfig } from '../dist/config.js';
 import { validate } from '../dist/contracts.js';
@@ -281,4 +281,138 @@ test('large streamed text is split within the delta limit without breaking chara
     assert.ok(deltas.every((text) => text.length <= 16_384 && !/[\uD800-\uDBFF]$/.test(text) && !/^[\uDC00-\uDFFF]/.test(text)));
     assert.equal(deltas.join(''), answer);
     assert.ok(events.every((event) => validate('runEvent', event).length === 0));
+});
+
+const withTools = (connectionId, limits = {}) =>
+    liveRun(connectionId, {}, { capabilities: ['lookup_reference'], limits: { ...example.limits, ...limits } });
+const toolResults = (context) => context.messages.filter((message) => message.role === 'toolResult');
+// Pi declares tools to the model in the transcript's system messages.
+const offered = (context) => getCurrentTools(context.messages).map((tool) => tool.name);
+
+test('a permitted lookup runs once, its result reaches the model, and the answer uses it', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([
+        engine.fake.reply(() =>
+            fauxAssistantMessage([fauxText('Let me check.'), fauxToolCall('lookup_reference', { query: 'sample office' }, { id: 'call_1' })], {
+                stopReason: 'toolUse',
+            }),
+        ),
+        engine.fake.reply((context) => {
+            const [result] = toolResults(context);
+
+            return fauxAssistantMessage(result.content[0].text.includes('SAMPLE-001') ? 'The sample office code is SAMPLE-001.' : 'Not found.');
+        }),
+    ]);
+
+    const events = await runToEnd(engine, withTools(connectionId));
+
+    assert.ok(events.every((event) => validate('runEvent', event).length === 0));
+    assert.deepEqual(ofType(events, 'run.progress').map((event) => event.data.stage), ['preparing', 'answering', 'retrieving', 'answering']);
+    assert.deepEqual(ofType(events, 'tool.started').map((event) => event.data), [{ toolCallId: 'call_1', name: 'lookup_reference' }]);
+    assert.equal(ofType(events, 'source.added')[0].data.evidenceId, 'ref-sample-office');
+    assert.deepEqual(ofType(events, 'tool.finished').map((event) => event.data), [
+        { toolCallId: 'call_1', name: 'lookup_reference', outcome: 'ok', message: null },
+    ]);
+    const final = ofType(events, 'assistant.final')[0].data.text;
+    assert.equal(final, 'Let me check.\n\nThe sample office code is SAMPLE-001.');
+    assert.equal(ofType(events, 'assistant.delta').map((event) => event.data.text).join(''), final);
+
+    const [first, second] = engine.fake.calls;
+    assert.deepEqual(offered(first.context), ['lookup_reference']);
+    assert.match(first.context.messages[0].content, /look them up with your tools/);
+    const [result] = toolResults(second.context);
+    assert.equal(result.toolCallId, 'call_1');
+    assert.match(result.content[0].text, /\[SAMPLE-001\] Sample office \(evidence ref-sample-office/);
+});
+
+test('without the capability no tool is offered and a requested call does not run', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([
+        fauxAssistantMessage([fauxToolCall('lookup_reference', { query: 'SAMPLE-001' }, { id: 'call_1' })], { stopReason: 'toolUse' }),
+        engine.fake.reply(() => fauxAssistantMessage('I cannot look that up here.')),
+    ]);
+
+    const events = await runToEnd(engine, liveRun(connectionId));
+
+    assert.deepEqual(offered(engine.fake.calls[0].context), []);
+    assert.doesNotMatch(engine.fake.calls[0].context.messages[0].content, /tools/);
+    assert.equal(ofType(events, 'tool.started').length, 0);
+    assert.equal(ofType(events, 'source.added').length, 0);
+    assert.equal(ofType(events, 'tool.finished')[0].data.outcome, 'blocked');
+    assert.equal(ofType(events, 'assistant.final')[0].data.text, 'I cannot look that up here.');
+    // The model was told the call failed and received no reference text.
+    const [refused] = toolResults(engine.fake.calls.at(-1).context);
+    assert.equal(refused.isError, true);
+    assert.doesNotMatch(refused.content[0].text, /SAMPLE-001\]/);
+});
+
+test('invalid arguments are refused before the lookup runs', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([
+        fauxAssistantMessage([fauxToolCall('lookup_reference', { query: '', limit: 99 }, { id: 'call_1' })], { stopReason: 'toolUse' }),
+        engine.fake.reply(() => fauxAssistantMessage('Please give me a code to look up.')),
+    ]);
+
+    const events = await runToEnd(engine, withTools(connectionId));
+
+    assert.equal(ofType(events, 'tool.started').length, 0);
+    assert.equal(ofType(events, 'tool.finished')[0].data.outcome, 'invalid_arguments');
+    assert.equal(toolResults(engine.fake.calls.at(-1).context)[0].isError, true);
+    assert.equal(ofType(events, 'run.completed').length, 1);
+});
+
+test('repeated calls and calls over the tool budget are blocked, and the model must then answer', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([
+        fauxAssistantMessage(
+            [
+                fauxToolCall('lookup_reference', { query: 'SAMPLE-001' }, { id: 'call_a' }),
+                fauxToolCall('lookup_reference', { query: 'SAMPLE-001' }, { id: 'call_a' }),
+                fauxToolCall('lookup_reference', { query: 'SAMPLE-002' }, { id: 'call_b' }),
+                fauxToolCall('lookup_reference', { query: 'POLICY-010' }, { id: 'call_c' }),
+            ],
+            { stopReason: 'toolUse' },
+        ),
+        engine.fake.reply(() => fauxAssistantMessage('Here is what I found.')),
+    ]);
+
+    const events = await runToEnd(engine, withTools(connectionId, { maxToolCalls: 2 }));
+
+    assert.deepEqual(ofType(events, 'tool.started').map((event) => event.data.toolCallId), ['call_a', 'call_b']);
+    assert.deepEqual(ofType(events, 'tool.finished').map((event) => [event.data.toolCallId, event.data.outcome]), [
+        ['call_a', 'ok'],
+        ['call_a', 'blocked'],
+        ['call_b', 'ok'],
+        ['call_c', 'blocked'],
+    ]);
+    assert.deepEqual(offered(engine.fake.calls.at(-1).context), [], 'no tools once the budget is used');
+    assert.equal(ofType(events, 'assistant.final')[0].data.text, 'Here is what I found.');
+});
+
+test('the last model round offers no tools, so a model that keeps calling them still answers', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    let n = 0;
+    const keepCalling = engine.fake.reply((context) =>
+        offered(context).length > 0
+            ? fauxAssistantMessage([fauxToolCall('lookup_reference', { query: `office ${(n += 1)}` }, { id: `call_${n}` })], { stopReason: 'toolUse' })
+            : fauxAssistantMessage('Final answer without tools.'),
+    );
+    engine.fake.core.setResponses([keepCalling, keepCalling, keepCalling, keepCalling, keepCalling]);
+
+    const events = await runToEnd(engine, withTools(connectionId, { maxModelRounds: 3 }));
+
+    assert.equal(engine.fake.calls.length, 3);
+    assert.deepEqual(engine.fake.calls.map((call) => offered(call.context).length), [1, 1, 0]);
+    assert.equal(ofType(events, 'tool.started').length, 2);
+    assert.equal(ofType(events, 'assistant.final')[0].data.text, 'Final answer without tools.');
 });

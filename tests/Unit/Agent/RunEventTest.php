@@ -11,6 +11,8 @@ class RunEventTest extends TestCase
 {
     private const RUN_ID = '0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0e';
 
+    private const TOOL_RUN_ID = '0199f2a0-7c1e-7a3b-9d4e-5f6a7b8c9d0f';
+
     public function test_the_shared_example_stream_parses_in_order(): void
     {
         $previous = 0;
@@ -25,6 +27,45 @@ class RunEventTest extends TestCase
 
         $this->assertSame(['run.started', 'run.progress', 'assistant.delta', 'assistant.delta', 'assistant.final', 'run.completed'], $types);
         $this->assertTrue(RunEvent::fromPayload(self::examples()[5], self::RUN_ID, 5)?->isTerminal());
+    }
+
+    public function test_the_shared_tool_example_stream_parses_in_order(): void
+    {
+        $previous = 0;
+        $types = [];
+
+        foreach (self::examples('run-events-tool.json') as $payload) {
+            $event = RunEvent::fromPayload($payload, self::TOOL_RUN_ID, $previous);
+            $this->assertNotNull($event, "event {$payload['sequence']} was rejected");
+            $previous = $event->sequence;
+            $types[] = $event->type;
+        }
+
+        $this->assertSame(['run.started', 'run.progress', 'run.progress', 'tool.started', 'source.added', 'tool.finished', 'run.progress', 'assistant.delta', 'assistant.final', 'run.completed'], $types);
+    }
+
+    /** @param  Closure(array<string, mixed>): array<string, mixed>  $change */
+    #[DataProvider('invalidToolEvents')]
+    public function test_tool_events_outside_the_contract_are_rejected(int $index, Closure $change): void
+    {
+        $this->assertNull(RunEvent::fromPayload($change(self::examples('run-events-tool.json')[$index]), self::TOOL_RUN_ID, $index));
+    }
+
+    /** @return array<string, array{int, Closure(array<string, mixed>): array<string, mixed>}> */
+    public static function invalidToolEvents(): array
+    {
+        $data = fn (array $event, array $changes): array => [...$event, 'data' => [...$event['data'], ...$changes]];
+
+        return [
+            'started with arguments' => [3, fn (array $e) => $data($e, ['arguments' => ['query' => 'x']])],
+            'started with an unsafe name' => [3, fn (array $e) => $data($e, ['name' => 'Lookup Reference'])],
+            'call ID with a space' => [3, fn (array $e) => $data($e, ['toolCallId' => 'call 1'])],
+            'source without a locator' => [4, fn (array $e) => [...$e, 'data' => array_diff_key($e['data'], ['locator' => true])]],
+            'source with a loose date' => [4, fn (array $e) => $data($e, ['checkedAt' => 'yesterday'])],
+            'finished with result text' => [5, fn (array $e) => $data($e, ['result' => 'SAMPLE-001'])],
+            'finished with an unknown outcome' => [5, fn (array $e) => $data($e, ['outcome' => 'maybe'])],
+            'finished with an empty message' => [5, fn (array $e) => $data($e, ['outcome' => 'blocked', 'message' => ''])],
+        ];
     }
 
     /** @param  Closure(array<string, mixed>): array<string, mixed>  $change */
@@ -58,8 +99,8 @@ class RunEventTest extends TestCase
     }
 
     /** @return list<array<string, mixed>> */
-    private static function examples(): array
+    private static function examples(string $file = 'run-events.json'): array
     {
-        return json_decode((string) file_get_contents(dirname(__DIR__, 3).'/contracts/v1/examples/run-events.json'), true, flags: JSON_THROW_ON_ERROR);
+        return json_decode((string) file_get_contents(dirname(__DIR__, 3)."/contracts/v1/examples/$file"), true, flags: JSON_THROW_ON_ERROR);
     }
 }

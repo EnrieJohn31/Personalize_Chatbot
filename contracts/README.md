@@ -55,7 +55,7 @@ The engine admits two kinds of model (task 3.2):
 - **`simulated`**, deterministic and only when `AGENT_SIMULATION_ENABLED=true`, which development Compose sets explicitly.
 - **A connection provider** (`openai`, `opencode`, `opencode-go`, `local`), only with the run's own `connectionId`, only when the credential store is configured, and for `local` only while `LOCAL_LLM_URL` is set. A run without its connection gets `422 connection_required`. The credential is looked up by that ID inside the engine; the request never carries one.
 
-`model.reasoning` (`low`, `medium` or `high`) is optional. The engine applies it only to models that reason and ignores it otherwise. Every capability is refused until the tool registry exists (task 3.3). The admission record is process-local, holds at most 256 runs for 15 minutes and is lost on restart; Laravel's durable claim (task 4.2) becomes the authority.
+`model.reasoning` (`low`, `medium` or `high`) is optional. The engine applies it only to models that reason and ignores it otherwise. `capabilities` may name only tools in the engine's registry (`lookup_reference` since task 3.3); any other is refused with `422 unsupported_capability`. See [tools](../docs/tools.md). The admission record is process-local, holds at most 256 runs for 15 minutes and is lost on restart; Laravel's durable claim (task 4.2) becomes the authority.
 
 ## Event stream
 
@@ -67,6 +67,10 @@ A live run (`runtime/live-run.ts`) builds a fresh Pi Agent on the connection's P
 
 - **Setup.** It uses a short system prompt, the saved history as plain text and the conversation ID as the provider session ID, with output capped at 32,000 tokens.
 - **Events.** It emits `run.started`, `run.progress` (`preparing`, then `answering` with the first text), `assistant.delta`, `assistant.final` and `run.completed`.
+- **Tools.** It offers the model only the tools the run's capabilities permit, through `tools/executor.ts`.
+    - A call that runs emits `run.progress` (`retrieving`), `tool.started`, a `source.added` per record used, and `tool.finished`. A refused call emits only `tool.finished` (`blocked` or `invalid_arguments`).
+    - These events carry identifiers, outcomes and source metadata, never arguments or result text.
+    - The tools are withdrawn before the last of `maxModelRounds` rounds or once `maxToolCalls` is used. When the model speaks in several rounds, the final text joins them with a blank line, as the deltas did.
 - **Text batching.** Streamed text is passed on at most every `runDeadlineMs / 1500` milliseconds (at least 100 ms) in pieces of at most 16,384 characters. A surrogate pair is never split, so a run within its deadline stays under the event limit.
 - **Before any model request,** the sign-in is resolved (and refreshed if needed).
 - **Failures** end the run with `run.failed` and one of these codes:

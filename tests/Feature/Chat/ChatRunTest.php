@@ -95,6 +95,33 @@ class ChatRunTest extends TestCase
         $this->postJson("/api/chat/conversations/$conversation->id/runs")->assertAccepted();
     }
 
+    public function test_a_reply_that_looks_something_up_relays_its_tool_events_and_saves_only_the_answer(): void
+    {
+        $tool = ['toolCallId' => 'call_1', 'name' => 'lookup_reference'];
+        [, , $runId] = $this->startedRun(function (FakeAgentGateway $engine) use ($tool): void {
+            $engine->script = [
+                ['run.started'],
+                ['run.progress', ['stage' => 'retrieving']],
+                ['tool.started', $tool],
+                ['source.added', ['toolCallId' => 'call_1', 'evidenceId' => 'ref-sample-office', 'title' => 'Sample office', 'locator' => 'fixture://reference/offices#SAMPLE-001', 'checkedAt' => '2026-10-01']],
+                ['tool.finished', [...$tool, 'outcome' => 'ok', 'message' => null]],
+                ['run.progress', ['stage' => 'answering']],
+                ['assistant.delta', ['text' => 'The code is SAMPLE-001.']],
+                ['assistant.final', ['text' => 'The code is SAMPLE-001.']],
+                ['run.completed'],
+            ];
+        });
+
+        $events = $this->events($this->get("/api/chat/runs/$runId/events"));
+
+        $this->assertSame(
+            ['run.started', 'run.progress', 'tool.started', 'source.added', 'tool.finished', 'run.progress', 'assistant.delta', 'assistant.final', 'run.completed'],
+            array_column($events, 'event'),
+        );
+        $this->assertSame('ref-sample-office', $events[3]['data']['evidenceId']);
+        $this->assertSame('The code is SAMPLE-001.', Message::query()->where('role', 'assistant')->sole()->content);
+    }
+
     public function test_the_stream_relays_events_and_saves_the_reply_once_on_the_server(): void
     {
         [$owner, $conversation, $runId] = $this->startedRun(fn (FakeAgentGateway $engine) => $engine->completes());

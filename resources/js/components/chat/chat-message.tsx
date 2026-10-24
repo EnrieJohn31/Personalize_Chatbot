@@ -15,6 +15,7 @@ import type { ChatRole } from '@/types';
 export type MessageStatus =
     | 'sending'
     | 'preparing'
+    | 'retrieving'
     | 'streaming'
     | 'stopped'
     | 'incomplete';
@@ -31,6 +32,7 @@ export type DisplayMessage = {
 const statusLabels: Record<MessageStatus, string> = {
     sending: 'Sending…',
     preparing: 'Preparing a reply…',
+    retrieving: 'Looking up references…',
     streaming: 'Writing…',
     stopped: 'Stopped',
     incomplete: 'Not completed',
@@ -41,6 +43,7 @@ export function ChatMessageItem({ message }: { message: DisplayMessage }) {
     const inProgress =
         message.status === 'sending' ||
         message.status === 'preparing' ||
+        message.status === 'retrieving' ||
         message.status === 'streaming';
     const actions = (
         <div

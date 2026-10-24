@@ -153,8 +153,10 @@ test('unverified providers, disabled simulation and unenforceable capabilities a
     assert.equal(live.status, 422);
     assert.equal(live.body.error.code, 'model_unavailable');
 
-    const capability = await post('/internal/runs', newRun({ capabilities: ['lookup_reference'] }));
+    const capability = await post('/internal/runs', newRun({ capabilities: ['lookup_reference', 'send_email'] }));
     assert.equal(capability.body.error.code, 'unsupported_capability');
+    assert.deepEqual(capability.body.error.details, [{ path: '/capabilities', message: 'unsupported capability send_email' }]);
+    assert.equal((await post('/internal/runs', newRun({ capabilities: ['lookup_reference'] }))).status, 202, 'the registry enforces lookup_reference');
 
     const many = await post('/internal/runs', newRun({ capabilities: Array.from({ length: 32 }, (_, i) => `tool_${i}`) }));
     assert.equal(many.body.error.details.length, 10);

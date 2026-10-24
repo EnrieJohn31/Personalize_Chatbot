@@ -2,6 +2,8 @@ import { Agent, type AgentMessage, type ThinkingLevel } from '@earendil-works/pi
 import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import type { ConnectionManager, ConnectionProvider, RunModel } from '../auth/connection-manager.js';
 import type { RunMessage, RunRequest } from '../contracts.js';
+import { safeSlice } from '../text.js';
+import { ToolExecutor } from '../tools/executor.js';
 import type { RunExecution } from './run-execution.js';
 
 /** The contract's bounds for one `assistant.delta` and for `assistant.final` text. */
@@ -16,6 +18,10 @@ const MAX_ERROR_LENGTH = 500;
 
 const SYSTEM_PROMPT =
     'You are a helpful assistant in a chat application. Answer clearly and concisely, and use Markdown when it helps readability.';
+const TOOLS_PROMPT =
+    ' When a question concerns the organisation\'s reference records, look them up with your tools rather than guessing, cite the codes you used, and say plainly when nothing matches.';
+/** Separates the text of consecutive assistant turns, for example before and after a lookup. */
+const TURN_SEPARATOR = '\n\n';
 
 export interface LiveRunOptions {
     connections: ConnectionManager;
@@ -59,18 +65,17 @@ export async function runLive(run: RunRequest, execution: RunExecution, options:
             return;
         }
 
-        const answer = await answerWith(prepared, run, execution, signal);
+        const { last, text } = await answerWith(prepared, run, execution, signal);
         if (stopped()) {
             return;
         }
-        if (answer.stopReason === 'error') {
-            options.log(`Run ${run.runId} provider error: ${answer.errorMessage ?? 'unknown'}`);
-            execution.emit('run.failed', { code: 'provider_error', message: providerMessage(answer.errorMessage) });
+        if (last.stopReason === 'error') {
+            options.log(`Run ${run.runId} provider error: ${last.errorMessage ?? 'unknown'}`);
+            execution.emit('run.failed', { code: 'provider_error', message: providerMessage(last.errorMessage) });
 
             return;
         }
 
-        const text = textOf(answer);
         if (text.trim() === '') {
             execution.emit('run.failed', { code: 'empty_reply', message: 'The model returned no text. Try again.' });
 
@@ -84,43 +89,80 @@ export async function runLive(run: RunRequest, execution: RunExecution, options:
     }
 }
 
-/** Runs the agent on the conversation and streams its text; resolves to the final assistant message. */
+/**
+ * Runs the agent on the conversation and streams its text. Resolves to the last assistant message
+ * (how the run ended) and the text of every assistant turn, which is what the deltas added up to.
+ */
 async function answerWith(
     { models, model }: RunModel,
     run: RunRequest,
     execution: RunExecution,
     signal: AbortSignal,
-): Promise<AssistantMessage> {
+): Promise<{ last: AssistantMessage; text: string }> {
+    let stage: 'preparing' | 'retrieving' | 'answering' = 'preparing';
+    const enter = (next: typeof stage): void => {
+        if (stage !== next) {
+            stage = next;
+            execution.emit('run.progress', { stage });
+        }
+    };
+
+    const tools = new ToolExecutor(run.capabilities, run.limits.maxToolCalls, execution, () => enter('retrieving'));
+    // A tool result needs a further model round to be used, so a single round offers no tools.
+    const offerTools = tools.available && run.limits.maxModelRounds > 1;
+    let requests = 0;
     const agent = new Agent({
         initialState: {
-            systemPrompt: SYSTEM_PROMPT,
+            systemPrompt: offerTools ? SYSTEM_PROMPT + TOOLS_PROMPT : SYSTEM_PROMPT,
             model,
             thinkingLevel: thinkingLevel(model, run),
             messages: run.messages.map((message) => toAgentMessage(message, model)),
+            tools: offerTools ? tools.agentTools() : [],
         },
         streamFn: (requestModel, context, streamOptions) =>
             models.streamSimple(requestModel, context, {
                 ...streamOptions,
                 maxTokens: Math.min(requestModel.maxTokens, MAX_OUTPUT_TOKENS),
             }),
+        beforeToolCall: async (context) => tools.beforeToolCall(context),
+        // Before the last permitted round, or once the tool budget is used up, the tools are
+        // withdrawn; Pi tells the model, which then has to answer with what it has.
+        prepareNextTurnWithContext: ({ context }) =>
+            requests + 1 >= run.limits.maxModelRounds || !tools.available ? { context: { ...context, tools: [] } } : undefined,
+        prepareRequest: () => {
+            requests += 1;
+        },
+        // No request beyond the run's model rounds, even if the last one asked for a tool anyway.
+        finishTurn: () => (requests >= run.limits.maxModelRounds ? { action: 'end' } : undefined),
+        toolExecution: 'sequential',
         // Cache-aware providers keep a conversation's prefix warm; OpenCode routes by session.
         sessionId: run.conversationId,
     });
 
     const deltas = new DeltaBuffer(execution, Math.max(MIN_FLUSH_INTERVAL_MS, Math.ceil(run.limits.runDeadlineMs / DELTA_BUDGET)));
-    let answer: AssistantMessage | null = null;
-    let answering = false;
+    const texts: string[] = [];
+    let last: AssistantMessage | null = null;
+    let current = '';
 
     agent.subscribe((event) => {
         if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
-            if (!answering) {
-                answering = true;
-                execution.emit('run.progress', { stage: 'answering' });
+            enter('answering');
+            if (current === '' && texts.length > 0) {
+                deltas.add(TURN_SEPARATOR);
             }
+            current += event.assistantMessageEvent.delta;
             deltas.add(event.assistantMessageEvent.delta);
         }
         if (event.type === 'message_end' && event.message.role === 'assistant') {
-            answer = event.message;
+            last = event.message;
+            const text = textOf(event.message);
+            if (text !== '') {
+                texts.push(text);
+            }
+            current = '';
+        }
+        if (event.type === 'tool_execution_end') {
+            tools.finish(event.toolCallId, event.toolName, event.isError, resultText(event.result));
         }
     });
 
@@ -133,7 +175,20 @@ async function answerWith(
         deltas.close(!signal.aborted);
     }
 
-    return answer ?? { ...assistantMessage(model, ''), stopReason: 'error', errorMessage: 'The model returned no answer.' };
+    return {
+        last: last ?? { ...assistantMessage(model, ''), stopReason: 'error', errorMessage: 'The model returned no answer.' },
+        text: texts.join(TURN_SEPARATOR),
+    };
+}
+
+/** The text Pi returned to the model for a tool call. */
+function resultText(result: unknown): string {
+    const content = (result as { content?: { type: string; text?: string }[] } | undefined)?.content ?? [];
+
+    return content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text ?? '')
+        .join('');
 }
 
 /**
@@ -223,14 +278,4 @@ function providerMessage(errorMessage: string | undefined): string {
 
 function shorten(message: string): string {
     return message.length > MAX_ERROR_LENGTH ? `${safeSlice(message, MAX_ERROR_LENGTH - 1)}…` : message;
-}
-
-/** At most `length` UTF-16 units, never splitting a surrogate pair. */
-function safeSlice(text: string, length: number): string {
-    if (text.length <= length) {
-        return text;
-    }
-    const code = text.charCodeAt(length - 1);
-
-    return text.slice(0, code >= 0xd800 && code <= 0xdbff ? length - 1 : length);
 }

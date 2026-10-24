@@ -13,9 +13,20 @@ test('shared examples satisfy their v1 schemas', () => {
     assert.deepEqual(validate('runRequest', example('run-request-live.json')), []);
     assert.deepEqual(validate('runAcknowledgement', example('run-acknowledgement.json')), []);
     assert.deepEqual(validate('error', example('error.json')), []);
-    for (const event of example('run-events.json')) {
+    for (const event of [...example('run-events.json'), ...example('run-events-tool.json')]) {
         assert.deepEqual(validate('runEvent', event), [], event.type);
     }
+});
+
+test('tool events carry only identifiers, outcomes and source metadata', () => {
+    const [, , , started, source, finished] = example('run-events-tool.json');
+    const rejected = (event) => validate('runEvent', event).length > 0;
+
+    assert.ok(rejected({ ...started, data: { ...started.data, arguments: { query: 'x' } } }), 'no arguments');
+    assert.ok(rejected({ ...finished, data: { ...finished.data, result: 'text' } }), 'no result text');
+    assert.ok(rejected({ ...finished, data: { ...finished.data, outcome: 'maybe' } }));
+    assert.ok(rejected({ ...source, data: { ...source.data, checkedAt: 'yesterday' } }));
+    assert.ok(rejected({ ...started, data: { ...started.data, toolCallId: 'has space' } }));
 });
 
 test('signing matches the independently computed test vector', () => {

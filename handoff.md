@@ -1,10 +1,12 @@
 # Development handoff
 
-Updated: 24 October 2026. Read this file first when resuming work.
+Updated: 25 October 2026. Read this file first when resuming work.
 
 ## Where we stopped
 
-**Phase 2 (tasks 2.1–2.4) is implemented. Task 3.2 is done: chat replies come from each conversation's chosen account and model through a fresh Pi Agent per run, verified live with the operator's ChatGPT connection on `gpt-6-luna`. Task 3.1's connections (ChatGPT, OpenCode Go/Zen, a local model server) are implemented; the operator's ChatGPT sign-in works live and survived an engine restart. Its remaining acceptance item is a refresh after the access token expires. Task 3.3 is done: replies can call the read-only `lookup_reference` tool on invented records, through the engine's checked tool executor, verified live on `gpt-6-luna`. Next build task: 3.4, bounded context and budgets.**
+**Phase 2 (tasks 2.1–2.4) and tasks 3.1–3.3 are complete for the chosen ChatGPT connection. Task 3.1 closed on 25 October: an already-expired access token refreshed automatically, `gpt-6-luna` replied successfully and the renewed expiry was stored. Earlier sign-in and restart persistence had passed. Task 3.2 provides live replies through a fresh Pi Agent per run; task 3.3 provides the permitted read-only sample lookup. OpenCode and real local-server acceptance remain unverified. Next build task: 3.4, bounded context and budgets, followed by 3.5, real Stop acceptance.**
+
+Latest acceptance on 25 October 2026: the normal test returned `Connected` in 7,155 ms and advanced the access expiry from 24 October 19:12:14 to 25 October 19:53:16 (+08:00), without another sign-in. Both Laravel and the engine remained connected. Signed connectivity, the engine build and 19 authentication/vault tests passed. This session changed documentation only; see [the dated evidence](docs/validation.md).
 
 Review on 24 October 2026 corrected three issues: tool validation arguments reaching browser events, truncation notices exceeding tool result caps, and oversized multi-round replies being silently shortened on completion. All 84 engine tests pass after the fixes; 247 Laravel tests, 28 frontend tests, static checks, the production build and signed connectivity passed. Earlier live acceptance notes were preserved, not rerun. See [the review evidence](docs/validation.md).
 
@@ -24,7 +26,7 @@ Replies stream through a Stage A Laravel relay. They come from the conversation'
 | [Blueprint.md](Blueprint.md)                         | Architecture, ownership, security boundaries and acceptance requirements |
 | [Build_Plan.md](Build_Plan.md)                       | Numbered tasks, completion checkboxes and progress                       |
 | [docs/setup.md](docs/setup.md)                       | Installation, daily commands and troubleshooting                         |
-| [docs/validation.md](docs/validation.md)             | Dated checks for Phase 1 and tasks 2.1–3.1, with their limits            |
+| [docs/validation.md](docs/validation.md)             | Dated foundation checks through task 3.3 and the 25 October refresh acceptance, with their limits |
 | [docs/connections.md](docs/connections.md)           | Task 3.1 ChatGPT, OpenCode and local-server connections, the chat choice |
 | [docs/chat-history.md](docs/chat-history.md)         | Task 2.1 endpoints (and deletion), ownership, storage and pagination     |
 | [docs/chat-ui.md](docs/chat-ui.md)                   | Chat page, date sections, deletion, Stage A reply relay and checks       |
@@ -63,7 +65,7 @@ Replies stream through a Stage A Laravel relay. They come from the conversation'
     - `composer ci:check` passed with 198 Laravel tests / 971 assertions (41 new), 18 frontend unit tests, Pint (112 files) and PHPStan level 7 (82 files).
     - 53 engine tests passed (19 new), and both npm audits found 0 vulnerabilities. Two mutation checks failed exactly their target tests.
     - A 12-check browser probe and a callback-listener probe ran against the real task image on a network without internet access. They found and fixed a poll/session race that hid inline errors.
-    - **Not yet done:** the live sign-in with a real account, a real test reply, persistence across a restart and a refresh after expiry. The 3.1 checkbox stays open until then. See [docs/validation.md](docs/validation.md) and [docs/provider-matrix.md](docs/provider-matrix.md).
+    - **At the initial implementation checkpoint:** real sign-in/replies, restart persistence and refresh after expiry remained open. Sign-in/replies and restart persistence subsequently passed on 24 October, and the real refresh passed on 25 October, closing 3.1. See [docs/validation.md](docs/validation.md) and [docs/provider-matrix.md](docs/provider-matrix.md).
 - User-requested additions on 24 October 2026:
     - **Chat.** The sidebar groups conversations into Today, Yesterday, Previous 7 days and Older. Conversations can be deleted one at a time (menu or header) or several at once (Select, Select all, Delete selected), after confirmation.
         - `DELETE /api/chat/conversations/{id}` and `DELETE /api/chat/conversations` (bulk, own IDs only) delete permanently through `ConversationDeletion`.
@@ -211,13 +213,9 @@ docker compose down
 
 Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal at `mysql:3306`; the engine is internal at `http://agent:3101`, and only its sign-in callback is published, on `127.0.0.1:1455`. Health reports `providerAuth` (`configured` once the engine has its credential key), `requestAuth` and `simulation`. Existing local secrets stay in ignored `.env`; preserve the application key and MySQL volume. Do not use `docker compose down -v` for routine shutdown.
 
-## Next: close 3.1, then 3.4
+## Next: 3.4, then 3.5
 
-**3.1 (operator).** A live request succeeded and the ChatGPT sign-in survived an engine restart (task 3.2's live runs). One item remains:
-
-- After the access token's expiry, send another message or test. A successful reply means the refresh works. The engine's connection status reports the expiry as `expiresAt`.
-- Record the date and outcome, with no tokens or personal data, in [docs/provider-matrix.md](docs/provider-matrix.md). Then check 3.1 in the Build Plan.
-- If HTTPS scanning (Kaspersky) is back on, sign-ins and requests to `chatgpt.com` or `auth.openai.com` can fail with "fetch failed". The live chat runs used `api.openai.com`, which was not intercepted.
+**3.1 is closed.** The remaining real refresh-after-expiry check passed on 25 October through the existing connection. The observed expiries and result are recorded in [docs/provider-matrix.md](docs/provider-matrix.md). Rejected renewal/re-authentication is covered with fakes; no live sign-in was deliberately revoked. Existing HTTPS-scanning limitations remain documented in the connections guide; no host security settings were changed in this session.
 
 **3.4 (build): bounded context and budgets.** Load permitted canonical history within the selected model's context budget, reserve output capacity and give oversized requests explicit handling. Verify a follow-up remembers relevant history and an oversized transcript never becomes an uncontrolled provider request. Starting points:
 
@@ -232,14 +230,14 @@ Then 3.5: verify Stop during a real provider/tool call and record cancellation d
 
 | Tasks        | Remaining result                                                                                                                |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| 3.1, 3.4–3.5 | ChatGPT refresh after token expiry (operator), bounded history and budgets (start here), live Stop through tools |
+| 3.4–3.5      | Bounded history and budgets (start here), then live Stop through provider/tool calls |
 | 4.1–4.4      | Durable runs/events, claims, idempotency and transactional final saves                                                          |
 | 5.1–5.4      | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                                                |
 | 6.1–6.3      | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation                              |
 | 7.1–7.3      | First purpose and authorized connector, after the purpose is selected                                                           |
 | 8.1–8.4      | Production images, serving/supervision, backup/restore and deployment acceptance                                                |
 
-Use the build plan's individual acceptance checks; this table does not replace them. Phase 3 requires supported, authorized provider access. Account and model eligibility are still unverified; do not infer that a healthy engine or a "Connected" badge can make a live request, and never silently substitute another billing/authentication path.
+Use the build plan's individual acceptance checks; this table does not replace them. Live acceptance covers the operator's existing ChatGPT connection and `gpt-6-luna`; other providers, accounts and models require their own checks. A healthy engine or a "Connected" badge alone is not proof of live access, and the application must never silently substitute another billing/authentication path.
 
 ## Boundaries and open items
 
@@ -268,6 +266,8 @@ Use the build plan's individual acceptance checks; this table does not replace t
 - `.setup/` contains ignored downloads, temporary probes and dependency backups. It is not application source and is not included in a new clone. The persistence probe fixture was cleaned up.
 
 ## Git branches and contributor requirements
+
+Current local work: the task 3.1 acceptance record on `development`, after published checkpoint `72b5aca`. This session changes only the handoff, plan, blueprint and connection/validation documentation. No push was requested for this session; the last verified publication remains the 24 October checkpoint below.
 
 Latest published implementation checkpoint: **`9263393` — Protect tool events and bound multi-round reply output**, including **`93f3085`** (first-message streaming), **`3ca251e`** (live Pi replies), **`5d7b7f0`** (task 3.2 evidence) and **`8ed22bb`** (the sample lookup tool). At the user's request, both branches were fast-forwarded and pushed atomically on 24 October 2026; both remote hashes matched `9263393f362352cea3aaa91305838ed63549c745`. Original commits and messages were preserved. The full history audit passed with the approved human author/committer and no prohibited attribution. This publication record follows that checkpoint. See [the three fixes and validation evidence](docs/validation.md). The four pending task 3.3 documentation files from the sibling `Chatbot-task-3.3` worktree were incorporated here; that worktree and its local edits were preserved.
 

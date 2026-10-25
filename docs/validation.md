@@ -1,5 +1,24 @@
 # Foundation validation
 
+## Task 3.1: live refresh after expiry — 25 October 2026
+
+The remaining chosen-provider acceptance passed using the operator's existing ChatGPT connection and selected `gpt-6-luna` model. One short test was sent through Laravel's `ProviderConnections::test()` and signed gateway. The engine used the existing encrypted sign-in and Pi's normal renewal path; no expiry was changed artificially and no new login was started.
+
+All timestamps below use Asia/Shanghai (+08:00).
+
+| Observation | Actual result |
+| --- | --- |
+| Before, 25 October 18:56:13 | Engine and Laravel `connected`; stored access expiry **24 October 19:12:14**, already in the past |
+| Live test | Success; reply **Connected**; **7,155 ms**; no error code |
+| After, 25 October 18:56:21 | Engine and Laravel still `connected`; stored expiry **25 October 19:53:16**, advanced into the future |
+| Remaining validity after test | 3,415 seconds (56 minutes 55 seconds); full issuance lifetime was not independently measured |
+| Signed connectivity | `php artisan agent:check` passed: configured authentication, signed requests accepted and unsigned requests rejected |
+| Focused regressions | Engine TypeScript build passed; all **19** tests in `connections.test.mjs` and `credential-vault.test.mjs` passed, including renewal, rejected renewal, re-authentication, encrypted storage and serialized writes |
+
+The status endpoint reads expiry from the encrypted vault, so the post-test value verifies that renewal was stored. Sign-in, normal live replies and persistence across engine restart were already observed on 24 October. Together these close task 3.1 for the chosen connection. No credentials, account details or connection identifiers were printed or added to Git; no chat rows were written. Only normal provider renewal and connection-status recording occurred. The temporary diagnostic remains ignored under `.setup/`.
+
+This session changes documentation only. The full application suite, frontend build and browser probes were not rerun; their earlier dated results remain below. Provider-side revocation/re-authentication was not forced on the real account, and OpenCode/local-server live acceptance remains unverified. Task 3.4 (context/token budgets) and task 3.5 (real Stop acceptance) remain open.
+
 ## Pre-push review of tasks 3.2–3.3 — 24 October 2026
 
 Reviewed the four commits from `93f3085` through `8ed22bb`, covering first-message streaming, live replies and the sample lookup. Three reproducible defects were fixed:

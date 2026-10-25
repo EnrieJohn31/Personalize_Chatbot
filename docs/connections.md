@@ -1,6 +1,6 @@
 # Connections: ChatGPT, OpenCode and a local model server
 
-Build Plan task 3.1, extended on 24 October 2026. Each user connects their own AI accounts on the **Connections** page, which has its own entry in the main menu and in the chat sidebar (`/connections`; the old `/settings/connections` address redirects there). The administrator can also offer one local model server to every user.
+Build Plan task 3.1, extended on 24 October 2026; chosen-provider acceptance completed on 25 October. Each user connects their own AI accounts on the **Connections** page, which has its own entry in the main menu and in the chat sidebar (`/connections`; the old `/settings/connections` address redirects there). The administrator can also offer one local model server to every user.
 
 | Card | Provider ID | How it connects | Billing |
 | --- | --- | --- | --- |
@@ -13,7 +13,7 @@ The engine keeps every sign-in and key encrypted. Laravel and the browser only e
 
 **Status:**
 - Implemented, and tested with fakes and live-engine browser probes on a network without internet access. The local server was probed with a fake OpenAI-compatible server, including stopping and restarting it.
-- No real sign-in, key or local server has been used yet, so live access is unverified; see the [provider matrix](provider-matrix.md).
+- The operator's real ChatGPT sign-in, replies, restart persistence and refresh after expiry have passed. The 25 October refresh test used `gpt-6-luna`, returned `Connected` and advanced the stored expiry without another sign-in. OpenCode keys and a real local server remain unverified; see the [provider matrix](provider-matrix.md).
 - Since task 3.2, chat replies come from the connection and model each conversation records ([chat-ui.md](chat-ui.md)). `ASSISTANT_LIVE_REPLIES=false` switches every chat back to the built-in simulation.
 - When a reply or a test message finds a ChatGPT sign-in whose renewal was rejected, the engine reports the connection as `reauth_required` until the user signs in again. The card then shows **Sign in again**, and chat stops using it.
 
@@ -114,7 +114,7 @@ docker compose exec --user sail laravel.test php artisan agent:check   # provide
 
 ## Limits and open items
 
-- Live behavior with real accounts is unverified: ChatGPT eligibility, the token lifetime and refresh after expiry, OpenCode key acceptance, and refusals for specific models. Record the results in the provider matrix.
+- Live acceptance applies to the operator's ChatGPT connection and `gpt-6-luna`. Other accounts/models, provider-side revocation, OpenCode key acceptance and a real local server remain unverified. Rejected renewal and re-authentication are covered with fakes. The provider matrix records the actual expiry observations; they do not establish a guaranteed token lifetime.
 - A ChatGPT sign-in in progress lives in engine memory. An engine restart ends it and the user starts again. Stored sign-ins and keys survive restarts.
 - Inside the Compose network, the Laravel and MySQL containers can reach the callback listener during a sign-in. A request carrying `error=` would end that sign-in; one with a wrong `state` is ignored. This is acceptable for development.
 - An API key typed into the page crosses the browser–Laravel connection once. Use HTTPS outside local development.

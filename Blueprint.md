@@ -1,12 +1,12 @@
 # Blueprint: Laravel Chatbot Foundation
 
-Updated: 24 October 2026\
-Revision: 16 — Live replies and the sample lookup tool implemented and reviewed\
-Status: Phase 2 and tasks 3.2–3.3 are implemented. Conversations use their recorded connection and model through a fresh Pi Agent, with an allowed read-only sample lookup. Earlier live acceptance records cover ChatGPT replies, lookup use and credential persistence across an engine restart. Task 3.1 still needs refresh-after-expiry acceptance; task 3.4 adds bounded context and configurable budgets, followed by live Stop acceptance in 3.5 and durable runs in Phase 4. Review fixes keep tool arguments out of browser events, count truncation notices inside tool result limits and fail oversized replies explicitly. No provider or throughput benchmark has been produced.
+Updated: 25 October 2026\
+Revision: 17 — Chosen-provider authentication acceptance complete, including live refresh after expiry\
+Status: Phase 2 and tasks 3.1–3.3 are complete for the chosen ChatGPT connection. Conversations use their recorded connection and model through a fresh Pi Agent, with an allowed read-only sample lookup. Live acceptance covers sign-in, replies, lookup use, credential persistence across an engine restart and automatic refresh after an observed expiry on 25 October. Task 3.4 adds bounded context and configurable budgets, followed by live Stop acceptance in 3.5 and durable runs in Phase 4. Other providers/accounts remain unverified. Review fixes keep tool arguments out of browser events, count truncation notices inside tool result limits and fail oversized replies explicitly. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
 
-Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 3.4 while closing task 3.1's remaining acceptance item. Refresh it alongside the build plan after each implementation session.
+Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 3.4 before task 3.5's real Stop acceptance. Refresh it alongside the build plan after each implementation session.
 
 ## 1. Goal and agreed foundation
 
@@ -181,7 +181,7 @@ Extended the same day at the user's request with OpenCode Go and Zen (`opencode-
 - **Chat choice.** A user-level choice of connection and model (`users.chat_connection_id`, `chat_model`) records what chat should use once task 3.2 executes live models.
 - **Credential boundary.** A browser-entered key is a deliberate exception to "credentials are server-managed references": it passes through Laravel without being stored, and the run snapshot still carries only the connection reference.
 
-The live check with a real account is still pending; see [docs/connections.md](docs/connections.md).
+The chosen ChatGPT account passed live sign-in, replies and restart persistence on 24 October 2026, then automatic refresh after expiry on 25 October. Rejected-renewal/re-authentication behavior is covered with fakes; the live account was not deliberately revoked. See [docs/provider-matrix.md](docs/provider-matrix.md).
 
 Extended again at the user's request with a local model server (`local`):
 - **Configuration.** An OpenAI-compatible server on the Docker host or the local network (Ollama, LM Studio, llama.cpp, vLLM) is configured by the administrator in the engine's environment (`LOCAL_LLM_URL`). Users cannot supply an address, which prevents the engine being pointed at arbitrary hosts.

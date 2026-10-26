@@ -44,6 +44,22 @@ class ConnectionPayloadsTest extends TestCase
         $this->assertSame('reauth_required', $result->errorCode);
     }
 
+    public function test_a_refused_renewal_carries_the_providers_reason_and_older_engines_send_none(): void
+    {
+        $rejection = ['reason' => 'refresh_token_invalidated', 'message' => 'ChatGPT invalidated this sign-in. Sign in again.', 'at' => 1_793_010_903_000];
+        $refused = [...self::example('connection-status.json'), 'status' => 'reauth_required', 'rejection' => $rejection];
+
+        $status = ConnectionStatus::fromPayload($refused, self::CONNECTION_ID, 'openai');
+        $this->assertNotNull($status);
+        $this->assertSame('reauth_required', $status->status);
+        $this->assertSame($rejection, $status->rejection);
+
+        $older = self::example('connection-status.json');
+        unset($older['rejection']);
+        $this->assertNull(ConnectionStatus::fromPayload($older, self::CONNECTION_ID, 'openai')?->rejection);
+        $this->assertNotNull(ConnectionStatus::fromPayload($older, self::CONNECTION_ID, 'openai'));
+    }
+
     /** @param  Closure(array<string, mixed>): array<string, mixed>  $change */
     #[DataProvider('invalidStatuses')]
     public function test_statuses_outside_the_contract_are_rejected(Closure $change): void
@@ -63,6 +79,11 @@ class ConnectionPayloadsTest extends TestCase
             'string expiry' => [fn (array $p): array => [...$p, 'expiresAt' => '1792774800000']],
             'malformed model' => [fn (array $p): array => [...$p, 'models' => ['gpt 5']]],
             'model map' => [fn (array $p): array => [...$p, 'models' => ['a' => 'gpt-5.4']]],
+            'rejection with a token' => [fn (array $p): array => [...$p, 'rejection' => ['reason' => 'invalid_grant', 'message' => 'Refused.', 'at' => 1, 'refresh' => 'token']]],
+            'rejection reason not a code' => [fn (array $p): array => [...$p, 'rejection' => ['reason' => 'Invalid Grant', 'message' => 'Refused.', 'at' => 1]]],
+            'empty rejection message' => [fn (array $p): array => [...$p, 'rejection' => ['reason' => 'invalid_grant', 'message' => '', 'at' => 1]]],
+            'rejection without a time' => [fn (array $p): array => [...$p, 'rejection' => ['reason' => 'invalid_grant', 'message' => 'Refused.', 'at' => null]]],
+            'rejection as text' => [fn (array $p): array => [...$p, 'rejection' => 'invalid_grant']],
         ];
     }
 

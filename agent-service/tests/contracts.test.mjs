@@ -97,6 +97,12 @@ test('connection answers reject credential fields and inconsistent outcomes', ()
     assert.ok(paths('connectionLoginRequest', { ...example('connection-login-request.json'), apiKey: 'x' }).includes('/apiKey'));
     assert.deepEqual(validate('connectionStatus', { ...status, provider: 'opencode-go', expiresAt: null }), []);
     assert.ok(paths('connectionStatus', { ...status, apiKey: 'leaked' }).includes('/apiKey'));
+    const rejection = { reason: 'refresh_token_invalidated', message: 'ChatGPT invalidated this sign-in.', at: 1_792_713_600_000 };
+    assert.deepEqual(validate('connectionStatus', { ...status, status: 'reauth_required', rejection }), []);
+    const { rejection: _omitted, ...olderEngine } = status;
+    assert.deepEqual(validate('connectionStatus', olderEngine), [], 'engines without the field still validate');
+    assert.ok(paths('connectionStatus', { ...status, rejection: { ...rejection, refresh: 'token' } }).some((path) => path.startsWith('/rejection')));
+    assert.ok(paths('connectionStatus', { ...status, rejection: { ...rejection, reason: 'Not A Code' } }).some((path) => path.startsWith('/rejection')));
     assert.ok(paths('connectionLoginRequest', { ...example('connection-login-request.json'), provider: 'opencode' }).includes('/provider'));
     assert.ok(paths('connectionKeyRequest', { ...example('connection-key-request.json'), provider: 'openai' }).includes('/provider'));
 

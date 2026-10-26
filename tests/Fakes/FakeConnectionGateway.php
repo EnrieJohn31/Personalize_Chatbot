@@ -23,6 +23,9 @@ final class FakeConnectionGateway implements ConnectionGateway
     /** @var array<string, int> access token expiry by provider */
     public array $expiresAt = [];
 
+    /** @var array<string, array{reason: string, message: string, at: int}> refused renewals by provider */
+    public array $rejections = [];
+
     /** @var array<string, list<string>> */
     public array $models = [
         'openai' => ['gpt-5.5', 'gpt-5.4-mini', 'gpt-5.4'],
@@ -162,6 +165,7 @@ final class FakeConnectionGateway implements ConnectionGateway
             $this->statuses[$provider] ?? 'not_connected',
             $this->expiresAt[$provider] ?? null,
             $this->models[$provider] ?? [],
+            $this->rejections[$provider] ?? null,
         );
     }
 

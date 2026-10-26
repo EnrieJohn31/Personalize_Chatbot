@@ -212,6 +212,7 @@ class ConnectionsController extends Controller
         $models = $status !== null && $status->isConnected() ? $status->models : [];
         sort($models, SORT_NATURAL);
         $recent = $login !== null && ($login->isActive() || $login->expiresAt > now()->getTimestampMs());
+        $rejection = $status?->rejection;
 
         return [
             'provider' => $provider,
@@ -219,6 +220,12 @@ class ConnectionsController extends Controller
             'auth' => $definition['auth'],
             'status' => $status->status ?? 'not_connected',
             'expires_at' => $this->time($status?->expiresAt),
+            // Why the provider refused to renew the sign-in, in its own words and reason code.
+            'rejection' => $rejection === null ? null : [
+                'reason' => $rejection['reason'],
+                'message' => $rejection['message'],
+                'at' => $this->time($rejection['at']),
+            ],
             'models' => $models,
             'test_model' => $definition['test_model'],
             'login' => $recent ? [
@@ -248,6 +255,7 @@ class ConnectionsController extends Controller
             'auth' => $definition['auth'],
             'status' => ! $local->configured ? 'not_connected' : ($local->reachable ? 'connected' : 'unreachable'),
             'expires_at' => null,
+            'rejection' => null,
             'models' => $models,
             'test_model' => in_array($definition['test_model'], $models, true) ? $definition['test_model'] : ($models[0] ?? ''),
             'login' => null,

@@ -20,3 +20,13 @@ export function formatTime(iso: string | null): string {
               minute: '2-digit',
           });
 }
+
+/** Date and time of an ISO timestamp in the viewer's locale. */
+export function formatDateTime(iso: string | null): string {
+    return iso === null
+        ? 'unknown'
+        : new Date(iso).toLocaleString([], {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+          });
+}

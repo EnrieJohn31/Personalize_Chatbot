@@ -48,6 +48,10 @@ services:
                 contracts: ./contracts
         image: assistant-foundation-agent:dev
         init: true
+        # The supervisor runs `tsx watch` and starts it again if the engine crashes or stops
+        # answering; tsx alone waits for the next code change after a crash.
+        command: ['node', 'scripts/dev-supervisor.mjs']
+        restart: unless-stopped
         environment:
             PORT: 3101
             CHOKIDAR_USEPOLLING: '${VITE_USE_POLLING:-true}'
@@ -79,6 +83,7 @@ services:
         volumes:
             - './agent-service/src:/app/src:ro'
             - './agent-service/tests:/app/tests:ro'
+            - './agent-service/scripts:/app/scripts:ro'
             - './contracts:/contracts:ro'
             # Private engine state: installation ID and encrypted sign-ins. Never mount it elsewhere.
             - agent-data:/var/lib/agent

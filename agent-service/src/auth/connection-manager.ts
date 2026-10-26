@@ -11,6 +11,7 @@ import {
 import { CredentialVault, UnreadableCredentialsError } from './credential-vault.js';
 import { installationId } from './installation.js';
 import type { LocalModelServer } from './local-model.js';
+import { RenewalRejections, type RenewalRejection } from './renewal-rejections.js';
 
 /**
  * Providers a user can connect, and how: `oauth` is the provider's own browser sign-in, `api_key`
@@ -59,11 +60,12 @@ export interface ConnectionStatus {
     provider: ConnectionProvider;
     /**
      * `unreachable`: the local model server is configured but did not answer. `reauth_required`:
-     * the provider rejected the stored sign-in's renewal since this engine started.
+     * the provider refused to renew the stored sign-in; `rejection` says why and when.
      */
     status: 'connected' | 'not_connected' | 'unreadable' | 'unreachable' | 'reauth_required';
     expiresAt: number | null;
     models: string[];
+    rejection: RenewalRejection | null;
 }
 
 export interface TestFailure {
@@ -137,13 +139,15 @@ export class ConnectionManager {
     // One vault per connection for the life of the process: all of a connection's writes, including
     // Pi's token refresh, must go through the same serialized store. Bounded by Laravel's records.
     private readonly connections = new Map<string, Connection>();
-    // Sign-ins whose renewal the provider rejected since this engine started. The credential stays
-    // stored until it is replaced, so without this its status would still read as connected.
-    private readonly rejected = new Set<string>();
+    // Sign-ins whose renewal the provider refused. The credential stays stored until it is replaced,
+    // so without this record its status would still read as connected.
+    private readonly rejections: RenewalRejections;
     private login: LoginSession | null = null;
     private installation: Promise<string> | null = null;
 
-    constructor(private readonly options: ConnectionManagerOptions) {}
+    constructor(private readonly options: ConnectionManagerOptions) {
+        this.rejections = new RenewalRejections(options.dataDirectory, options.log);
+    }
 
     async startLogin(connectionId: string, provider: ConnectionProvider, agentName: string): Promise<LoginView> {
         requireAuthMethod(provider, 'oauth');
@@ -167,7 +171,10 @@ export class ConnectionManager {
             this.options.loginTimeoutMs,
             (outcome) => {
                 if (outcome === 'completed') {
-                    this.rejected.delete(rejectionKey(connectionId, provider));
+                    // The new sign-in replaced the refused one.
+                    this.rejections.delete(rejectionKey(connectionId, provider)).catch((error: unknown) => {
+                        this.options.log(`Connection ${connectionId}: could not clear a refused renewal: ${describe(error)}`);
+                    });
                 }
                 this.options.log(`Connection ${connectionId}: ${provider} sign-in ${outcome}`);
             },
@@ -208,18 +215,21 @@ export class ConnectionManager {
         try {
             const credential = await vault.read(provider);
             if (credential === undefined) {
-                return { provider, status: 'not_connected', expiresAt: null, models: catalog };
+                return { provider, status: 'not_connected', expiresAt: null, models: catalog, rejection: null };
             }
+
+            const rejection = await this.rejections.get(rejectionKey(connectionId, provider));
 
             return {
                 provider,
-                status: this.rejected.has(rejectionKey(connectionId, provider)) ? 'reauth_required' : 'connected',
+                status: rejection === null ? 'connected' : 'reauth_required',
                 expiresAt: credential.type === 'oauth' ? credential.expires : null,
                 models: catalog,
+                rejection,
             };
         } catch (error) {
             if (error instanceof UnreadableCredentialsError) {
-                return { provider, status: 'unreadable', expiresAt: null, models: catalog };
+                return { provider, status: 'unreadable', expiresAt: null, models: catalog, rejection: null };
             }
             throw error;
         }
@@ -229,14 +239,14 @@ export class ConnectionManager {
     async disconnect(connectionId: string, provider: ConnectionProvider): Promise<ConnectionStatus> {
         if (provider === 'local') {
             // Nothing of the user's is stored for the shared local server.
-            return { provider, status: 'not_connected', expiresAt: null, models: [] };
+            return { provider, status: 'not_connected', expiresAt: null, models: [], rejection: null };
         }
         if (this.login?.connectionId === connectionId) {
             // A sign-in that already stored its credential still finishes; the logout then removes it.
             await this.login.cancel('The connection was removed.');
         }
         await this.connection(connectionId).models.logout(provider);
-        this.rejected.delete(rejectionKey(connectionId, provider));
+        await this.rejections.delete(rejectionKey(connectionId, provider));
 
         return this.status(connectionId, provider);
     }
@@ -245,7 +255,7 @@ export class ConnectionManager {
     async saveKey(connectionId: string, provider: ConnectionProvider, apiKey: string): Promise<ConnectionStatus> {
         requireAuthMethod(provider, 'api_key');
         await this.connection(connectionId).vault.modify(provider, async () => ({ type: 'api_key', key: apiKey }));
-        this.rejected.delete(rejectionKey(connectionId, provider));
+        await this.rejections.delete(rejectionKey(connectionId, provider));
 
         return this.status(connectionId, provider);
     }
@@ -303,7 +313,7 @@ export class ConnectionManager {
 
             return result(reply === '' ? null : shorten(reply));
         } catch (error) {
-            return result(null, signal.aborted ? timeout : authFailure(error));
+            return result(null, signal.aborted ? timeout : classifyAuthError(error, provider).failure);
         }
     }
 
@@ -341,6 +351,7 @@ export class ConnectionManager {
     /**
      * Resolves the stored sign-in, refreshing it if needed, and remembers whether the provider
      * still accepts it. Request paths report auth problems only as stream errors, so this runs first.
+     * Every renewal and every failed one is logged with the provider's reason, never with a token.
      */
     private async checkAuth(
         connectionId: string,
@@ -349,22 +360,31 @@ export class ConnectionManager {
         signal: AbortSignal,
     ): Promise<TestFailure | null> {
         const key = rejectionKey(connectionId, provider);
+        const { vault } = this.connection(connectionId);
+        const expiredBefore = await accessExpiry(vault, provider);
 
         try {
             if ((await models.getAuth(provider, { signal })) === undefined) {
                 return { code: 'not_connected', message: 'This account is not connected.' };
             }
         } catch (error) {
-            const failure = authFailure(error);
+            const { failure, reason } = classifyAuthError(error, provider);
+            if (error instanceof ModelsError) {
+                this.options.log(`Connection ${connectionId}: ${provider} sign-in could not be renewed (${reason}): ${failure.message}`);
+            }
             if (failure.code === 'reauth_required') {
-                this.rejected.add(key);
+                await this.rejections.set(key, { reason, message: failure.message, at: this.options.now() });
             }
 
             return failure;
         }
 
-        // Only a working renewal or a new sign-in gets past a rejected one.
-        this.rejected.delete(key);
+        const expires = await accessExpiry(vault, provider);
+        if (expires !== null && expires !== expiredBefore) {
+            this.options.log(`Connection ${connectionId}: ${provider} sign-in renewed; access valid until ${new Date(expires).toISOString()}`);
+        }
+        // Only a working renewal or a new sign-in gets past a refused one.
+        await this.rejections.delete(key);
 
         return null;
     }
@@ -373,13 +393,19 @@ export class ConnectionManager {
     private async localStatus(connectionId: string): Promise<ConnectionStatus> {
         const local = this.options.local ?? null;
         if (local === null) {
-            return { provider: 'local', status: 'not_connected', expiresAt: null, models: [] };
+            return { provider: 'local', status: 'not_connected', expiresAt: null, models: [], rejection: null };
         }
 
         await this.prepareLocal(this.connection(connectionId).models);
         const view = local.view();
 
-        return { provider: 'local', status: view.reachable ? 'connected' : 'unreachable', expiresAt: null, models: view.models };
+        return {
+            provider: 'local',
+            status: view.reachable ? 'connected' : 'unreachable',
+            expiresAt: null,
+            models: view.models,
+            rejection: null,
+        };
     }
 
     /** Refreshes the local model list and gives the connection's Pi models the current provider. */
@@ -437,26 +463,120 @@ function requireAuthMethod(provider: ConnectionProvider, method: 'oauth' | 'api_
     }
 }
 
-function authFailure(error: unknown): TestFailure {
+/** How the connection's owner knows each provider, for messages about their sign-in. */
+const PROVIDER_NAMES: Record<ConnectionProvider, string> = {
+    openai: 'ChatGPT',
+    opencode: 'OpenCode Zen',
+    'opencode-go': 'OpenCode Go',
+    local: 'The local model server',
+};
+
+interface AuthErrorOutcome {
+    failure: TestFailure;
+    /** A short code for the log and the refused-renewal record, such as `refresh_token_invalidated`. */
+    reason: string;
+}
+
+function classifyAuthError(error: unknown, provider: ConnectionProvider): AuthErrorOutcome {
     if (error instanceof ModelsError && error.code === 'oauth') {
         // Pi reports every failed renewal this way, including ones that never reached the provider.
         // Only those end with a retryable error; the stored sign-in stays and the next request renews it.
         const interrupted = interruptedRenewal(error.cause);
         if (interrupted !== null) {
             return {
-                code: 'provider_error',
-                message: `The sign-in could not be renewed because ${interrupted}. The provider did not refuse it, so there is no need to sign in again; try again.`,
+                reason: interrupted.reason,
+                failure: {
+                    code: 'provider_error',
+                    message: shorten(
+                        `The sign-in could not be renewed because ${interrupted.because}. The provider did not refuse it, so there is no need to sign in again; try again.`,
+                    ),
+                },
             };
         }
 
         // The provider refused the refresh token; the credential is kept until the user signs in again.
-        return { code: 'reauth_required', message: 'The sign-in has expired or was revoked. Sign in again.' };
+        const refusal = refusalOf(error.cause);
+
+        return { reason: refusal.reason, failure: { code: 'reauth_required', message: shorten(refusalMessage(PROVIDER_NAMES[provider], refusal)) } };
     }
     if (error instanceof ModelsError && error.cause instanceof UnreadableCredentialsError) {
-        return { code: 'credentials_unreadable', message: 'The stored sign-in cannot be read by this engine. Sign in again.' };
+        return {
+            reason: 'credentials_unreadable',
+            failure: { code: 'credentials_unreadable', message: 'The stored sign-in cannot be read by this engine. Sign in again.' },
+        };
     }
 
-    return { code: 'provider_error', message: describe(error) };
+    return { reason: 'error', failure: { code: 'provider_error', message: describe(error) } };
+}
+
+/** When the stored access token expires; null without an OAuth sign-in or when it cannot be read. */
+async function accessExpiry(vault: CredentialVault, provider: ConnectionProvider): Promise<number | null> {
+    const credential = await vault.read(provider).catch(() => undefined);
+
+    return credential?.type === 'oauth' ? credential.expires : null;
+}
+
+/** Pi's message for a token response other than 2xx: the status, then the provider's response body. */
+const TOKEN_RESPONSE = /token request failed \((\d{3})\): ([\s\S]*)$/;
+/** Provider reason codes are short snake_case words, such as `invalid_grant`. */
+const REASON_CODE = /^[a-z][a-z0-9_]{0,63}$/;
+/** Long runs of token-like characters; never part of a message about a refused sign-in. */
+const TOKEN_LIKE = /[A-Za-z0-9_\-.]{40,}/g;
+
+interface Refusal {
+    /** The provider's `error_reason` or `error`, `http_<status>` without either, or `renewal_failed`. */
+    reason: string;
+    detail: string | null;
+}
+
+/** What the provider said when it refused a renewal; OpenAI sends `error`, `error_reason` and a description. */
+function refusalOf(cause: unknown): Refusal {
+    const chain = causeChain(cause);
+    for (const error of chain) {
+        const response = TOKEN_RESPONSE.exec(error.message);
+        if (response === null) {
+            continue;
+        }
+
+        let body: Record<string, unknown> = {};
+        try {
+            const parsed: unknown = JSON.parse(response[2]!);
+            body = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+        } catch {
+            // Not JSON; the status alone still says what happened.
+        }
+        const reason = [body.error_reason, body.error].find((value): value is string => typeof value === 'string' && REASON_CODE.test(value));
+
+        return { reason: reason ?? `http_${response[1]}`, detail: typeof body.error_description === 'string' ? body.error_description : null };
+    }
+
+    // A renewal that failed in another way, for example an incomplete token response. The innermost
+    // cause is the most specific.
+    return { reason: 'renewal_failed', detail: chain.at(-1)?.message.replace(TOKEN_LIKE, '[redacted]') ?? null };
+}
+
+function refusalMessage(name: string, refusal: Refusal): string {
+    switch (refusal.reason) {
+        case 'refresh_token_invalidated':
+            return `${name} invalidated this sign-in (refresh_token_invalidated), which happens for example after a password change or signing out of all devices. Sign in again.`;
+        case 'refresh_token_expired':
+            return `This sign-in expired at ${name} (refresh_token_expired). Sign in again.`;
+        case 'refresh_token_reused':
+            return `${name} ended this sign-in because its renewal token was used twice (refresh_token_reused). Sign in again.`;
+        case 'renewal_failed':
+            return `The sign-in could not be renewed${refusal.detail === null ? '' : ` (${refusal.detail})`}. Sign in again.`;
+        default:
+            return `${name} refused to renew this sign-in (${refusal.reason}). Sign in again.`;
+    }
+}
+
+function causeChain(cause: unknown): Error[] {
+    const chain: Error[] = [];
+    for (let link = cause; link instanceof Error && chain.length < MAX_CAUSE_DEPTH; link = link.cause) {
+        chain.push(link);
+    }
+
+    return chain;
 }
 
 /** How deep a renewal failure's `cause` chain is searched; undici nests its code two levels down. */
@@ -475,32 +595,31 @@ const NETWORK = /^(E[A-Z]+|UND_ERR_[A-Z_]+)$/;
  * timed out, or met a provider-side error. Null when the provider refused it, or when the cause is
  * not recognized, so asking the user to sign in again stays the default.
  */
-function interruptedRenewal(cause: unknown): string | null {
-    const chain: Error[] = [];
-    for (let link = cause; link instanceof Error && chain.length < MAX_CAUSE_DEPTH; link = link.cause) {
-        chain.push(link);
-    }
+function interruptedRenewal(cause: unknown): { reason: string; because: string } | null {
+    const chain = causeChain(cause);
     if (chain.some((error) => REFUSED.test(error.message))) {
         return null;
     }
 
     const code = chain.map((error) => (error as { code?: unknown }).code).find((value) => typeof value === 'string') as string | undefined;
     if (code !== undefined && CERTIFICATE.test(code)) {
-        return (
-            `the connection to the provider was intercepted with a certificate this server does not trust (${code}). ` +
-            "Security software that scans HTTPS connections usually causes this; exclude the provider's sites from that scanning"
-        );
+        return {
+            reason: code.toLowerCase(),
+            because:
+                `the connection to the provider was intercepted with a certificate this server does not trust (${code}). ` +
+                "Security software that scans HTTPS connections usually causes this; exclude the provider's sites from that scanning",
+        };
     }
     if (chain.some((error) => error.name === 'TimeoutError')) {
-        return 'the provider did not answer in time';
+        return { reason: 'timeout', because: 'the provider did not answer in time' };
     }
     const network = code !== undefined && NETWORK.test(code);
     if (network || chain.some((error) => error instanceof TypeError && error.message === 'fetch failed')) {
-        return `the provider could not be reached${network ? ` (${code})` : ''}`;
+        return { reason: network ? code.toLowerCase() : 'unreachable', because: `the provider could not be reached${network ? ` (${code})` : ''}` };
     }
     const status = chain.map((error) => PROVIDER_SIDE.exec(error.message)?.[1]).find((value) => value !== undefined);
 
-    return status === undefined ? null : `the provider had a temporary problem (${status})`;
+    return status === undefined ? null : { reason: `http_${status}`, because: `the provider had a temporary problem (${status})` };
 }
 
 /**

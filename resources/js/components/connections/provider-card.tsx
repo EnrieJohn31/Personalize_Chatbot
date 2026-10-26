@@ -7,6 +7,7 @@ import {
 import { ConnectedTools } from '@/components/connections/connected-tools';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { formatDateTime } from '@/lib/utils';
 import type { ConnectionProviderId, ProviderConnectionCard } from '@/types';
 
 /** States in which a ChatGPT sign-in can still finish; the page polls while one is shown. */
@@ -102,13 +103,23 @@ function CardBody({
                     <TriangleAlert />
                     <AlertTitle>
                         {card.auth === 'oauth'
-                            ? 'The sign-in has expired or was revoked'
+                            ? `${card.name} no longer accepts this sign-in`
                             : 'The key was rejected'}
                     </AlertTitle>
                     <AlertDescription>
-                        {card.auth === 'oauth'
-                            ? `${card.name} no longer accepts this sign-in. Sign in again to keep using it.`
-                            : `${card.name} no longer accepts this key. Paste a new one to keep using it.`}
+                        {card.rejection !== null ? (
+                            <>
+                                <p>{card.rejection.message}</p>
+                                <p className="text-xs">
+                                    Refused on{' '}
+                                    {formatDateTime(card.rejection.at)}.
+                                </p>
+                            </>
+                        ) : card.auth === 'oauth' ? (
+                            `${card.name} no longer accepts this sign-in. Sign in again to keep using it.`
+                        ) : (
+                            `${card.name} no longer accepts this key. Paste a new one to keep using it.`
+                        )}
                     </AlertDescription>
                 </Alert>
             )}

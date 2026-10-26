@@ -21,7 +21,7 @@
         },
         "provider": { "enum": ["openai", "opencode", "opencode-go", "local"] },
         "status": {
-            "description": "unreadable: a sign-in or key is stored but this engine cannot decrypt it; connecting again replaces it. unreachable: the local model server is configured but did not answer. reauth_required: the provider rejected the stored sign-in's renewal since this engine started; signing in again replaces it.",
+            "description": "unreadable: a sign-in or key is stored but this engine cannot decrypt it; connecting again replaces it. unreachable: the local model server is configured but did not answer. reauth_required: the provider refused to renew the stored sign-in (see rejection); signing in again replaces it.",
             "enum": [
                 "connected",
                 "not_connected",
@@ -42,6 +42,34 @@
                 "type": "string",
                 "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
             }
+        },
+        "rejection": {
+            "description": "Why and when the provider refused to renew the stored sign-in; null unless status is reauth_required. Kept until a new sign-in, a new key or a disconnect. Optional for older engines.",
+            "anyOf": [
+                { "type": "null" },
+                {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["reason", "message", "at"],
+                    "properties": {
+                        "reason": {
+                            "description": "The provider's reason code, such as refresh_token_invalidated, http_<status> without one, or renewal_failed.",
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                        },
+                        "message": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                        },
+                        "at": {
+                            "description": "Unix time in milliseconds when the renewal was refused.",
+                            "type": "integer",
+                            "minimum": 0
+                        }
+                    }
+                }
+            ]
         }
     }
 }

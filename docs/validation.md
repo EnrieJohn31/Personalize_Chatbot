@@ -1,5 +1,29 @@
 # Foundation validation
 
+## Why the ChatGPT sign-in ended; renewal log and engine self-restart — 26 October 2026
+
+**Correction to the entry below.** That entry guessed that HTTPS scanning caused the 10:35 UTC renewal failure. It did not. At 10:53 UTC, after the network-failure fix was live and with scanning paused, a renewal was refused again and classified as a refusal. A direct renewal attempt with the stored sign-in (same engine code, only OpenAI's answer printed, no token) returned `400 invalid_grant`, reason `refresh_token_invalidated`: "The refresh token has been invalidated. A fresh sign-in is required." OpenAI distinguishes this from `refresh_token_expired` and `refresh_token_reused`.
+
+Facts gathered:
+- The stored sign-in was intact: its file was last written at the 25 October 11:54:03 UTC renewal, with its app ID and all scopes, including `offline_access`.
+- Only one engine has ever held the sign-in. That engine crashed at 13:07:49 UTC on 25 October, when a Git operation briefly removed `src/index.ts`, and stayed down until the host restart at 10:08 UTC on 26 October. It made no OpenAI request in that window, so a shutdown could not have interrupted a renewal.
+- An earlier renewal had succeeded after about 25 idle hours, so this was not a plain idle limit.
+
+OpenAI ended the grant on its side; why is not visible to the app. A new sign-in is the only remedy.
+
+Changes:
+- **Renewal reason.** A refusal keeps the provider's reason code and message. The engine stores it, without secrets, in `renewal-rejections.json` in its data volume, so it survives restarts. It reports the reason in the connection status (new optional `rejection` field, older engines still accepted) and logs every renewal and every failed one. The card shows the message and the time.
+- **Engine self-restart.** Development Compose runs `tsx watch` through `agent-service/scripts/dev-supervisor.mjs` with `restart: unless-stopped`. The supervisor restarts the watcher when it exits or the health endpoint has not answered for 45 seconds.
+
+| Check | Observed result |
+| --- | --- |
+| Engine `npm test` (worktree sources in a container from the running engine image) | **97 passed**, 2 new: a refusal keeps OpenAI's reason across an engine restart and clears with a new sign-in; each renewal is logged with its new expiry and no token. Existing refusal cases now also check the recorded reason (`invalid_grant`, `http_403`, `renewal_failed`) |
+| Laravel `php artisan test` (worktree, SQLite) | **255 passed** / 1408 assertions; new cases parse a status with and without `rejection`, refuse five malformed rejections, and show the reason and time on the Connections page |
+| Pint, PHPStan, `npm run check`, `types:check`, Vitest | Passed; 28 frontend tests |
+| Recovery probe: `src/index.ts` removed for 3 s in two throwaway engine containers | `tsx watch` alone: **still down 90 s** after the file returned (the 25 October failure). With the supervisor: **back after 44 s**. `docker stop` of the supervised engine took 459 ms with exit code 0 |
+
+Not verified: why OpenAI invalidated the grant, and whether it recurs. The log will show the reason and timing if it does. No live model request was made for this change.
+
 ## Publication review of refresh and Stop changes — 26 October 2026
 
 Reviewed all three unpublished commits: `b59ecff` (real refresh acceptance), `3b0c463` (task 3.5 Stop) and `dc42637` (retryable renewal failures). No blocking code defect or prohibited contributor attribution was found. Original commits, messages and approved human author/committer identities were preserved.

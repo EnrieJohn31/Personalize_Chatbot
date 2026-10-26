@@ -73,6 +73,7 @@ class ConnectionsTest extends TestCase
                     'auth' => 'oauth',
                     'status' => 'not_connected',
                     'expires_at' => null,
+                    'rejection' => null,
                     'models' => [],
                     'test_model' => 'gpt-5.4-mini',
                     'login' => null,
@@ -89,6 +90,7 @@ class ConnectionsTest extends TestCase
                     'auth' => 'none',
                     'status' => 'not_connected',
                     'expires_at' => null,
+                    'rejection' => null,
                     'models' => [],
                     'test_model' => '',
                     'login' => null,
@@ -335,10 +337,20 @@ class ConnectionsTest extends TestCase
         $this->assertSame('reauth_required', $connection->refresh()->status);
 
         // The engine keeps reporting the rejection, so viewing the page does not undo it, even
-        // while the earlier sign-in is still reported as finished.
+        // while the earlier sign-in is still reported as finished. The page shows the provider's reason.
         $this->engine->statuses['openai'] = 'reauth_required';
+        $this->engine->rejections['openai'] = [
+            'reason' => 'refresh_token_invalidated',
+            'message' => 'ChatGPT invalidated this sign-in (refresh_token_invalidated). Sign in again.',
+            'at' => 1_793_010_903_000,
+        ];
         $this->get('/connections')->assertInertia(fn (Assert $page) => $page
             ->where('connections.providers.0.status', 'reauth_required')
+            ->where('connections.providers.0.rejection', [
+                'reason' => 'refresh_token_invalidated',
+                'message' => 'ChatGPT invalidated this sign-in (refresh_token_invalidated). Sign in again.',
+                'at' => '2026-10-26T10:35:03Z',
+            ])
             ->where('connections.providers.0.models', []));
         $this->assertSame('reauth_required', $connection->refresh()->status);
         $this->put('/connections/chat', ['provider' => 'openai', 'model_id' => 'gpt-5.4-mini'])

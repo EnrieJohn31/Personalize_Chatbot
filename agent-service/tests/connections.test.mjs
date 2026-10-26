@@ -258,6 +258,7 @@ test('an OpenCode key is stored encrypted, used for tests and removed on disconn
         status: 'connected',
         expiresAt: null,
         models: ['opencode-go-model'],
+        rejection: null,
     });
     assert.ok(!(await readFile(join(engine.dir, 'credentials', `${id}.json.enc`), 'utf8')).includes('secret'));
 
@@ -556,21 +557,82 @@ test('a chat run whose renewal is cut off fails with a retryable error and leave
 
 test('a refusal still asks for a new sign-in, even beside a network-looking error or a server status', async () => {
     const cases = {
-        'refused with 401': new Error('OpenAI OAuth token request failed (401): {"error":"invalid_grant"}'),
-        'invalid_grant behind a 5xx': new Error('OpenAI OAuth token request failed (500): {"error":"invalid_grant"}'),
-        'refusal deeper in the chain': new TypeError('fetch failed', { cause: new Error('refresh token was revoked') }),
-        'unrecognized failure': new Error('OpenAI OAuth token response must be an object'),
+        'refused with 401': [new Error('OpenAI OAuth token request failed (401): {"error":"invalid_grant"}'), 'invalid_grant'],
+        'invalid_grant behind a 5xx': [new Error('OpenAI OAuth token request failed (500): {"error":"invalid_grant"}'), 'invalid_grant'],
+        'status without a body': [new Error('OpenAI OAuth token request failed (403): Forbidden'), 'http_403'],
+        'refusal deeper in the chain': [new TypeError('fetch failed', { cause: new Error('refresh token was revoked') }), 'renewal_failed'],
+        'unrecognized failure': [new Error('OpenAI OAuth token response must be an object'), 'renewal_failed'],
     };
 
-    for (const [name, refreshError] of Object.entries(cases)) {
+    for (const [name, [refreshError, reason]] of Object.entries(cases)) {
         const engine = await start({ fake: fakeOpenAI({ expires: Date.now() - 1, refreshError }) });
         const id = randomUUID();
         await connect(engine, id);
 
         const result = await call(engine, 'POST', connectionPath(id, '/test'), testRequest());
         assert.equal(result.body.error.code, 'reauth_required', name);
-        assert.equal((await call(engine, 'GET', statusPath(id))).body.status, 'reauth_required', name);
+        const status = (await call(engine, 'GET', statusPath(id))).body;
+        assert.deepEqual(validate('connectionStatus', status), [], name);
+        assert.equal(status.status, 'reauth_required', name);
+        assert.equal(status.rejection.reason, reason, name);
+        assert.equal(status.rejection.message, result.body.error.message, name);
     }
+});
+
+/** OpenAI's answer when it has revoked a sign-in, as Pi reports it. */
+const invalidated = () =>
+    new Error(
+        'OpenAI OAuth token request failed (400): {\n  "error": "invalid_grant",\n  "error_reason": "refresh_token_invalidated",\n' +
+            '  "error_description": "The refresh token has been invalidated. A fresh sign-in is required."\n}',
+    );
+
+test("a refusal shows the provider's reason, survives an engine restart and ends with a new sign-in", async () => {
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'engine-'));
+    const key = randomBytes(32);
+    const first = await start({ fake: fakeOpenAI({ expires: Date.now() - 1, refreshError: invalidated() }), dataDirectory, key });
+    const id = randomUUID();
+    await connect(first, id);
+
+    const result = await call(first, 'POST', connectionPath(id, '/test'), testRequest());
+    assert.equal(result.body.error.code, 'reauth_required');
+    assert.match(result.body.error.message, /^ChatGPT invalidated this sign-in \(refresh_token_invalidated\).*Sign in again\.$/);
+    assert.ok(first.logs.some((line) => line.includes(`Connection ${id}: openai sign-in could not be renewed (refresh_token_invalidated)`)));
+    assert.ok(first.logs.every((line) => !line.includes('secret')), 'no token in the log');
+
+    // A restarted engine still knows the stored sign-in was refused, and why.
+    const restarted = await start({ fake: fakeOpenAI(), dataDirectory, key });
+    const status = (await call(restarted, 'GET', statusPath(id))).body;
+    assert.deepEqual(validate('connectionStatus', status), []);
+    assert.equal(status.status, 'reauth_required');
+    assert.equal(status.rejection.reason, 'refresh_token_invalidated');
+    assert.equal(status.rejection.message, result.body.error.message);
+    assert.equal(typeof status.rejection.at, 'number');
+    assert.ok(!(await readFile(join(dataDirectory, 'renewal-rejections.json'), 'utf8')).includes('secret'));
+
+    await connect(restarted, id, 'again');
+    const signedIn = (await call(restarted, 'GET', statusPath(id))).body;
+    assert.equal(signedIn.status, 'connected');
+    assert.equal(signedIn.rejection, null);
+    const later = await start({ fake: fakeOpenAI(), dataDirectory, key });
+    assert.equal((await call(later, 'GET', statusPath(id))).body.status, 'connected', 'the cleared refusal stays cleared');
+});
+
+test('each renewal is logged with the new expiry and never with a token', async () => {
+    const engine = await start({ fake: fakeOpenAI({ expires: Date.now() - 1 }) });
+    const id = randomUUID();
+    await connect(engine, id);
+    engine.fake.core.setResponses([fauxAssistantMessage('Connected')]);
+
+    assert.equal((await call(engine, 'POST', connectionPath(id, '/test'), testRequest())).body.outcome, 'ok');
+    const renewed = engine.logs.filter((line) => line.includes(`Connection ${id}: openai sign-in renewed; access valid until`));
+    assert.equal(renewed.length, 1);
+    assert.match(renewed[0], /until \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    assert.ok(engine.logs.every((line) => !line.includes('secret')), 'no token in the log');
+
+    // A sign-in that is still valid is used without a renewal, so nothing more is logged.
+    engine.fake.core.setResponses([fauxAssistantMessage('Connected')]);
+    assert.equal((await call(engine, 'POST', connectionPath(id, '/test'), testRequest())).body.outcome, 'ok');
+    assert.equal(engine.logs.filter((line) => line.includes('renewed')).length, 1);
 });
 
 test('disconnecting removes the stored sign-in and cancels a pending one', async () => {

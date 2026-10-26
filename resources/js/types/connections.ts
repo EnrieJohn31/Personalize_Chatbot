@@ -41,6 +41,13 @@ export type ProviderConnectionCard = {
         | 'reauth_required'
         | null;
     expires_at: string | null;
+    /** Why and when the provider refused to renew the sign-in; set with `reauth_required`. */
+    rejection: {
+        /** The provider's reason code, such as `refresh_token_invalidated`. */
+        reason: string;
+        message: string;
+        at: string | null;
+    } | null;
     /** The provider's model catalog; empty until connected. */
     models: string[];
     /** Empty when the local server lists no models. */

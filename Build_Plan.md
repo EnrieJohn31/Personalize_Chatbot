@@ -260,6 +260,8 @@ Publication review of local model changes on 24 October: no blocking findings ac
 
 - Publication review, 26 October — Reviewed all three unpublished commits through `dc42637`, including the renewal-failure correction. All 95 engine, 249 Laravel and 28 frontend tests, static checks, production build, signed connectivity and contributor audit passed. No blocking findings. Both branches were fast-forwarded and pushed atomically with their original commits/messages; remote hashes matched. The review changed documentation only; no live provider call was repeated. Task 3.4 remains next and remote CI results remain unverified.
 
+- Fix (user-reported), 26 October — OpenAI ended the ChatGPT grant on its side (`refresh_token_invalidated`); HTTPS scanning was not the cause. The engine now keeps and reports the provider's refusal reason across restarts, logs every renewal, and runs under a development supervisor that restarts it when it stops answering — 97 engine, 255 Laravel and 28 frontend tests passed; a recovery probe stayed down without the supervisor and recovered in 44 s with it — whether and why OpenAI invalidates the grant again is unknown, and a new sign-in is required now.
+
 ## Completion boundaries
 
 - **After Phase 3:** a working connectivity prototype with one real provider and one sample tool.

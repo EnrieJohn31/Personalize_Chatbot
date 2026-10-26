@@ -175,7 +175,7 @@ Keep a short progress record here as implementation proceeds:
 | Current task | 3.4 — bounded context and budgets |
 | Last completed task | 3.5 on 25 October: model/tool Stop guards and live cancellation acceptance, completed before 3.4 at the user's request |
 | Actual checks run on the application | Latest 26 October review: 255 Laravel tests / 1408 assertions, 28 frontend tests, 100 engine tests, static checks, production build and signed connectivity passed. Previous live Stop measurements remain dated 25 October. See docs/validation.md |
-| Git checkpoint and branches | Reviewed `912b83a` (refusal reasons and engine supervision), followed by privacy/parsing review fixes. Requested publication to both branches after the handoff update; previous published checkpoint `55a901c`. Continue on `development` |
+| Git checkpoint and branches | Published `7c65af5` (privacy/parsing review fixes), including `912b83a` (refusal reasons and engine supervision), to both branches on 26 October. Remote hashes verified; this publication record follows. Continue on `development` |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
 | Next checkpoint | Task 3.4: follow-up context and oversized-history handling within a model-aware budget, then Phase 4 durable runs |
 

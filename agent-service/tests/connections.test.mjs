@@ -84,7 +84,7 @@ function fakeOpenAI(behaviour = {}) {
         async refresh(credential) {
             fake.refreshes += 1;
             if (behaviour.refreshError) {
-                throw new Error(behaviour.refreshError);
+                throw behaviour.refreshError instanceof Error ? behaviour.refreshError : new Error(behaviour.refreshError);
             }
 
             return { ...credential, access: 'secret-access-renewed', expires: Date.now() + 3_600_000 };
@@ -495,6 +495,82 @@ test('an expired sign-in is renewed before a test, or reported when renewal fail
     // A new sign-in replaces the rejected one.
     await connect(revoked, id, 'again');
     assert.equal((await call(revoked, 'GET', statusPath(id))).body.status, 'connected');
+});
+
+/** What undici's fetch rejects with when the connection fails; the code sits on the cause. */
+const fetchFailed = (code, message = code) => new TypeError('fetch failed', { cause: Object.assign(new Error(message), { code }) });
+
+test('a renewal that never got an answer from the provider keeps the sign-in connected', async () => {
+    const cases = {
+        'certificate interception': [fetchFailed('SELF_SIGNED_CERT_IN_CHAIN', 'self-signed certificate in certificate chain'), /intercepted.*SELF_SIGNED_CERT_IN_CHAIN.*scans HTTPS/],
+        'nested connection code': [new TypeError('fetch failed', { cause: new Error('connect failed', { cause: Object.assign(new Error('reset'), { code: 'ECONNRESET' }) }) }), /could not be reached \(ECONNRESET\)/],
+        'bare fetch failure': [new TypeError('fetch failed'), /could not be reached\./],
+        timeout: [new DOMException('The operation was aborted due to timeout', 'TimeoutError'), /did not answer in time/],
+        'provider outage': [new Error('OpenAI OAuth token request failed (503): Service Unavailable'), /temporary problem \(503\)/],
+    };
+
+    for (const [name, [refreshError, message]] of Object.entries(cases)) {
+        const behaviour = { expires: Date.now() - 1, refreshError };
+        const engine = await start({ fake: fakeOpenAI(behaviour) });
+        const id = randomUUID();
+        await connect(engine, id);
+
+        const result = await call(engine, 'POST', connectionPath(id, '/test'), testRequest());
+        assert.deepEqual(validate('connectionTestResult', result.body), [], name);
+        assert.equal(result.body.error.code, 'provider_error', name);
+        assert.match(result.body.error.message, message, name);
+        assert.match(result.body.error.message, /no need to sign in again/, name);
+        assert.equal(engine.fake.core.state.callCount, 0, `${name}: no model request without a valid sign-in`);
+        assert.equal((await call(engine, 'GET', statusPath(id))).body.status, 'connected', name);
+
+        // Once the provider answers again, the next request renews the same stored sign-in.
+        behaviour.refreshError = undefined;
+        engine.fake.core.setResponses([fauxAssistantMessage('Connected')]);
+        assert.equal((await call(engine, 'POST', connectionPath(id, '/test'), testRequest())).body.outcome, 'ok', name);
+        assert.equal(engine.fake.refreshes, 2, name);
+        assert.ok((await call(engine, 'GET', statusPath(id))).body.expiresAt > Date.now(), name);
+    }
+});
+
+test('a chat run whose renewal is cut off fails with a retryable error and leaves the account connected', async () => {
+    const engine = await start({ fake: fakeOpenAI({ expires: Date.now() - 1, refreshError: fetchFailed('SELF_SIGNED_CERT_IN_CHAIN') }) });
+    const id = randomUUID();
+    await connect(engine, id);
+    const example = JSON.parse(await readFile(new URL('../../contracts/v1/examples/run-request-live.json', import.meta.url), 'utf8'));
+    const run = { ...example, runId: randomUUID(), connectionId: id, model: { provider: 'openai', id: 'gpt-test', reasoning: 'medium' } };
+    assert.equal((await call(engine, 'POST', '/internal/runs', run)).status, 202);
+
+    const path = `/internal/runs/${run.runId}/events`;
+    const timestamp = String(Math.floor(clock / 1000));
+    const response = await fetch(`${engine.baseUrl}${path}`, {
+        headers: { 'x-agent-timestamp': timestamp, 'x-agent-signature': signRequest(KEY, timestamp, 'GET', path, '') },
+    });
+    const events = (await response.text()).split('\n').filter(Boolean).map((line) => JSON.parse(line));
+    const failed = events.find((event) => event.type === 'run.failed');
+    assert.ok(events.every((event) => validate('runEvent', event).length === 0));
+    assert.equal(failed?.data.code, 'provider_error', JSON.stringify(failed));
+    assert.match(failed.data.message, /SELF_SIGNED_CERT_IN_CHAIN.*no need to sign in again/s);
+    assert.equal(engine.fake.core.state.callCount, 0);
+    assert.equal((await call(engine, 'GET', statusPath(id))).body.status, 'connected');
+});
+
+test('a refusal still asks for a new sign-in, even beside a network-looking error or a server status', async () => {
+    const cases = {
+        'refused with 401': new Error('OpenAI OAuth token request failed (401): {"error":"invalid_grant"}'),
+        'invalid_grant behind a 5xx': new Error('OpenAI OAuth token request failed (500): {"error":"invalid_grant"}'),
+        'refusal deeper in the chain': new TypeError('fetch failed', { cause: new Error('refresh token was revoked') }),
+        'unrecognized failure': new Error('OpenAI OAuth token response must be an object'),
+    };
+
+    for (const [name, refreshError] of Object.entries(cases)) {
+        const engine = await start({ fake: fakeOpenAI({ expires: Date.now() - 1, refreshError }) });
+        const id = randomUUID();
+        await connect(engine, id);
+
+        const result = await call(engine, 'POST', connectionPath(id, '/test'), testRequest());
+        assert.equal(result.body.error.code, 'reauth_required', name);
+        assert.equal((await call(engine, 'GET', statusPath(id))).body.status, 'reauth_required', name);
+    }
 });
 
 test('disconnecting removes the stored sign-in and cancels a pending one', async () => {

@@ -111,6 +111,7 @@ Replies stream through a Stage A Laravel relay. They come from the conversation'
     - **A new chat refreshed on its first message.** The page made an Inertia visit to `/chat/{id}` after starting the reply, which remounted it mid-stream. It now takes the address on the client (`lib/conversation-address.ts`) and streams in place.
     - **ChatGPT card.** It no longer shows "the current token is valid until …", which read as a sign-in that ends. It says the account stays connected until disconnected; access already renewed automatically.
     - Verification: browser probe, failed before and 6/6 after; 27 frontend tests (2 new); format, lint, types and the production build. See [docs/validation.md](docs/validation.md).
+- Fix on 26 October 2026 (user-reported): the ChatGPT connection showed **Sign in again** ("expired"). The engine had treated a renewal failure as a revoked sign-in, although Pi reports network, certificate and timeout failures the same way. The likely trigger was the reboot re-enabling Kaspersky's HTTPS scanning. Now only a refusal from OpenAI (or an unrecognized failure) asks for a new sign-in; an interrupted renewal fails that one reply with a retryable error naming the cause, and the account stays connected. Engine tests: 95 passed (3 new); a mutation check failed the 2 targeted tests. See [docs/validation.md](docs/validation.md).
 
 - Task 3.2 on 24 October 2026: live replies.
     - **Engine.**

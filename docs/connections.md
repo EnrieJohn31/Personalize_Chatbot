@@ -16,6 +16,7 @@ The engine keeps every sign-in and key encrypted. Laravel and the browser only e
 - The operator's real ChatGPT sign-in, replies, restart persistence and refresh after expiry have passed. The 25 October refresh test used `gpt-6-luna`, returned `Connected` and advanced the stored expiry without another sign-in. OpenCode keys and a real local server remain unverified; see the [provider matrix](provider-matrix.md).
 - Since task 3.2, chat replies come from the connection and model each conversation records ([chat-ui.md](chat-ui.md)). `ASSISTANT_LIVE_REPLIES=false` switches every chat back to the built-in simulation.
 - When a reply or a test message finds a ChatGPT sign-in whose renewal was rejected, the engine reports the connection as `reauth_required` until the user signs in again. The card then shows **Sign in again**, and chat stops using it.
+- A renewal that never got an answer from OpenAI is not a rejection. A network or certificate failure, a timeout, or an HTTP 408, 429 or 5xx token response ends that reply or test with a retryable `provider_error`; its message names the cause. The account stays connected, and the next request renews the same stored sign-in. A refusal (HTTP 400, 401 or 403, `invalid_grant`, a revoked token) or an unrecognized failure still asks for a new sign-in.
 
 ## Using it
 
@@ -76,7 +77,7 @@ Browser ──Inertia──▶ Laravel ──signed HTTP──▶ engine (Pi) �
   - The files are AES-256-GCM encrypted. The key is SHA-256 of `AGENT_CREDENTIAL_KEY`, and the connection ID is authenticated data, so a file moved to another connection fails.
   - Writes are serialized and atomic (private temporary file, then rename). The directory is `0700` and the files `0600`.
   - Pi refreshes a ChatGPT access token under the vault's lock when it has less than five minutes left.
-  - The ChatGPT card therefore says the account stays connected until the user disconnects it, without the access token's expiry time, which needs no action. The engine's status still reports `expiresAt`. A refresh token that OpenAI rejects (for example after a password change) shows up on the next test message or reply as `reauth_required`.
+  - The ChatGPT card therefore says the account stays connected until the user disconnects it, without the access token's expiry time, which needs no action. The engine's status still reports `expiresAt`. A refresh token that OpenAI rejects (for example after a password change) shows up on the next test message or reply as `reauth_required`. A renewal blocked by the network, for example by security software that intercepts HTTPS after a reboot, does not.
 - **No silent API billing.** The engine gives Pi an auth context without environment variables or files. `OPENAI_API_KEY` and `OPENCODE_API_KEY` are never used, even if set; a test proves Pi would otherwise use them.
 - **Page updates.** While a ChatGPT sign-in runs, the page reloads only its `connections` prop every two seconds after each answer, and pauses while any form submits. The page and its actions take Laravel's session lock (`->block()`), except the test message, which can take a minute. A poll therefore cannot overwrite an action's flashed answer.
 

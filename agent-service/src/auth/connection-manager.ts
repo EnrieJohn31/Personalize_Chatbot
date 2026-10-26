@@ -439,7 +439,17 @@ function requireAuthMethod(provider: ConnectionProvider, method: 'oauth' | 'api_
 
 function authFailure(error: unknown): TestFailure {
     if (error instanceof ModelsError && error.code === 'oauth') {
-        // The refresh token was rejected; the stored credential is kept until the user signs in again.
+        // Pi reports every failed renewal this way, including ones that never reached the provider.
+        // Only those end with a retryable error; the stored sign-in stays and the next request renews it.
+        const interrupted = interruptedRenewal(error.cause);
+        if (interrupted !== null) {
+            return {
+                code: 'provider_error',
+                message: `The sign-in could not be renewed because ${interrupted}. The provider did not refuse it, so there is no need to sign in again; try again.`,
+            };
+        }
+
+        // The provider refused the refresh token; the credential is kept until the user signs in again.
         return { code: 'reauth_required', message: 'The sign-in has expired or was revoked. Sign in again.' };
     }
     if (error instanceof ModelsError && error.cause instanceof UnreadableCredentialsError) {
@@ -447,6 +457,50 @@ function authFailure(error: unknown): TestFailure {
     }
 
     return { code: 'provider_error', message: describe(error) };
+}
+
+/** How deep a renewal failure's `cause` chain is searched; undici nests its code two levels down. */
+const MAX_CAUSE_DEPTH = 6;
+/** A token response the provider sends when it refuses the refresh token itself. */
+const REFUSED = /token request failed \((400|401|403)\)|invalid_grant|unauthorized_client|revoked/i;
+/** A token response that says nothing about the refresh token: the provider was busy or failing. */
+const PROVIDER_SIDE = /token request failed \((408|429|5\d\d)\)/;
+/** Node's certificate verification codes. On a desktop, security software that scans HTTPS usually causes them. */
+const CERTIFICATE = /CERT|SELF_SIGNED|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER/;
+/** System and undici connection codes such as ECONNRESET, ENOTFOUND or UND_ERR_CONNECT_TIMEOUT. */
+const NETWORK = /^(E[A-Z]+|UND_ERR_[A-Z_]+)$/;
+
+/**
+ * Why a renewal ended without the provider refusing the sign-in: the request did not get through,
+ * timed out, or met a provider-side error. Null when the provider refused it, or when the cause is
+ * not recognized, so asking the user to sign in again stays the default.
+ */
+function interruptedRenewal(cause: unknown): string | null {
+    const chain: Error[] = [];
+    for (let link = cause; link instanceof Error && chain.length < MAX_CAUSE_DEPTH; link = link.cause) {
+        chain.push(link);
+    }
+    if (chain.some((error) => REFUSED.test(error.message))) {
+        return null;
+    }
+
+    const code = chain.map((error) => (error as { code?: unknown }).code).find((value) => typeof value === 'string') as string | undefined;
+    if (code !== undefined && CERTIFICATE.test(code)) {
+        return (
+            `the connection to the provider was intercepted with a certificate this server does not trust (${code}). ` +
+            "Security software that scans HTTPS connections usually causes this; exclude the provider's sites from that scanning"
+        );
+    }
+    if (chain.some((error) => error.name === 'TimeoutError')) {
+        return 'the provider did not answer in time';
+    }
+    const network = code !== undefined && NETWORK.test(code);
+    if (network || chain.some((error) => error instanceof TypeError && error.message === 'fetch failed')) {
+        return `the provider could not be reached${network ? ` (${code})` : ''}`;
+    }
+    const status = chain.map((error) => PROVIDER_SIDE.exec(error.message)?.[1]).find((value) => value !== undefined);
+
+    return status === undefined ? null : `the provider had a temporary problem (${status})`;
 }
 
 /**

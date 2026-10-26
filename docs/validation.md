@@ -1,5 +1,21 @@
 # Foundation validation
 
+## ChatGPT sign-in reported as expired after a network failure — 26 October 2026
+
+The user reported that the ChatGPT connection had "expired" although it should stay connected until removed. On 26 October, both the Laravel record and the engine showed `reauth_required`, set at 10:35:51 UTC. The stored access token had expired on 25 October at 12:51 UTC, so the next reply or test had to renew it. The services had restarted at about 10:09 UTC, and a reboot turns the host's Kaspersky HTTPS scanning back on. That scanning had broken the first sign-in (see the handoff); by 10:39 it no longer intercepted OpenAI, so the exact failure at 10:35 could not be observed.
+
+Cause: Pi reports every failed renewal as `ModelsError('oauth')`, with the original error as its `cause`: a network or certificate failure that never reached OpenAI, a timeout, a 5xx answer, or a genuine refusal. The engine treated all of them as a revoked sign-in and kept the connection at `reauth_required` until a new sign-in or an engine restart. A network blip therefore asked the user to sign in again, and blocked chat meanwhile.
+
+Fix: the engine walks the error's `cause` chain. A certificate failure (with advice about HTTPS-scanning software), another connection failure, a timeout, or an HTTP 408/429/5xx token response now ends the reply or test with a retryable `provider_error`; the account stays connected, and the next request renews the same sign-in. HTTP 400/401/403, `invalid_grant`, a revoked token or an unrecognized failure still leads to `reauth_required`.
+
+| Check | Observed result |
+| --- | --- |
+| Engine `npm test`, in a container from the running engine's image with the fix's sources | All 95 tests passed, 3 of them new: five interrupted-renewal kinds (certificate interception, a nested connection code, a bare fetch failure, a timeout, a 503) stay connected and renew on the next request; a chat run with an intercepted renewal fails with `provider_error` and leaves the account connected; four refusal and unknown kinds still require a new sign-in |
+| Mutation check | With the classification disabled, exactly the two interrupted-renewal tests failed (93/95) |
+| Live state before the fix | Record and engine `reauth_required`; certificate chains from the engine container showed the real issuers for `auth.openai.com` (both addresses), `chatgpt.com` and `api.openai.com` |
+
+Not verified: the exact error at 10:35 UTC, which was not logged, and a renewal through real HTTPS interception. No live model request was made for this fix.
+
 ## Task 3.5: Stop during live replies and active tools — 25 October 2026
 
 Completed before task 3.4 at the user's request. The engine now checks cancellation before credential setup, each model request and tool dispatch. Active tools combine the run and Pi signals with their timeout; cancellation stops waiting, drops late results and prevents later calls. Adapter rejection after abort becomes cancellation, and buffered text is not flushed after abort. `tool.finished` accepts the explicit `cancelled` outcome in both the shared schema and Laravel. See [Stop behavior and limits](stop.md).

@@ -1,5 +1,21 @@
 # Foundation validation
 
+## Publication review of refresh and Stop changes — 26 October 2026
+
+Reviewed all three unpublished commits: `b59ecff` (real refresh acceptance), `3b0c463` (task 3.5 Stop) and `dc42637` (retryable renewal failures). No blocking code defect or prohibited contributor attribution was found. Original commits, messages and approved human author/committer identities were preserved.
+
+| Check rerun for publication | Observed result |
+| --- | --- |
+| `composer ci:check` | **249 Laravel tests / 1396 assertions**, **28 frontend tests**, formatting (136 files), lint (96 files), TypeScript, Pint (123 files) and PHPStan (91 files) passed |
+| Engine `npm test` | TypeScript build and **95 tests passed**, including renewal refusal/retry and Stop before/during execution |
+| Production frontend build | Passed in **146 seconds**. Existing optional `fontaine` warning remains non-fatal. Build timing attributed 118 seconds to the Tailwind transform; generated assets remain ignored |
+| Signed `php artisan agent:check` | Passed: configured authentication, valid signatures accepted and unsigned requests rejected; no provider request started |
+| Contributor and repository checks | Full reachable-history attribution audit and whitespace checks passed. `.githooks`, approved identities and attribution settings unchanged; `.claude/`, credentials, temporary probes and generated dependencies remain ignored/untracked |
+
+The Stop/renewal interaction was also reviewed against the installed Pi 1.4.0 implementation. Cancelling the caller stops waiting for authentication. Once a token renewal starts, Pi intentionally lets renewal and persistence finish under its separate 15-second timeout so a rotated refresh token is not lost. Late rejection is consumed. This is an implementation inspection, not a new live cancellation measurement; see [Stop limits](stop.md).
+
+At the user's request, `main` was fast-forwarded and both branches pushed atomically. `git ls-remote --heads origin main development` verified both at **`dc426379d7ea85ead1515642475006d9330499e5`** before this review/publication record. This review changed documentation only and did not make a live provider request or alter user data. Earlier live acceptance remains dated evidence; the exact HTTPS failure described below and real OpenCode/local-server acceptance remain unverified. Remote CI results were not inspected. Task 3.4 remains next. For build speed, measure the existing Linux-filesystem relocation option before changing dependencies or build configuration.
+
 ## ChatGPT sign-in reported as expired after a network failure — 26 October 2026
 
 The user reported that the ChatGPT connection had "expired" although it should stay connected until removed. On 26 October, both the Laravel record and the engine showed `reauth_required`, set at 10:35:51 UTC. The stored access token had expired on 25 October at 12:51 UTC, so the next reply or test had to renew it. The services had restarted at about 10:09 UTC, and a reboot turns the host's Kaspersky HTTPS scanning back on. That scanning had broken the first sign-in (see the handoff); by 10:39 it no longer intercepted OpenAI, so the exact failure at 10:35 could not be observed.

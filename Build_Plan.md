@@ -174,8 +174,8 @@ Keep a short progress record here as implementation proceeds:
 | --- | --- |
 | Current task | 3.4 — bounded context and budgets |
 | Last completed task | 3.5 on 25 October: model/tool Stop guards and live cancellation acceptance, completed before 3.4 at the user's request |
-| Actual checks run on the application | 25 October: 249 Laravel tests / 1396 assertions, 28 frontend tests, 92 engine tests, static checks and signed connectivity passed. Real browser Stop reached cancellation in 5,655 ms and saved no final answer; controlled tool/loop cancellation measured 0.28/1.22 ms. See docs/validation.md |
-| Git checkpoint and branches | Local `development`: task 3.1 acceptance commit `b59ecff`, followed by task 3.5. Last published checkpoint remains `72b5aca` (including review fixes `9263393`). No push requested for this session |
+| Actual checks run on the application | 26 October publication review: 249 Laravel tests / 1396 assertions, 28 frontend tests, 95 engine tests, static checks, production build and signed connectivity passed. Previous live Stop measurements remain dated 25 October. See docs/validation.md |
+| Git checkpoint and branches | Published `dc42637` (retryable renewal failures), including `3b0c463` (Stop) and `b59ecff` (refresh acceptance), to both branches on 26 October. Remote hashes verified; this review/publication record follows. Continue on `development` |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
 | Next checkpoint | Task 3.4: follow-up context and oversized-history handling within a model-aware budget, then Phase 4 durable runs |
 
@@ -257,6 +257,8 @@ Publication review of local model changes on 24 October: no blocking findings ac
 - 3.1 acceptance — The operator's stored ChatGPT access had expired on 24 October at 19:12:14 +08:00. A normal signed test on 25 October at 18:56:13 renewed it automatically and returned `Connected` from `gpt-6-luna` in 7,155 ms. The stored expiry advanced to 19:53:16 that day and both engine and Laravel remained connected. Signed connectivity, the engine build and 19 authentication/vault tests passed. No application code, credentials or chat messages were added to Git. Actual evidence and remaining provider-specific limits are in docs/validation.md and docs/provider-matrix.md. Tasks 3.4–3.5 remain open.
 
 - 3.5 — Completed before 3.4 at the user's request on 25 October. Guarded credential/model/tool entry, combined cancellation signals, stopped waiting on active tools and discarded late results/buffered text. Added `cancelled` tool outcomes through the contract and Laravel. Six failing regressions reproduced the gaps before the fixes; all 92 engine, 249 Laravel and 28 frontend tests now pass with static checks and signed connectivity. Real browser Stop on `gpt-6-luna` reached cancellation in 5,655 ms, saved no final answer and allowed retry after reload. Controlled active-tool and complete-loop cancellation measured 0.28/1.22 ms; later tools/model rounds did not run. Local commit on `development`; no push. See docs/stop.md and docs/validation.md for limits. Task 3.4 remains next.
+
+- Publication review, 26 October — Reviewed all three unpublished commits through `dc42637`, including the renewal-failure correction. All 95 engine, 249 Laravel and 28 frontend tests, static checks, production build, signed connectivity and contributor audit passed. No blocking findings. Both branches were fast-forwarded and pushed atomically with their original commits/messages; remote hashes matched. The review changed documentation only; no live provider call was repeated. Task 3.4 remains next and remote CI results remain unverified.
 
 ## Completion boundaries
 

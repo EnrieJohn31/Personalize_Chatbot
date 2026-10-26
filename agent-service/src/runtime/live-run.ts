@@ -4,6 +4,7 @@ import type { ConnectionManager, ConnectionProvider, RunModel } from '../auth/co
 import type { RunMessage, RunRequest } from '../contracts.js';
 import { safeSlice } from '../text.js';
 import { ToolExecutor } from '../tools/executor.js';
+import type { ToolDefinition } from '../tools/registry.js';
 import type { RunExecution } from './run-execution.js';
 
 /** The contract's bounds for one `assistant.delta` and for `assistant.final` text. */
@@ -26,6 +27,8 @@ const TURN_SEPARATOR = '\n\n';
 export interface LiveRunOptions {
     connections: ConnectionManager;
     log: (message: string) => void;
+    /** Trusted engine definitions; never supplied by a run request. Defaults to the static registry. */
+    toolRegistry?: readonly ToolDefinition[];
 }
 
 /**
@@ -50,6 +53,9 @@ export async function runLive(run: RunRequest, execution: RunExecution, options:
     execution.emit('run.progress', { stage: 'preparing' });
 
     try {
+        if (stopped()) {
+            return;
+        }
         const prepared = await options.connections.runModel(
             run.connectionId ?? '',
             run.model.provider as ConnectionProvider,
@@ -65,7 +71,7 @@ export async function runLive(run: RunRequest, execution: RunExecution, options:
             return;
         }
 
-        const { last, text, outputLimitExceeded } = await answerWith(prepared, run, execution, signal);
+        const { last, text, outputLimitExceeded } = await answerWith(prepared, run, execution, signal, options.toolRegistry);
         if (stopped()) {
             return;
         }
@@ -89,6 +95,11 @@ export async function runLive(run: RunRequest, execution: RunExecution, options:
 
         execution.emit('assistant.final', { text });
         execution.emit('run.completed');
+    } catch (error) {
+        // An adapter may reject on abort instead of returning an aborted message.
+        if (!stopped()) {
+            throw error;
+        }
     } finally {
         clearTimeout(timer);
     }
@@ -103,6 +114,7 @@ async function answerWith(
     run: RunRequest,
     execution: RunExecution,
     signal: AbortSignal,
+    toolRegistry?: readonly ToolDefinition[],
 ): Promise<{ last: AssistantMessage; text: string; outputLimitExceeded: boolean }> {
     let stage: 'preparing' | 'retrieving' | 'answering' = 'preparing';
     const enter = (next: typeof stage): void => {
@@ -112,7 +124,7 @@ async function answerWith(
         }
     };
 
-    const tools = new ToolExecutor(run.capabilities, run.limits.maxToolCalls, execution, () => enter('retrieving'));
+    const tools = new ToolExecutor(run.capabilities, run.limits.maxToolCalls, execution, () => enter('retrieving'), toolRegistry);
     // A tool result needs a further model round to be used, so a single round offers no tools.
     const offerTools = tools.available && run.limits.maxModelRounds > 1;
     let requests = 0;
@@ -129,12 +141,13 @@ async function answerWith(
                 ...streamOptions,
                 maxTokens: Math.min(requestModel.maxTokens, MAX_OUTPUT_TOKENS),
             }),
-        beforeToolCall: async (context) => tools.beforeToolCall(context),
+        beforeToolCall: async (context, toolSignal) => tools.beforeToolCall(context, toolSignal),
         // Before the last permitted round, or once the tool budget is used up, the tools are
         // withdrawn; Pi tells the model, which then has to answer with what it has.
         prepareNextTurnWithContext: ({ context }) =>
             requests + 1 >= run.limits.maxModelRounds || !tools.available ? { context: { ...context, tools: [] } } : undefined,
         prepareRequest: () => {
+            signal.throwIfAborted();
             requests += 1;
         },
         // No request beyond the run's model rounds, even if the last one asked for a tool anyway.
@@ -144,7 +157,7 @@ async function answerWith(
         sessionId: run.conversationId,
     });
 
-    const deltas = new DeltaBuffer(execution, Math.max(MIN_FLUSH_INTERVAL_MS, Math.ceil(run.limits.runDeadlineMs / DELTA_BUDGET)));
+    const deltas = new DeltaBuffer(execution, Math.max(MIN_FLUSH_INTERVAL_MS, Math.ceil(run.limits.runDeadlineMs / DELTA_BUDGET)), signal);
     const texts: string[] = [];
     let last: AssistantMessage | null = null;
     let current = '';
@@ -153,7 +166,7 @@ async function answerWith(
 
     agent.subscribe((event) => {
         if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
-            if (outputLimitExceeded) {
+            if (outputLimitExceeded || signal.aborted) {
                 return;
             }
             const delta = event.assistantMessageEvent.delta;
@@ -213,29 +226,37 @@ class DeltaBuffer {
     constructor(
         private readonly execution: RunExecution,
         private readonly intervalMs: number,
+        private readonly signal: AbortSignal,
     ) {}
 
     add(text: string): void {
+        if (this.signal.aborted) {
+            return;
+        }
         this.pending += text;
         this.timer ??= setTimeout(() => this.flush(), this.intervalMs);
     }
 
     /** Stops the timer; the remaining text is sent only when the answer ended normally. */
     close(send: boolean): void {
-        if (send) {
-            this.flush();
-        }
         if (this.timer !== null) {
             clearTimeout(this.timer);
             this.timer = null;
         }
+        if (send) {
+            this.flush();
+        }
+        this.pending = '';
     }
 
     private flush(): void {
+        if (this.timer !== null) {
+            clearTimeout(this.timer);
+        }
         this.timer = null;
         let rest = this.pending;
         this.pending = '';
-        while (rest !== '') {
+        while (rest !== '' && !this.signal.aborted) {
             const piece = safeSlice(rest, MAX_DELTA_LENGTH);
             this.execution.emit('assistant.delta', { text: piece });
             rest = rest.slice(piece.length);

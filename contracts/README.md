@@ -80,7 +80,7 @@ A live run (`runtime/live-run.ts`) builds a fresh Pi Agent on the connection's P
     - `empty_reply`
     - `deadline_exceeded`
     - `output_limit_exceeded`: the aggregate reply exceeded the text limit; no final answer is saved.
-- **Stop** aborts the model request and ends the run with `run.cancelled`.
+- **Stop** aborts the model/tool request and ends an active run with `run.cancelled`. Cancellation is checked before credential setup, each model request and tool dispatch. An adapter rejection after abort is classified as cancellation, and buffered answer text is discarded. A tool stopped before or during execution reports `tool.finished` with `outcome: cancelled`; the run still needs its own terminal event. Completed runs remain completed after a late Stop. See [Stop behavior and acceptance](../docs/stop.md) for the measured delay and transport limits.
 
 The simulated run is deterministic: the same request always yields the same Markdown answer, which quotes the latest question. It emits `run.started`, `run.progress` (`answering`), `assistant.delta` chunks of about three words, `assistant.final` with the complete text, and `run.completed`. The deltas always add up to the final text. `AGENT_SIMULATION_CHUNK_DELAY_MS` (default 35, maximum 1000) sets the pause between chunks. Cancellation ends the run with `run.cancelled` and no final text; passing the run deadline ends it with `run.failed` (`deadline_exceeded`).
 

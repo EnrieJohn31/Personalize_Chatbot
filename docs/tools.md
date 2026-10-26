@@ -27,7 +27,8 @@ Laravel profile ──capabilities──▶ run request ──▶ engine admissi
   - Results over the cap are shortened at a character boundary, with a note to the model. The note counts toward the same size cap.
   - Internal errors are not passed on: the model sees "could not complete".
 - **Rounds.** Each model request is a round. Before the run's last round (`maxModelRounds`, 4), or once the tool budget is used up, the tools are withdrawn. Pi tells the model, which then has to answer with what it has; no request goes beyond the last round. A run allowed only one round offers no tools.
-- **Outcomes.** Every call the model makes ends with an explicit result for the model and a `tool.finished` event. Its outcome is `ok`, `blocked`, `invalid_arguments`, `failed` or `timeout`.
+- **Outcomes.** A call handled by the executor ends with an explicit result for the model and a `tool.finished` event. Its outcome is `ok`, `blocked`, `invalid_arguments`, `failed`, `timeout` or `cancelled`. A cancelled call may have stopped before dispatch or during execution; `run.cancelled` separately ends the whole reply. Pi can skip remaining queued calls after Stop without dispatching them.
+- **Stop (task 3.5).** The executor combines the run and tool abort signals, checks cancellation before dispatch and before exposing results, and stops waiting promptly even when the tool ignores the signal. Late results and rejections are consumed without publishing sources or starting another step. A timeout remains distinct from cancellation. The fixture lookup checks the signal at entry; its small synchronous search finishes within one event-loop turn and cannot be interrupted midway by an incoming HTTP request.
 
 ## Events
 

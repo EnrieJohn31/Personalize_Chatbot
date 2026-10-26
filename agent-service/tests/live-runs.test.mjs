@@ -11,7 +11,10 @@ import { ConnectionManager } from '../dist/auth/connection-manager.js';
 import { loadConfig } from '../dist/config.js';
 import { validate } from '../dist/contracts.js';
 import { signRequest } from '../dist/http/service-auth.js';
+import { runLive } from '../dist/runtime/live-run.js';
+import { RunExecution } from '../dist/runtime/run-execution.js';
 import { createServer } from '../dist/server.js';
+import { lookupReference } from '../dist/tools/lookup-reference.js';
 
 const KEY = 'test-request-signing-key-0123456789abcdef';
 const API_KEY = 'secret-opencode-key-0123456789';
@@ -72,7 +75,7 @@ async function start({ providerOptions = {}, key = randomBytes(32), dataDirector
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
 
-    return { baseUrl: `http://127.0.0.1:${server.address().port}`, fake, dir, logs };
+    return { baseUrl: `http://127.0.0.1:${server.address().port}`, fake, dir, logs, connections };
 }
 
 async function call(engine, method, path, payload) {
@@ -225,6 +228,35 @@ test('provider errors and empty answers end the run honestly without a final ans
     assert.ok(!engine.logs.join('\n').includes(API_KEY), 'the key is never logged');
 });
 
+test('a run stopped before execution does not resolve credentials or start a model', async () => {
+    const run = liveRun(randomUUID());
+    const execution = new RunExecution(run.runId, 2000);
+    execution.cancel();
+    let preparations = 0;
+    await runLive(run, execution, {
+        connections: { runModel: async () => { preparations += 1; return { code: 'not_connected', message: 'Not connected.' }; } },
+        log: () => {},
+    });
+
+    assert.equal(preparations, 0);
+    assert.equal(execution.after(0).at(-1).type, 'run.cancelled');
+});
+
+test('an aborted credential preparation ends as cancellation rather than an internal error', async () => {
+    const run = liveRun(randomUUID());
+    const execution = new RunExecution(run.runId, 2000);
+    const work = runLive(run, execution, {
+        connections: { runModel: (_id, _provider, _model, signal) => new Promise((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }) },
+        log: () => {},
+    });
+    execution.cancel();
+    await work;
+
+    assert.equal(execution.after(0).at(-1).type, 'run.cancelled');
+});
+
 test('Stop aborts the model request and ends the run as cancelled', async () => {
     const engine = await start({ providerOptions: { tokensPerSecond: 20 } });
     const connectionId = randomUUID();
@@ -325,6 +357,72 @@ test('a permitted lookup runs once, its result reaches the model, and the answer
     const [result] = toolResults(second.context);
     assert.equal(result.toolCallId, 'call_1');
     assert.match(result.content[0].text, /\[SAMPLE-001\] Sample office \(evidence ref-sample-office/);
+});
+
+test('Stop during a tool call aborts it, skips the remaining calls and starts no further model round', { timeout: 3000 }, async (t) => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    const started = Promise.withResolvers();
+    const late = Promise.withResolvers();
+    let toolCalls = 0;
+    engine.fake.core.setResponses([
+        engine.fake.reply(() => fauxAssistantMessage([
+            fauxToolCall('lookup_reference', { query: 'SAMPLE-001' }, { id: 'call_1' }),
+            fauxToolCall('lookup_reference', { query: 'SAMPLE-002' }, { id: 'call_2' }),
+        ], { stopReason: 'toolUse' })),
+        engine.fake.reply(() => fauxAssistantMessage('Must not generate a later answer.')),
+    ]);
+    const run = withTools(connectionId);
+    const execution = new RunExecution(run.runId, 2000);
+    const work = runLive(run, execution, {
+        connections: engine.connections,
+        log: () => {},
+        toolRegistry: [{ ...lookupReference, run: (_args, signal) => {
+            toolCalls += 1;
+            started.resolve(signal);
+            return late.promise;
+        } }],
+    });
+    const toolSignal = await started.promise;
+    const stoppedAt = performance.now();
+    execution.cancel();
+    await work;
+    t.diagnostic(`Stop during the tool reached run.cancelled in ${(performance.now() - stoppedAt).toFixed(2)} ms.`);
+    const events = execution.after(0);
+
+    assert.equal(toolSignal.aborted, true);
+    assert.equal(toolCalls, 1);
+    assert.equal(engine.fake.calls.length, 1);
+    assert.equal(ofType(events, 'tool.started').length, 1);
+    assert.equal(ofType(events, 'tool.finished')[0].data.outcome, 'cancelled');
+    assert.equal(ofType(events, 'source.added').length, 0);
+    assert.equal(ofType(events, 'assistant.final').length, 0);
+    assert.equal(ofType(events, 'run.completed').length, 0);
+    assert.equal(ofType(events, 'run.cancelled').length, 1);
+    assert.equal(events.at(-1).type, 'run.cancelled');
+    assert.ok(events.every((event) => validate('runEvent', event).length === 0));
+    late.reject(new Error('Late tool rejection is consumed.'));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(execution.after(0), events);
+});
+
+test('late and repeated Stop never replace a completed answer or restart work', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([engine.fake.reply(() => fauxAssistantMessage('Done.'))]);
+    const run = liveRun(connectionId);
+    const events = await runToEnd(engine, run);
+
+    for (let i = 0; i < 2; i += 1) {
+        const cancel = await call(engine, 'POST', `/internal/runs/${run.runId}/cancel`, { contractVersion: 1, runId: run.runId });
+        assert.equal(cancel.status, 202);
+    }
+    const replay = await call(engine, 'GET', `/internal/runs/${run.runId}/events`);
+    assert.deepEqual(replay.events, events);
+    assert.equal(engine.fake.calls.length, 1);
+    assert.equal(events.at(-1).type, 'run.completed');
 });
 
 test('without the capability no tool is offered and a requested call does not run', async () => {

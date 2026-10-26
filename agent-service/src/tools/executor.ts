@@ -4,7 +4,7 @@ import type { RunExecution } from '../runtime/run-execution.js';
 import { safeSlice } from '../text.js';
 import { TOOLS, type ToolDefinition } from './registry.js';
 
-export type ToolOutcome = 'ok' | 'blocked' | 'invalid_arguments' | 'failed' | 'timeout';
+export type ToolOutcome = 'ok' | 'blocked' | 'invalid_arguments' | 'failed' | 'timeout' | 'cancelled';
 
 interface Settled {
     outcome: ToolOutcome;
@@ -44,7 +44,7 @@ export class ToolExecutor {
 
     /** Whether another call may still run in this reply. */
     get available(): boolean {
-        return this.tools.length > 0 && this.reserved < this.maxToolCalls;
+        return !this.execution.signal.aborted && this.tools.length > 0 && this.reserved < this.maxToolCalls;
     }
 
     /** The toolbox for the model; empty when nothing is permitted. */
@@ -60,14 +60,17 @@ export class ToolExecutor {
     }
 
     /** Runs after Pi has validated the arguments against the schema, before the tool executes. */
-    beforeToolCall({ toolCall }: BeforeToolCallContext): BeforeToolCallResult | undefined {
+    beforeToolCall({ toolCall }: BeforeToolCallContext, signal?: AbortSignal): BeforeToolCallResult | undefined {
         const tool = this.permitted(toolCall.name);
-        const refuse = (message: string): BeforeToolCallResult => {
-            this.settled.set(toolCall.id, { outcome: 'blocked', message });
+        const refuse = (message: string, outcome: ToolOutcome = 'blocked'): BeforeToolCallResult => {
+            this.settled.set(toolCall.id, { outcome, message });
 
             return { block: true, reason: message };
         };
 
+        if (this.execution.signal.aborted || signal?.aborted) {
+            return refuse('This reply was stopped.', 'cancelled');
+        }
         if (tool === undefined) {
             return refuse(`The tool ${toolCall.name} is not available in this conversation.`);
         }
@@ -89,10 +92,10 @@ export class ToolExecutor {
      * offered, or had arguments that do not match the tool's schema.
      */
     finish(toolCallId: string, name: string, isError: boolean): void {
-        const refused: ToolOutcome = this.permitted(name) === undefined ? 'blocked' : 'invalid_arguments';
+        const refused: ToolOutcome = this.execution.signal.aborted ? 'cancelled' : this.permitted(name) === undefined ? 'blocked' : 'invalid_arguments';
         // Pi's validation errors include the received arguments. Keep them in the model's
         // tool result; browser events carry only a fixed explanation and the outcome.
-        const refusalMessage = refused === 'blocked'
+        const refusalMessage = refused === 'cancelled' ? 'This reply was stopped.' : refused === 'blocked'
             ? 'The requested tool is not available in this conversation.'
             : 'The tool arguments do not match its schema.';
         const settled = this.settled.get(toolCallId) ?? {
@@ -120,6 +123,12 @@ export class ToolExecutor {
             return { content: [{ type: 'text', text }], details: { outcome }, ...(outcome === 'ok' ? {} : { isError: true }) };
         };
 
+        // Always retain the run's signal, even when a caller supplies a different tool signal.
+        const cancellation = signal === undefined ? this.execution.signal : AbortSignal.any([this.execution.signal, signal]);
+        if (cancellation.aborted) {
+            return result('cancelled', 'This reply was stopped.');
+        }
+
         // Checked again where the call runs, not only by Pi when the call was prepared.
         if (this.permitted(tool.name) === undefined) {
             return result('blocked', `The tool ${tool.name} is not available in this conversation.`);
@@ -131,11 +140,13 @@ export class ToolExecutor {
         this.onStart();
         this.execution.emit('tool.started', { toolCallId: eventId(toolCallId), name: tool.name });
         const timeout = AbortSignal.timeout(tool.timeoutMs);
-        const bounded = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
+        const bounded = AbortSignal.any([cancellation, timeout]);
 
         try {
-            const output = await untilAborted(tool.run(args, bounded), bounded);
+            const output = await untilAborted(() => tool.run(args, bounded), bounded);
+            bounded.throwIfAborted();
             for (const source of output.sources) {
+                bounded.throwIfAborted();
                 this.execution.emit('source.added', { toolCallId: eventId(toolCallId), ...source });
             }
 
@@ -147,7 +158,9 @@ export class ToolExecutor {
 
             return result('ok', text);
         } catch {
-            return timeout.aborted && signal?.aborted !== true
+            return cancellation.aborted
+                ? result('cancelled', 'This reply was stopped.')
+                : timeout.aborted
                 ? result('timeout', `${tool.name} did not finish within ${tool.timeoutMs / 1000} seconds.`)
                 : result('failed', `${tool.name} could not complete.`);
         }
@@ -155,16 +168,22 @@ export class ToolExecutor {
 }
 
 /** Settles with the work, or rejects as soon as the signal aborts even if the work ignores it. */
-function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-    if (signal.aborted) {
-        return Promise.reject(signal.reason);
-    }
+async function untilAborted<T>(work: () => Promise<T>, signal: AbortSignal): Promise<T> {
+    signal.throwIfAborted();
+    let abort = (): void => {};
+    try {
+        return await new Promise<T>((resolve, reject) => {
+            abort = (): void => reject(signal.reason);
+            signal.addEventListener('abort', abort, { once: true });
+            Promise.resolve().then(() => {
+                signal.throwIfAborted();
 
-    return new Promise<T>((resolve, reject) => {
-        const abort = (): void => reject(signal.reason);
-        signal.addEventListener('abort', abort, { once: true });
-        work.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
-    });
+                return work();
+            }).then(resolve, reject);
+        });
+    } finally {
+        signal.removeEventListener('abort', abort);
+    }
 }
 
 function shorten(message: string): string {

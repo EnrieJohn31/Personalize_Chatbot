@@ -32,8 +32,82 @@ function executor(capabilities, { maxToolCalls = 6, registry } = {}) {
     const tools = new ToolExecutor(capabilities, maxToolCalls, execution, () => {}, registry);
     const events = () => execution.after(0);
 
-    return { tools, events, execute: (id, args) => tools.agentTools()[0].execute(id, args, signal) };
+    return { tools, events, execution, execute: (id, args) => tools.agentTools()[0].execute(id, args, signal) };
 }
+
+test('a stopped run or already-aborted tool signal never invokes a tool', async () => {
+    for (const stoppedBy of ['run', 'agent']) {
+        let calls = 0;
+        const tool = fakeTool(async () => {
+            calls += 1;
+            return { text: 'Must not run', sources: [] };
+        });
+        const { tools, execution, events } = executor(['fake_lookup'], { registry: [tool] });
+        const controller = new AbortController();
+        if (stoppedBy === 'run') execution.cancel();
+        else controller.abort();
+
+        const result = await tools.agentTools()[0].execute('call-1', { query: 'x' }, controller.signal);
+
+        assert.equal(calls, 0, stoppedBy);
+        assert.equal(result.details.outcome, 'cancelled');
+        assert.equal(events().length, 0);
+    }
+});
+
+test('Stop arriving at tool.started prevents dispatch', async () => {
+    let calls = 0;
+    const tool = fakeTool(async () => {
+        calls += 1;
+        return { text: 'Must not run', sources: [] };
+    });
+    const { tools, execution, events, execute } = executor(['fake_lookup'], { registry: [tool] });
+    execution.subscribe((event) => {
+        if (event.type === 'tool.started') execution.cancel();
+    });
+
+    const result = await execute('call-1', { query: 'x' });
+    tools.finish('call-1', 'fake_lookup', true);
+
+    assert.equal(calls, 0);
+    assert.equal(result.details.outcome, 'cancelled');
+    assert.deepEqual(events().map((event) => event.type), ['tool.started', 'tool.finished']);
+    assert.equal(events().at(-1).data.outcome, 'cancelled');
+    assert.ok(events().every((event) => validate('runEvent', event).length === 0));
+});
+
+test('Stop aborts an active tool and ignores a late result even if the tool ignores cancellation', { timeout: 2000 }, async (t) => {
+    const started = Promise.withResolvers();
+    const late = Promise.withResolvers();
+    let toolSignal;
+    const tool = fakeTool((_args, signal) => {
+        toolSignal = signal;
+        started.resolve();
+        return late.promise;
+    });
+    const { tools, execution, events, execute } = executor(['fake_lookup'], { registry: [tool] });
+    const work = execute('call-1', { query: 'x' });
+    await started.promise;
+    const stoppedAt = performance.now();
+    execution.cancel();
+    const result = await work;
+    t.diagnostic(`Active tool cancellation settled in ${(performance.now() - stoppedAt).toFixed(2)} ms.`);
+    tools.finish('call-1', 'fake_lookup', true);
+
+    assert.equal(toolSignal.aborted, true);
+    assert.equal(result.details.outcome, 'cancelled');
+    assert.equal(tools.available, false);
+    assert.equal(tools.beforeToolCall(call('call-2', 'fake_lookup')).block, true);
+    const count = events().length;
+    late.resolve({ text: 'Late answer', sources: [{ evidenceId: 'late', title: 'Late', locator: 'fixture://late', checkedAt: '2026-10-25' }] });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(events().length, count, 'late output is discarded');
+    assert.equal(events().filter((event) => event.type === 'source.added').length, 0);
+});
+
+test('the reference lookup refuses an already-aborted signal', async () => {
+    await assert.rejects(lookupReference.run({ query: 'SAMPLE-001' }, AbortSignal.abort()), { name: 'AbortError' });
+});
 
 test('every registered tool declares its contract and only lookup_reference exists so far', () => {
     assert.deepEqual(TOOLS.map((tool) => tool.name), ['lookup_reference']);

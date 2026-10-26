@@ -1,5 +1,29 @@
 # Foundation validation
 
+## Task 3.5: Stop during live replies and active tools — 25 October 2026
+
+Completed before task 3.4 at the user's request. The engine now checks cancellation before credential setup, each model request and tool dispatch. Active tools combine the run and Pi signals with their timeout; cancellation stops waiting, drops late results and prevents later calls. Adapter rejection after abort becomes cancellation, and buffered text is not flushed after abort. `tool.finished` accepts the explicit `cancelled` outcome in both the shared schema and Laravel. See [Stop behavior and limits](stop.md).
+
+Six new regression cases failed before the fixes: pre-stopped credential resolution, credential-setup rejection on abort, pre-aborted tool dispatch, Stop at `tool.started`, an active tool ignoring abort, and direct lookup with an already-aborted signal. Additional coverage exercises the complete Pi loop and repeated/late Stop. In the complete-loop case, Stop prevents the second queued tool and the next model request; no source, final answer or completion is emitted, and a late tool rejection is consumed.
+
+| Check | Observed result |
+| --- | --- |
+| Engine `npm test` | TypeScript build and **92 tests passed** |
+| `composer ci:check` | **249 Laravel tests / 1396 assertions**, **28 frontend tests**, formatting (136 files), lint (96 files), TypeScript, Pint (123 files) and PHPStan (91 files) passed |
+| Controlled active tool | A deliberately non-cooperating tool's wrapper returned cancellation in **0.28 ms**; the complete Pi loop reached `run.cancelled` in **1.22 ms** in a separate controlled case. Local observations, not performance guarantees |
+| Real browser reply | Chromium, the existing ChatGPT connection and `gpt-6-luna`, through the Laravel page and signed engine boundary. The model completed one `lookup_reference` call (`ok`) and was still streaming when Stop was clicked |
+| Live Stop timing | From just before the click to browser `run.cancelled`: **5,655 ms**. DELETE request to HTTP `202`: **5,850 ms**. The stream's terminal event arrived before the HTTP acknowledgement |
+| Stream and persistence | 12 text chunks before Stop; **38 more chunks observed while Stop was pending**. Exactly one cancellation; no `assistant.final`, `run.completed`, `run.failed` or stream error. History contained only the user message. Reload offered "Get a reply" and no Stop button; zero page errors |
+| Signed connectivity after cleanup | `php artisan agent:check` passed: authentication configured, valid signatures accepted and unsigned requests rejected; no model run started |
+
+The browser server used a new isolated SQLite database and a fixture user with the existing owned connection reference and selected model. Only non-secret connection metadata was copied; credentials stayed in the engine vault. No real MySQL chat rows were created or changed. The temporary internal server and browser container were stopped/removed; diagnostic scripts and SQLite data remain ignored under `.setup/`. Browser-probe configuration and an HTTP-response timing assertion were corrected before the successful run.
+
+No dependency, lockfile, migration or frontend behavior changed. The production frontend build was not repeated; the existing built assets were used for the live browser check. The full application check corrected formatting in the earlier handoff tables before passing. Contributor review uses the approved human author/committer and active hooks; no contribution credits, co-author trailers, credentials, generated dependencies or `.claude/` files are included.
+
+Limits: the real lookup is synchronous and finished before this browser Stop, so active-tool cancellation was verified with a controlled slow tool inside the real Pi loop, not by delaying the production lookup. The observed browser delay includes local PHP request/relay and transport overhead; it does not isolate provider abort time or establish when remote computation/billing ceased. Future tools must honor the abort signal in their own I/O. Optimize the local Stop route/relay only after measuring those stages separately. Durable cancellation flags, atomic terminal races and restart recovery remain Phase 4–5; model-aware context/token budgets remain task 3.4.
+
+Finalized on 26 October: updated the handoff, plan and blueprint, checked final Markdown/JSON formatting and whitespace, and audited the existing commit history against the contributor policy before the local checkpoint. Application behavior did not change during this continuation; the full test and live acceptance results above remain dated 25 October. No push was requested.
+
 ## Task 3.1: live refresh after expiry — 25 October 2026
 
 The remaining chosen-provider acceptance passed using the operator's existing ChatGPT connection and selected `gpt-6-luna` model. One short test was sent through Laravel's `ProviderConnections::test()` and signed gateway. The engine used the existing encrypted sign-in and Pi's normal renewal path; no expiry was changed artificially and no new login was started.

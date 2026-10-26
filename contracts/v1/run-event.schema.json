@@ -100,7 +100,7 @@
             }
         },
         "toolFinished": {
-            "description": "How a tool call the model made ended. blocked: not permitted, a repeat or over the run's tool budget; invalid_arguments: refused before running; failed and timeout: it ran without a result. Only ok and failed or timeout calls were started.",
+            "description": "How a tool call ended. blocked: not permitted, a repeat or over budget; invalid_arguments: refused before running; failed and timeout: no usable result; cancelled: stopped before dispatch or during execution. Cancellation of the whole run has its own terminal event.",
             "type": "object",
             "additionalProperties": false,
             "required": ["toolCallId", "name", "outcome", "message"],
@@ -113,7 +113,8 @@
                         "blocked",
                         "invalid_arguments",
                         "failed",
-                        "timeout"
+                        "timeout",
+                        "cancelled"
                     ]
                 },
                 "message": {

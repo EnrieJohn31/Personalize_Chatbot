@@ -1,6 +1,6 @@
 # Provider choice and verification
 
-Recorded: 22 October 2026 (Asia/Shanghai), Build Plan task 0.3. Updated 25 October 2026: task 3.1's real refresh-after-expiry acceptance passed.
+Recorded: 22 October 2026 (Asia/Shanghai), Build Plan task 0.3. Updated 25 October 2026: tasks 3.1's real refresh-after-expiry and 3.5's live Stop acceptance passed.
 
 Status: **Task 3.1 is complete for the chosen ChatGPT connection.** Sign-in, real replies and persistence across an engine restart were verified on 24 October; automatic renewal after an observed expiry passed on 25 October with `gpt-6-luna`. OpenCode keys and the local model server have not been used live yet. No credential was copied, printed or recorded; the checks read only non-secret status and answers.
 
@@ -16,6 +16,7 @@ Status: **Task 3.1 is complete for the chosen ChatGPT connection.** Sign-in, rea
 | Streaming | Implemented (task 3.2): a fresh Pi Agent per run on the run's own connection, with batched deltas, honest failure codes and Stop. Verified live with ChatGPT (below) and with Pi's faux provider |
 | Tool calling | Implemented (task 3.3): `lookup_reference` through the engine's tool executor, with the run's tool and round budgets. Verified with Pi's faux provider; live result below. See [tools](tools.md) |
 | Context / output budgets | Model-aware context/token budgets remain task 3.4. Per-request output tokens, aggregate reply characters, model rounds and tool calls already have hard ceilings |
+| Stop | Task 3.5: cancellation checked before model/tool work, combined run/tool signals and cancelled tool outcome. Active-tool behavior verified with a controlled slow tool; real browser result below. See [Stop](stop.md) |
 
 ## ChatGPT (`openai`)
 
@@ -29,6 +30,8 @@ Status: **Task 3.1 is complete for the chosen ChatGPT connection.** Sign-in, rea
 | Refresh | **Passed live on 25 October 2026.** Before the test, status reported expiry at 24 October 19:12:14 +08:00. At 25 October 18:56:13 +08:00 the same connection sent a short test through Laravel, without a new sign-in. `gpt-6-luna` replied `Connected` in 7,155 ms. Status then reported expiry at 25 October 19:53:16 +08:00, with 3,415 seconds remaining when checked at 18:56:21. Both engine and Laravel stayed `connected`. This measures remaining validity after renewal, not the full issuance lifetime |
 | Re-authentication | A rejected refresh reports `reauth_required`. The engine remembers it per connection, so status stays `reauth_required` until a new sign-in, and Laravel marks the record from a test or a chat reply. An unreadable file reports "connect again". Verified with fakes; **untested against OpenAI** |
 | Earlier live reply/tool tests | 24 October 2026, task 3.2: two runs on `gpt-6-luna` with reasoning `medium`, submitted and read through Laravel's signed gateway on the operator's connection. "What is 17 times 3?" answered "17 times 3 is 51." in 6.0 s (first text at 5.6 s). A five-item Markdown list streamed in 10 pieces between 2.7 s and 4.2 s. No chat rows were written. Persistence across an engine restart: the engine was rebuilt and restarted before these runs, and the stored sign-in still worked. Task 3.3, same day and setup: `gpt-6-luna` called `lookup_reference` itself and answered the sample warehouse's code and delivery hours from the invented record in 8.9 s; with no tools permitted it said it lacked the details. The engine was rebuilt again before these runs, and the sign-in still worked |
+
+Task 3.5 live Stop, 25 October 2026: Chromium on the existing `openai` / `gpt-6-luna` connection completed one lookup, then Stop during streamed text reached browser `run.cancelled` in **5,655 ms**. The HTTP `202` took **5,850 ms**; 38 additional chunks arrived while Stop was pending. No final answer was saved, reload offered another reply and no page error occurred. The check used an isolated application database with the existing connection reference; credentials stayed in the engine. This is end-to-end local cancellation latency, not proof of immediate remote computation/billing cessation. [Validation](validation.md) records the controlled active-tool case and transport limits.
 
 ## OpenCode Go (`opencode-go`) and OpenCode Zen (`opencode`)
 

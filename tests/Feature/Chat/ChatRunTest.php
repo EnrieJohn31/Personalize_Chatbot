@@ -331,6 +331,27 @@ class ChatRunTest extends TestCase
         $this->assertSame([], $this->engine->cancelled);
     }
 
+    public function test_a_cancelled_tool_run_relays_its_outcome_saves_no_answer_and_releases_the_slot(): void
+    {
+        [$owner, $conversation, $runId] = $this->startedRun(function (FakeAgentGateway $engine): void {
+            $engine->script = [
+                ['run.started'],
+                ['assistant.delta', ['text' => 'Let me check.']],
+                ['tool.started', ['toolCallId' => 'call_1', 'name' => 'lookup_reference']],
+                ['tool.finished', ['toolCallId' => 'call_1', 'name' => 'lookup_reference', 'outcome' => 'cancelled', 'message' => 'This reply was stopped.']],
+                ['run.cancelled'],
+            ];
+        });
+
+        $this->deleteJson("/api/chat/runs/$runId")->assertAccepted();
+        $events = $this->events($this->get("/api/chat/runs/$runId/events"));
+
+        $this->assertSame('cancelled', $events[3]['data']['outcome']);
+        $this->assertSame('run.cancelled', last($events)['event']);
+        $this->assertSame(0, $conversation->messages()->where('role', 'assistant')->count());
+        $this->actingAs($owner)->postJson("/api/chat/conversations/$conversation->id/runs")->assertAccepted();
+    }
+
     public function test_stop_asks_the_engine_to_cancel(): void
     {
         [, , $runId] = $this->startedRun(fn (FakeAgentGateway $engine) => $engine->completes());

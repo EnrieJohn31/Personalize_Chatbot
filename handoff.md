@@ -1,12 +1,14 @@
 # Development handoff
 
-Updated: 25 October 2026. Read this file first when resuming work.
+Updated: 26 October 2026. Read this file first when resuming work.
 
 ## Where we stopped
 
-**Phase 2 (tasks 2.1–2.4) and tasks 3.1–3.3 are complete for the chosen ChatGPT connection. Task 3.1 closed on 25 October: an already-expired access token refreshed automatically, `gpt-6-luna` replied successfully and the renewed expiry was stored. Earlier sign-in and restart persistence had passed. Task 3.2 provides live replies through a fresh Pi Agent per run; task 3.3 provides the permitted read-only sample lookup. OpenCode and real local-server acceptance remain unverified. Next build task: 3.4, bounded context and budgets, followed by 3.5, real Stop acceptance.**
+**Phase 2 (tasks 2.1–2.4) and tasks 3.1–3.3 and 3.5 are complete for the chosen ChatGPT connection. Task 3.5 was completed before 3.4 at the user's request: Stop reaches model/tool abort signals, prevents later work and saves no cancelled answer. Live browser cancellation and controlled active-tool cancellation passed on 25 October; this handoff and the local commit were finalized on 26 October. Next build task: 3.4, bounded context and budgets. OpenCode and real local-server acceptance remain unverified.**
 
-Latest acceptance on 25 October 2026: the normal test returned `Connected` in 7,155 ms and advanced the access expiry from 24 October 19:12:14 to 25 October 19:53:16 (+08:00), without another sign-in. Both Laravel and the engine remained connected. Signed connectivity, the engine build and 19 authentication/vault tests passed. This session changed documentation only; see [the dated evidence](docs/validation.md).
+Latest acceptance on 25 October 2026: browser Stop during `gpt-6-luna` streaming reached `run.cancelled` in **5,655 ms**, with 38 further chunks while Stop was pending. No final answer was saved, and reload allowed another reply. A controlled active tool and the complete Pi loop cancelled in 0.28/1.22 ms; subsequent tool/model steps did not run. All **92 engine, 249 Laravel / 1396 assertions and 28 frontend tests** passed, alongside static checks and signed connectivity. The browser used an isolated SQLite database; existing MySQL chats were untouched. See [Stop behavior and limits](docs/stop.md) and [dated evidence](docs/validation.md).
+
+Task 3.1 also closed on 25 October: the normal test returned `Connected` in 7,155 ms and advanced the access expiry from 24 October 19:12:14 to 25 October 19:53:16 (+08:00), without another sign-in. Both Laravel and the engine remained connected. Earlier sign-in and restart persistence had passed.
 
 Review on 24 October 2026 corrected three issues: tool validation arguments reaching browser events, truncation notices exceeding tool result caps, and oversized multi-round replies being silently shortened on completion. All 84 engine tests pass after the fixes; 247 Laravel tests, 28 frontend tests, static checks, the production build and signed connectivity passed. Earlier live acceptance notes were preserved, not rerun. See [the review evidence](docs/validation.md).
 
@@ -21,21 +23,23 @@ The application provides:
 
 Replies stream through a Stage A Laravel relay. They come from the conversation's account and model (`ASSISTANT_LIVE_REPLIES`, default `true`, with `ASSISTANT_REASONING` default `medium`), or from the engine's deterministic simulation when the conversation has none. Live replies may use the tools in `ASSISTANT_CAPABILITIES` (default `lookup_reference`; see [tools](docs/tools.md)). Bounded context and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the connections guide](docs/connections.md).
 
-| Document                                             | Use it for                                                               |
-| ---------------------------------------------------- | ------------------------------------------------------------------------ |
-| [Blueprint.md](Blueprint.md)                         | Architecture, ownership, security boundaries and acceptance requirements |
-| [Build_Plan.md](Build_Plan.md)                       | Numbered tasks, completion checkboxes and progress                       |
-| [docs/setup.md](docs/setup.md)                       | Installation, daily commands and troubleshooting                         |
-| [docs/validation.md](docs/validation.md)             | Dated foundation checks through task 3.3 and the 25 October refresh acceptance, with their limits |
-| [docs/connections.md](docs/connections.md)           | Task 3.1 ChatGPT, OpenCode and local-server connections, the chat choice |
-| [docs/chat-history.md](docs/chat-history.md)         | Task 2.1 endpoints (and deletion), ownership, storage and pagination     |
-| [docs/chat-ui.md](docs/chat-ui.md)                   | Chat page, date sections, deletion, Stage A reply relay and checks       |
-| [contracts/README.md](contracts/README.md)           | Engine schemas, request signing, admission, event stream and error codes |
-| [docs/runtime-versions.md](docs/runtime-versions.md) | Installed versions, image identities and compatibility sources           |
-| [docs/provider-matrix.md](docs/provider-matrix.md)   | Provider path, ownership and what is verified or still untested          |
+| Document                                             | Use it for                                                                           |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [Blueprint.md](Blueprint.md)                         | Architecture, ownership, security boundaries and acceptance requirements             |
+| [Build_Plan.md](Build_Plan.md)                       | Numbered tasks, completion checkboxes and progress                                   |
+| [docs/setup.md](docs/setup.md)                       | Installation, daily commands and troubleshooting                                     |
+| [docs/validation.md](docs/validation.md)             | Dated foundation checks, refresh acceptance and task 3.5 cancellation measurements   |
+| [docs/stop.md](docs/stop.md)                         | Model/tool Stop behavior, observed latency and remaining transport/durability limits |
+| [docs/connections.md](docs/connections.md)           | Task 3.1 ChatGPT, OpenCode and local-server connections, the chat choice             |
+| [docs/chat-history.md](docs/chat-history.md)         | Task 2.1 endpoints (and deletion), ownership, storage and pagination                 |
+| [docs/chat-ui.md](docs/chat-ui.md)                   | Chat page, date sections, deletion, Stage A reply relay and checks                   |
+| [contracts/README.md](contracts/README.md)           | Engine schemas, request signing, admission, event stream and error codes             |
+| [docs/runtime-versions.md](docs/runtime-versions.md) | Installed versions, image identities and compatibility sources                       |
+| [docs/provider-matrix.md](docs/provider-matrix.md)   | Provider path, ownership and what is verified or still untested                      |
 
 ## Completed and checked
 
+- Task 3.5, 25 October 2026 (requested before 3.4): checked cancellation before credential/model/tool work, combined run/tool signals and timeouts, stopped waiting on active tools, discarded late results and buffered text, and added the `cancelled` tool outcome to the shared schema and Laravel. Six regressions failed before the fixes. All 92 engine tests and the full application check passed; real browser Stop and controlled active-tool acceptance are recorded above. Temporary test server/container were cleaned up; probes remain ignored. No dependency, migration or frontend behavior changed. Final documentation and the local checkpoint followed on 26 October.
 - Tasks 0.1–0.3: workspace selected, versions recorded and initial provider ownership/path documented. All three generated lockfiles are saved in local commit `6736ac6`.
 - Task 1.1: Laravel 13.38.0 with the official React/Inertia/TypeScript/Tailwind/shadcn/ui/Lucide starter. Registration, email verification, password reset/confirmation, two-factor and passkey scaffolding remain enabled. No default account is seeded.
 - Task 1.2: pinned PHP/Node development image, Compose services, MySQL 8.4.13, all five starter migrations and a persistent named volume. A temporary user survived a database restart and was then removed.
@@ -213,7 +217,7 @@ docker compose down
 
 Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal at `mysql:3306`; the engine is internal at `http://agent:3101`, and only its sign-in callback is published, on `127.0.0.1:1455`. Health reports `providerAuth` (`configured` once the engine has its credential key), `requestAuth` and `simulation`. Existing local secrets stay in ignored `.env`; preserve the application key and MySQL volume. Do not use `docker compose down -v` for routine shutdown.
 
-## Next: 3.4, then 3.5
+## Next: 3.4
 
 **3.1 is closed.** The remaining real refresh-after-expiry check passed on 25 October through the existing connection. The observed expiries and result are recorded in [docs/provider-matrix.md](docs/provider-matrix.md). Rejected renewal/re-authentication is covered with fakes; no live sign-in was deliberately revoked. Existing HTTPS-scanning limitations remain documented in the connections guide; no host security settings were changed in this session.
 
@@ -224,18 +228,18 @@ Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal
 - `tools/executor.ts` already enforces capability, argument, repeat, tool-count, timeout and result-size checks. Keep truncation notices inside the size cap and validation arguments out of browser events.
 - Keep source metadata separate from tool result text; the page shows retrieval progress but does not yet list sources.
 
-Then 3.5: verify Stop during a real provider/tool call and record cancellation delay and transport limits. Fake-provider abort checks already pass. Task 3.4 stays open despite the review's hard output ceiling; model-aware context and configurable token budgets are still missing.
+Task 3.5 is complete; preserve its cancellation guards and regression cases while adding context budgets. Task 3.4 stays open despite the existing hard output ceiling; model-aware context and configurable token budgets are still missing. Phase 4 follows after 3.4.
 
 ## Remaining work in order
 
-| Tasks        | Remaining result                                                                                                                |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| 3.4–3.5      | Bounded history and budgets (start here), then live Stop through provider/tool calls |
-| 4.1–4.4      | Durable runs/events, claims, idempotency and transactional final saves                                                          |
-| 5.1–5.4      | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                                                |
-| 6.1–6.3      | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation                              |
-| 7.1–7.3      | First purpose and authorized connector, after the purpose is selected                                                           |
-| 8.1–8.4      | Production images, serving/supervision, backup/restore and deployment acceptance                                                |
+| Tasks   | Remaining result                                                                                   |
+| ------- | -------------------------------------------------------------------------------------------------- |
+| 3.4     | Bounded history and budgets (start here)                                                           |
+| 4.1–4.4 | Durable runs/events, claims, idempotency and transactional final saves                             |
+| 5.1–5.4 | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                   |
+| 6.1–6.3 | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation |
+| 7.1–7.3 | First purpose and authorized connector, after the purpose is selected                              |
+| 8.1–8.4 | Production images, serving/supervision, backup/restore and deployment acceptance                   |
 
 Use the build plan's individual acceptance checks; this table does not replace them. Live acceptance covers the operator's existing ChatGPT connection and `gpt-6-luna`; other providers, accounts and models require their own checks. A healthy engine or a "Connected" badge alone is not proof of live access, and the application must never silently substitute another billing/authentication path.
 
@@ -257,6 +261,7 @@ Use the build plan's individual acceptance checks; this table does not replace t
 - Conversation deletion is permanent (no trash or undo); messages go with their conversation through the foreign key.
 - Account deletion now clears owned provider credentials first. An account with supported-provider records needs the engine to confirm removal; if a later cleanup fails, the account remains available for retry but earlier connections stay disconnected. No provider-side revocation is implied.
 - The Stage A relay saves a reply only while some reader follows its stream; opening the conversation within about four minutes resumes and saves a run whose stream was never opened. Each open stream occupies one PHP CLI server worker (four in development). Laravel sends no heartbeats to the browser yet, which matters behind proxies. An engine restart mid-reply surfaces as a failed reply rather than a detected interruption. Phases 4–5 replace these limits.
+- Stop acceptance covers the chosen live connection and controlled active tools. Its observed 5.7-second browser delay includes the local PHP route/relay and transport; immediate provider-side computation/billing cessation is unverified. Measure those stages separately before optimizing. Synchronous lookup can only observe Stop when it yields, and non-cooperating tools may continue their own work after the executor stops waiting. Durable cancellation flags and atomic terminal races remain Phase 4–5.
 - The local model server is shared by every account and has no per-user quota beyond the run limit (20 starts a minute per user, one reply at a time). Its traffic is plain HTTP unless the server offers HTTPS; keep it on a trusted network. Its context window and output limit are assumed (32,768 and 8,192 tokens); task 3.2 may need them configurable. No real local server has been tested yet.
 - Physical iOS/Android keyboards, real IMEs and screen readers have not been checked; the browser probes are not part of CI yet (a candidate for task 6.1) and are kept in ignored `.setup/`. The `interactive-widget=resizes-content` viewport hint helps Chrome on Android keep the composer above the keyboard; Safari ignores it with a console note.
 - `docker/php/php.ini` now enables OPcache for the PHP CLI server and rechecks timestamps at most every 2 seconds, so PHP edits apply within 2 seconds. Requests in a burst take about 0.2–0.3 s; the first after 2 idle seconds still takes about 2 s on the Windows bind mount, which a Linux-filesystem checkout would remove. It takes effect after `docker compose up -d --build laravel.test`. In a worktree container it also cut the PHP suite from 480 s to about 50 s. The chat page bundle is 58 kB gzip, mostly Markdown parsing; measure before splitting it.
@@ -267,7 +272,7 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 ## Git branches and contributor requirements
 
-Current local work: the task 3.1 acceptance record on `development`, after published checkpoint `72b5aca`. This session changes only the handoff, plan, blueprint and connection/validation documentation. No push was requested for this session; the last verified publication remains the 24 October checkpoint below.
+Current local work: task 3.1 acceptance commit **`b59ecff`**, followed by **Propagate Stop through model and tool execution** (task 3.5), on `development` after published checkpoint `72b5aca`. The task 3.5 checkpoint contains engine guards, shared/Laravel tool outcomes, regressions and updated handoff/plan/blueprint/validation documentation. No push was requested for this session; the last verified publication remains the 24 October checkpoint below. The approved human author/committer and `.githooks` policy remain required, with no co-author trailer or contribution credit.
 
 Latest published implementation checkpoint: **`9263393` — Protect tool events and bound multi-round reply output**, including **`93f3085`** (first-message streaming), **`3ca251e`** (live Pi replies), **`5d7b7f0`** (task 3.2 evidence) and **`8ed22bb`** (the sample lookup tool). At the user's request, both branches were fast-forwarded and pushed atomically on 24 October 2026; both remote hashes matched `9263393f362352cea3aaa91305838ed63549c745`. Original commits and messages were preserved. The full history audit passed with the approved human author/committer and no prohibited attribution. This publication record follows that checkpoint. See [the three fixes and validation evidence](docs/validation.md). The four pending task 3.3 documentation files from the sibling `Chatbot-task-3.3` worktree were incorporated here; that worktree and its local edits were preserved.
 

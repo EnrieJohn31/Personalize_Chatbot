@@ -28,7 +28,8 @@ export const lookupReference: ToolDefinition<typeof parameters> = {
     effect: 'read',
     timeoutMs: 10_000,
     maxResultLength: 4_000,
-    async run({ query }) {
+    async run({ query }, signal) {
+        signal.throwIfAborted();
         const matches = search(query);
         if (matches.length === 0) {
             return { text: `No reference entry matches "${query}".`, sources: [] };

@@ -1,15 +1,15 @@
 # Build Plan: Laravel + Pi Chatbot
 
-Updated: 25 October 2026\
-Version: 16\
-Companion: [Blueprint.md](Blueprint.md), revision 17; [handoff.md](handoff.md) for the continuation record\
-Status: Phases 0–2 and tasks 3.1–3.3 complete for the chosen ChatGPT connection. Owned history, a signed Laravel-to-Pi boundary, the chat page, live replies and the permitted sample lookup are implemented. Task 3.1's live acceptance now includes automatic renewal after an observed expiry, alongside sign-in and restart persistence. OpenCode Go/Zen keys and an administrator-configured local model server are implemented but remain unverified with real accounts/servers. Chat deletion and date sections are also implemented. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md) and [validation](docs/validation.md).
+Updated: 26 October 2026\
+Version: 17\
+Companion: [Blueprint.md](Blueprint.md), revision 18; [handoff.md](handoff.md) for the continuation record\
+Status: Phases 0–2 and tasks 3.1–3.3 and 3.5 complete for the chosen ChatGPT connection. Owned history, a signed Laravel-to-Pi boundary, the chat page, live replies and the permitted sample lookup are implemented. Task 3.1 includes automatic renewal after an observed expiry, alongside sign-in and restart persistence. Task 3.5 verifies Stop through the live browser/provider path and controlled active tools, with the observed delay and transport limits recorded. Task 3.4 remains open. OpenCode Go/Zen keys and an administrator-configured local model server are implemented but remain unverified with real accounts/servers. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md), [Stop](docs/stop.md) and [validation](docs/validation.md).
 
 ## Start here
 
 Build a reusable chatbot foundation with Laravel, React/Inertia, TypeScript, shadcn/ui, Lucide, MySQL and a private Node/Pi engine. Use Docker Compose/Sail for development. Keep Pi as the engine throughout this plan.
 
-**Next task: 3.4 — bounded context and budgets, then 3.5 — real Stop acceptance. Task 3.1 closed on 25 October after the live refresh-after-expiry check; task 3.3's sample lookup is implemented and its live acceptance is recorded.** Work in order, completing one numbered task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
+**Next task: 3.4 — bounded context and budgets. At the user's request, task 3.5 was completed before 3.4 on 25 October; 3.4 is still unchecked. Task 3.1 also closed that day after the live refresh-after-expiry check.** Otherwise work in numbered order, completing one task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
 
 Use **Blueprint.md for design decisions** and **this file for work order and progress**. Update both when a decision changes. Read the relevant blueprint sections before each phase; there is no need to reproduce the entire architecture in every task.
 
@@ -80,7 +80,7 @@ Phases 0–3 deliver **Stage A: the connectivity prototype**. Phases 4–6 deliv
 | [x] | 3.2 | Construct a fresh Pi Agent per run and map its text/error events into the application protocol. | A real answer streams through Laravel; auth and provider errors appear as honest outcomes. |
 | [x] | 3.3 | Register `lookup_reference` with a schema, permission, timeout and size limit against invented fixtures. | Pi calls it, receives a matching result and answers using that result; denied access and invalid arguments do not execute the lookup. |
 | [ ] | 3.4 | Load the permitted canonical transcript and enforce context, output, model-round and tool budgets. | A follow-up remembers the relevant history, and an oversized case gets bounded handling rather than an uncontrolled request. |
-| [ ] | 3.5 | Connect the prototype Stop action to Pi and the tool/provider abort signal. | Later steps stop; active-call cancellation delay and any transport limitation are recorded. |
+| [x] | 3.5 | Connect the prototype Stop action to Pi and the tool/provider abort signal. | Later steps stop; active-call cancellation delay and any transport limitation are recorded. |
 
 **Stage A checkpoint:** one real provider, one tool, streaming, follow-up context and Stop work together. Use an authenticated server-side save for basic history; Phase 4 will make execution and completion durable independently of the browser.
 
@@ -172,12 +172,12 @@ Keep a short progress record here as implementation proceeds:
 
 | Field | Current value |
 | --- | --- |
-| Current task | 3.4 — bounded context and budgets, followed by 3.5 real Stop acceptance |
-| Last completed task | 3.1 acceptance closed on 25 October: real refresh after expiry and a successful `gpt-6-luna` test; tasks 3.2–3.3 were already complete |
-| Actual checks run on the application | 25 October: signed connectivity, live expired-token renewal/reply, engine TypeScript build and 19 authentication/vault tests passed. Previous 24 October checks: 247 Laravel / 1388 assertions, 28 frontend, 84 engine tests, static checks and production build passed; not rerun in full for this documentation session. See docs/validation.md |
-| Git checkpoint and branches | The task 3.1 acceptance record is local on `development` after published checkpoint `72b5aca` (which includes review fixes `9263393`). No push was requested for this session |
+| Current task | 3.4 — bounded context and budgets |
+| Last completed task | 3.5 on 25 October: model/tool Stop guards and live cancellation acceptance, completed before 3.4 at the user's request |
+| Actual checks run on the application | 25 October: 249 Laravel tests / 1396 assertions, 28 frontend tests, 92 engine tests, static checks and signed connectivity passed. Real browser Stop reached cancellation in 5,655 ms and saved no final answer; controlled tool/loop cancellation measured 0.28/1.22 ms. See docs/validation.md |
+| Git checkpoint and branches | Local `development`: task 3.1 acceptance commit `b59ecff`, followed by task 3.5. Last published checkpoint remains `72b5aca` (including review fixes `9263393`). No push requested for this session |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
-| Next checkpoint | Task 3.4: follow-up context and oversized-history handling within a model-aware budget. Then task 3.5: real provider/tool cancellation and its observed delay |
+| Next checkpoint | Task 3.4: follow-up context and oversized-history handling within a model-aware budget, then Phase 4 durable runs |
 
 For each completed task, append: `ID — result — verification/evidence — remaining issue, if any`. Record a commit reference when working in Git. Checkboxes remain open for partially implemented or unverified behavior.
 
@@ -255,6 +255,8 @@ Publication review of local model changes on 24 October: no blocking findings ac
 ### Progress — 25 October 2026
 
 - 3.1 acceptance — The operator's stored ChatGPT access had expired on 24 October at 19:12:14 +08:00. A normal signed test on 25 October at 18:56:13 renewed it automatically and returned `Connected` from `gpt-6-luna` in 7,155 ms. The stored expiry advanced to 19:53:16 that day and both engine and Laravel remained connected. Signed connectivity, the engine build and 19 authentication/vault tests passed. No application code, credentials or chat messages were added to Git. Actual evidence and remaining provider-specific limits are in docs/validation.md and docs/provider-matrix.md. Tasks 3.4–3.5 remain open.
+
+- 3.5 — Completed before 3.4 at the user's request on 25 October. Guarded credential/model/tool entry, combined cancellation signals, stopped waiting on active tools and discarded late results/buffered text. Added `cancelled` tool outcomes through the contract and Laravel. Six failing regressions reproduced the gaps before the fixes; all 92 engine, 249 Laravel and 28 frontend tests now pass with static checks and signed connectivity. Real browser Stop on `gpt-6-luna` reached cancellation in 5,655 ms, saved no final answer and allowed retry after reload. Controlled active-tool and complete-loop cancellation measured 0.28/1.22 ms; later tools/model rounds did not run. Local commit on `development`; no push. See docs/stop.md and docs/validation.md for limits. Task 3.4 remains next.
 
 ## Completion boundaries
 

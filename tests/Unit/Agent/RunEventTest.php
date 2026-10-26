@@ -44,6 +44,18 @@ class RunEventTest extends TestCase
         $this->assertSame(['run.started', 'run.progress', 'run.progress', 'tool.started', 'source.added', 'tool.finished', 'run.progress', 'assistant.delta', 'assistant.final', 'run.completed'], $types);
     }
 
+    public function test_a_cancelled_tool_outcome_is_accepted_without_arguments_or_results(): void
+    {
+        $payload = self::examples('run-events-tool.json')[5];
+        $payload['data']['outcome'] = 'cancelled';
+        $payload['data']['message'] = 'This reply was stopped.';
+
+        $event = RunEvent::fromPayload($payload, self::TOOL_RUN_ID, 5);
+        $this->assertNotNull($event);
+        $this->assertSame('cancelled', $event->data['outcome']);
+        $this->assertFalse($event->isTerminal(), 'the run still needs its own cancellation event');
+    }
+
     /** @param  Closure(array<string, mixed>): array<string, mixed>  $change */
     #[DataProvider('invalidToolEvents')]
     public function test_tool_events_outside_the_contract_are_rejected(int $index, Closure $change): void

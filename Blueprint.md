@@ -1,12 +1,12 @@
 # Blueprint: Laravel Chatbot Foundation
 
-Updated: 25 October 2026\
-Revision: 17 — Chosen-provider authentication acceptance complete, including live refresh after expiry\
-Status: Phase 2 and tasks 3.1–3.3 are complete for the chosen ChatGPT connection. Conversations use their recorded connection and model through a fresh Pi Agent, with an allowed read-only sample lookup. Live acceptance covers sign-in, replies, lookup use, credential persistence across an engine restart and automatic refresh after an observed expiry on 25 October. Task 3.4 adds bounded context and configurable budgets, followed by live Stop acceptance in 3.5 and durable runs in Phase 4. Other providers/accounts remain unverified. Review fixes keep tool arguments out of browser events, count truncation notices inside tool result limits and fail oversized replies explicitly. No provider or throughput benchmark has been produced.
+Updated: 26 October 2026\
+Revision: 18 — Stop guards and chosen-provider cancellation acceptance complete\
+Status: Phase 2 and tasks 3.1–3.3 and 3.5 are complete for the chosen ChatGPT connection. Conversations use their recorded connection and model through a fresh Pi Agent, with an allowed read-only sample lookup. Live acceptance covers sign-in, replies, lookup use, restart persistence, automatic refresh after expiry and Stop in the browser. Task 3.5 was completed before 3.4 at the user's request. Task 3.4 still adds model-aware context/token budgets; Phase 4 adds durable runs. Other providers/accounts remain unverified. Tool arguments stay out of browser events, truncation notices count inside result limits and oversized replies fail explicitly. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
 
-Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 3.4 before task 3.5's real Stop acceptance. Refresh it alongside the build plan after each implementation session.
+Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 3.4. Refresh it alongside the build plan after each implementation session.
 
 ## 1. Goal and agreed foundation
 
@@ -374,6 +374,8 @@ The application must:
 - Report the observed cancellation delay honestly; use bounded timeouts where immediate abort is unavailable.
 
 Closing the browser subscription is not cancellation. In-flight provider work may still incur cost after the user requests Stop.
+
+Implementation record, 25 October 2026 (task 3.5, Stage A): Stop is checked before credential resolution, model requests and tool dispatch. The tool executor combines the run/Pi signals and timeout, returns an explicit `cancelled` outcome, stops waiting on non-cooperating work and discards late results. Cancellation suppresses buffered deltas, subsequent tool/model steps and successful final saves. A real browser Stop on the chosen ChatGPT connection reached `run.cancelled` in 5,655 ms; 38 extra chunks arrived while Stop was pending. Reload showed no assistant answer and allowed another reply. Active-tool cancellation was separately verified inside the Pi loop using a controlled slow tool, because the production lookup is synchronous. These observations do not prove immediate remote computation/billing cessation. Durable cancellation flags and atomic terminal races remain Phase 4–5. See [Stop behavior](docs/stop.md) and [dated checks](docs/validation.md).
 
 ### Tool boundary
 

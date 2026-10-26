@@ -28,7 +28,7 @@ final readonly class RunEvent
 
     private const TOOL_NAME_PATTERN = '/\A[a-z][a-z0-9_]{0,63}\z/';
 
-    private const TOOL_OUTCOMES = ['ok', 'blocked', 'invalid_arguments', 'failed', 'timeout'];
+    private const TOOL_OUTCOMES = ['ok', 'blocked', 'invalid_arguments', 'failed', 'timeout', 'cancelled'];
 
     private const EVIDENCE_ID_PATTERN = '/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,63}\z/';
 

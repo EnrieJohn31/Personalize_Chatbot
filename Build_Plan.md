@@ -174,8 +174,8 @@ Keep a short progress record here as implementation proceeds:
 | --- | --- |
 | Current task | 3.4 — bounded context and budgets |
 | Last completed task | 3.5 on 25 October: model/tool Stop guards and live cancellation acceptance, completed before 3.4 at the user's request |
-| Actual checks run on the application | 26 October publication review: 249 Laravel tests / 1396 assertions, 28 frontend tests, 95 engine tests, static checks, production build and signed connectivity passed. Previous live Stop measurements remain dated 25 October. See docs/validation.md |
-| Git checkpoint and branches | Published `dc42637` (retryable renewal failures), including `3b0c463` (Stop) and `b59ecff` (refresh acceptance), to both branches on 26 October. Remote hashes verified; this review/publication record follows. Continue on `development` |
+| Actual checks run on the application | Latest 26 October review: 255 Laravel tests / 1408 assertions, 28 frontend tests, 100 engine tests, static checks, production build and signed connectivity passed. Previous live Stop measurements remain dated 25 October. See docs/validation.md |
+| Git checkpoint and branches | Reviewed `912b83a` (refusal reasons and engine supervision), followed by privacy/parsing review fixes. Requested publication to both branches after the handoff update; previous published checkpoint `55a901c`. Continue on `development` |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
 | Next checkpoint | Task 3.4: follow-up context and oversized-history handling within a model-aware budget, then Phase 4 durable runs |
 
@@ -261,6 +261,8 @@ Publication review of local model changes on 24 October: no blocking findings ac
 - Publication review, 26 October — Reviewed all three unpublished commits through `dc42637`, including the renewal-failure correction. All 95 engine, 249 Laravel and 28 frontend tests, static checks, production build, signed connectivity and contributor audit passed. No blocking findings. Both branches were fast-forwarded and pushed atomically with their original commits/messages; remote hashes matched. The review changed documentation only; no live provider call was repeated. Task 3.4 remains next and remote CI results remain unverified.
 
 - Fix (user-reported), 26 October — OpenAI ended the ChatGPT grant on its side (`refresh_token_invalidated`); HTTPS scanning was not the cause. The engine now keeps and reports the provider's refusal reason across restarts, logs every renewal, and runs under a development supervisor that restarts it when it stops answering — 97 engine, 255 Laravel and 28 frontend tests passed; a recovery probe stayed down without the supervisor and recovered in 44 s with it — whether and why OpenAI invalidates the grant again is unknown, and a new sign-in is required now.
+
+- Review of refusal diagnostics, 26 October — Fixed unknown exception/description text reaching responses, logs and unencrypted refusal records; hardened saved-record parsing against null/malformed entries and enforced the 1,000-entry loading bound. Three new regressions failed before the corrections; all 100 engine tests pass afterward. Full application checks (255 Laravel / 1408 assertions, 28 frontend), production build and signed connectivity pass. The running supervisor configuration was verified; the earlier crash-recovery probe was not repeated. Updated the handoff, provider matrix and restart instructions. Task 3.4 remains next.
 
 ## Completion boundaries
 

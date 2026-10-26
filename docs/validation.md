@@ -1,5 +1,25 @@
 # Foundation validation
 
+## Review of renewal diagnostics and engine recovery — 26 October 2026
+
+Reviewed `912b83a`, which adds a persisted refusal reason/time, the Connections card display and development engine supervision. Two defects were reproduced and corrected before publication:
+
+- An unrecognized renewal error copied its innermost message, or an `error_description` paired with `renewal_failed`, into the response, log and unencrypted refusal record. Redacting only strings of 40 characters or more left shorter credentials exposed. Unknown failures now use a fixed explanation; provider reason codes remain bounded and known reasons retain their explanations.
+- A null saved entry threw during loading and rejected the cached map promise, breaking subsequent status reads/writes. Loading now skips malformed entries, requires the contract's message/time fields and bounds, rejects array roots and retains at most the newest 1,000 valid entries.
+
+All three new regression tests failed before these fixes and pass afterward, using invented credentials and isolated temporary files. No real credential exposure was observed in this review.
+
+| Check rerun | Result |
+| --- | --- |
+| Engine `npm test`, after fixes | TypeScript build and **100 tests passed** |
+| `composer ci:check` | **255 Laravel tests / 1408 assertions**, **28 frontend tests**, formatting (136 files), lint (96 files), TypeScript, Pint (123 files) and PHPStan (91 files) passed |
+| Production frontend build | Passed in 135 seconds; the existing optional `fontaine` warning remains non-fatal |
+| Signed connectivity | `php artisan agent:check` passed before and after the fixes; no provider run started |
+| Supervisor | Syntax check passed; the running container uses `node scripts/dev-supervisor.mjs` with `unless-stopped`. The earlier isolated 44-second recovery result below was reviewed, not rerun; this review did not deliberately crash the user's engine |
+| Contributor checks | Existing reachable history passed the audit; approved human identity and hooks preserved. Credentials, `.claude/`, probes and generated dependencies stay excluded |
+
+The handoff and provider matrix now distinguish the confirmed `refresh_token_invalidated` response from the earlier HTTPS-scanning hypothesis. The stale resume prompt now points to task 3.4. Supervisor documentation distinguishes restarting after a script edit from applying changed Compose configuration. No dependency, migration or real user data changed. Live sign-in/replies, browser visual acceptance of the new card and remote CI were not rerun. The original commit is preserved, followed by the review fixes and documentation. Task 3.4 remains next; future optimization should measure the existing Windows bind-mount build overhead before changing the toolchain.
+
 ## Why the ChatGPT sign-in ended; renewal log and engine self-restart — 26 October 2026
 
 **Correction to the entry below.** That entry guessed that HTTPS scanning caused the 10:35 UTC renewal failure. It did not. At 10:53 UTC, after the network-failure fix was live and with scanning paused, a renewal was refused again and classified as a refusal. A direct renewal attempt with the stored sign-in (same engine code, only OpenAI's answer printed, no token) returned `400 invalid_grant`, reason `refresh_token_invalidated`: "The refresh token has been invalidated. A fresh sign-in is required." OpenAI distinguishes this from `refresh_token_expired` and `refresh_token_reused`.

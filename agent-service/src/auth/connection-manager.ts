@@ -520,13 +520,9 @@ async function accessExpiry(vault: CredentialVault, provider: ConnectionProvider
 const TOKEN_RESPONSE = /token request failed \((\d{3})\): ([\s\S]*)$/;
 /** Provider reason codes are short snake_case words, such as `invalid_grant`. */
 const REASON_CODE = /^[a-z][a-z0-9_]{0,63}$/;
-/** Long runs of token-like characters; never part of a message about a refused sign-in. */
-const TOKEN_LIKE = /[A-Za-z0-9_\-.]{40,}/g;
-
 interface Refusal {
     /** The provider's `error_reason` or `error`, `http_<status>` without either, or `renewal_failed`. */
     reason: string;
-    detail: string | null;
 }
 
 /** What the provider said when it refused a renewal; OpenAI sends `error`, `error_reason` and a description. */
@@ -547,12 +543,12 @@ function refusalOf(cause: unknown): Refusal {
         }
         const reason = [body.error_reason, body.error].find((value): value is string => typeof value === 'string' && REASON_CODE.test(value));
 
-        return { reason: reason ?? `http_${response[1]}`, detail: typeof body.error_description === 'string' ? body.error_description : null };
+        return { reason: reason ?? `http_${response[1]}` };
     }
 
-    // A renewal that failed in another way, for example an incomplete token response. The innermost
-    // cause is the most specific.
-    return { reason: 'renewal_failed', detail: chain.at(-1)?.message.replace(TOKEN_LIKE, '[redacted]') ?? null };
+    // Unknown error text can contain credentials of any length. Keep it out of public messages,
+    // logs and the unencrypted rejection file; only the bounded reason code is retained.
+    return { reason: 'renewal_failed' };
 }
 
 function refusalMessage(name: string, refusal: Refusal): string {
@@ -564,7 +560,7 @@ function refusalMessage(name: string, refusal: Refusal): string {
         case 'refresh_token_reused':
             return `${name} ended this sign-in because its renewal token was used twice (refresh_token_reused). Sign in again.`;
         case 'renewal_failed':
-            return `The sign-in could not be renewed${refusal.detail === null ? '' : ` (${refusal.detail})`}. Sign in again.`;
+            return 'The sign-in could not be renewed. Sign in again.';
         default:
             return `${name} refused to renew this sign-in (${refusal.reason}). Sign in again.`;
     }

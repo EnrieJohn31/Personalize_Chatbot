@@ -635,6 +635,26 @@ test('each renewal is logged with the new expiry and never with a token', async 
     assert.equal(engine.logs.filter((line) => line.includes('renewed')).length, 1);
 });
 
+test('unrecognized renewal failures never copy raw credentials into responses, logs or the rejection file', async () => {
+    for (const refreshError of [
+        new Error('Unexpected response: access_token=secret-access-short refresh_token=secret-refresh'),
+        new Error('OpenAI OAuth token request failed (400): {"error":"renewal_failed","error_description":"refresh_token=secret-refresh"}'),
+    ]) {
+        const engine = await start({ fake: fakeOpenAI({ expires: Date.now() - 1, refreshError }) });
+        const id = randomUUID();
+        await connect(engine, id);
+
+        const result = await call(engine, 'POST', connectionPath(id, '/test'), testRequest());
+        assert.equal(result.body.error.code, 'reauth_required');
+        const status = (await call(engine, 'GET', statusPath(id))).body;
+        const saved = await readFile(join(engine.dir, 'renewal-rejections.json'), 'utf8');
+        for (const value of [JSON.stringify(result.body), JSON.stringify(status), engine.logs.join('\n'), saved]) {
+            assert.ok(!value.includes('secret-'), 'raw credentials must stay out of public diagnostics and the unencrypted rejection file');
+        }
+        assert.equal(status.rejection.reason, 'renewal_failed');
+    }
+});
+
 test('disconnecting removes the stored sign-in and cancels a pending one', async () => {
     const engine = await start();
     const id = randomUUID();

@@ -13,6 +13,7 @@ export interface RenewalRejection {
 
 /** More entries than Laravel can have connections is a sign of misuse; the oldest are dropped. */
 const MAX_ENTRIES = 1_000;
+const MAX_MESSAGE_LENGTH = 500;
 const REASON = /^[a-z][a-z0-9_]{0,63}$/;
 
 /**
@@ -37,12 +38,7 @@ export class RenewalRejections {
         return this.change((entries) => {
             entries.delete(key);
             entries.set(key, rejection);
-            for (const oldest of entries.keys()) {
-                if (entries.size <= MAX_ENTRIES) {
-                    break;
-                }
-                entries.delete(oldest);
-            }
+            trim(entries);
 
             return true;
         });
@@ -104,12 +100,32 @@ function parse(raw: string, report: (problem: string) => void): Map<string, Rene
         return entries;
     }
 
-    for (const [key, value] of Object.entries(typeof data === 'object' && data !== null ? data : {})) {
+    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+        report('not a record map');
+
+        return entries;
+    }
+    for (const [key, value] of Object.entries(data)) {
+        if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).sort().join(',') !== 'at,message,reason') {
+            continue;
+        }
         const entry = value as Partial<RenewalRejection>;
-        if (typeof entry.reason === 'string' && REASON.test(entry.reason) && typeof entry.message === 'string' && Number.isInteger(entry.at)) {
+        if (typeof entry.reason === 'string' && REASON.test(entry.reason)
+            && typeof entry.message === 'string' && entry.message !== '' && [...entry.message].length <= MAX_MESSAGE_LENGTH
+            && typeof entry.at === 'number' && Number.isSafeInteger(entry.at) && entry.at >= 0) {
             entries.set(key, { reason: entry.reason, message: entry.message, at: entry.at as number });
+            trim(entries);
         }
     }
 
     return entries;
+}
+
+function trim(entries: Map<string, RenewalRejection>): void {
+    for (const oldest of entries.keys()) {
+        if (entries.size <= MAX_ENTRIES) {
+            break;
+        }
+        entries.delete(oldest);
+    }
 }

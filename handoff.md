@@ -6,7 +6,7 @@ Updated: 26 October 2026. Read this file first when resuming work.
 
 **Phase 2 (tasks 2.1–2.4) and tasks 3.1–3.3 and 3.5 are complete for the chosen ChatGPT connection. Task 3.5 was completed before 3.4 at the user's request: Stop reaches model/tool abort signals, prevents later work and saves no cancelled answer. Live browser cancellation and controlled active-tool cancellation passed on 25 October; this handoff and the local commit were finalized on 26 October. Next build task: 3.4, bounded context and budgets. OpenCode and real local-server acceptance remain unverified.**
 
-Publication review on 26 October 2026 passed with no blocking findings: **95 engine tests, 249 Laravel tests / 1396 assertions, 28 frontend tests**, static checks, the production build and signed connectivity. The contributor audit passed; the three original commits through `dc42637` were pushed atomically to `main` and `development`, and both remote hashes were verified. This review record follows that checkpoint. No new live provider request was made. See [the dated review](docs/validation.md).
+Latest review on 26 October 2026 covers **`912b83a`**, which records renewal refusal reasons across restarts, shows the reason/time on Connections, and supervises the development engine. The provider's recorded `refresh_token_invalidated` response replaced the earlier HTTPS-scanning hypothesis; why the grant was invalidated is unknown. Review fixed raw unknown-error text reaching diagnostics and malformed refusal records breaking status loading. All **100 engine tests, 255 Laravel tests / 1408 assertions and 28 frontend tests**, static checks, the production build and signed connectivity passed. The running engine already uses the supervisor and `unless-stopped`. No new live provider request was made. See [the dated review](docs/validation.md).
 
 Latest live acceptance on 25 October 2026: browser Stop during `gpt-6-luna` streaming reached `run.cancelled` in **5,655 ms**, with 38 further chunks while Stop was pending. No final answer was saved, and reload allowed another reply. A controlled active tool and the complete Pi loop cancelled in 0.28/1.22 ms; subsequent tool/model steps did not run. All **92 engine, 249 Laravel / 1396 assertions and 28 frontend tests** passed, alongside static checks and signed connectivity. The browser used an isolated SQLite database; existing MySQL chats were untouched. See [Stop behavior and limits](docs/stop.md) and [dated evidence](docs/validation.md).
 
@@ -227,7 +227,7 @@ Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal
 
 ## Next: 3.4
 
-**3.1 is closed.** The remaining real refresh-after-expiry check passed on 25 October through the existing connection. The observed expiries and result are recorded in [docs/provider-matrix.md](docs/provider-matrix.md). Rejected renewal/re-authentication is covered with fakes; no live sign-in was deliberately revoked. Existing HTTPS-scanning limitations remain documented in the connections guide; no host security settings were changed in this session.
+**3.1 is closed.** The real refresh-after-expiry check passed on 25 October. A later real refusal on 26 October returned `refresh_token_invalidated`; the provider's underlying reason and successful sign-in after that refusal have not been recorded. If Connections still requests sign-in, the owner must reconnect before another live test. Refusal persistence and clearing after new sign-in are covered with fakes. Observations are in [docs/provider-matrix.md](docs/provider-matrix.md). No live sign-in was deliberately revoked and no host security settings were changed in this review.
 
 **3.4 (build): bounded context and budgets.** Load permitted canonical history within the selected model's context budget, reserve output capacity and give oversized requests explicit handling. Verify a follow-up remembers relevant history and an oversized transcript never becomes an uncontrolled provider request. Starting points:
 
@@ -280,6 +280,8 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 ## Git branches and contributor requirements
 
+Current review checkpoint: `912b83a` plus **Keep renewal diagnostics private and validate saved refusals**. Three regression cases reproduced the two review findings before the fixes and now pass. The user requested publication to both branches after the handoff update; the last published review record is `55a901c` until this checkpoint is sent. Preserve the original commit and its message, approved human identities and `.githooks`. Task 3.4 remains next.
+
 Latest published implementation checkpoint: **`dc42637` — Keep ChatGPT connected when a token renewal never reaches OpenAI**, including **`3b0c463` — Propagate Stop through model and tool execution** and **`b59ecff` — Verify automatic credential refresh and close task 3.1**. Reviewed and pushed atomically to `main` and `development` on 26 October at the user's request; both remote hashes matched `dc426379d7ea85ead1515642475006d9330499e5`. This review/publication record follows that checkpoint. All original commits/messages were preserved, with approved human identities and no contribution credits or co-author trailers. Continue on `development` with task 3.4. See [validation](docs/validation.md).
 
 Previous published implementation checkpoint: **`9263393` — Protect tool events and bound multi-round reply output**, including **`93f3085`** (first-message streaming), **`3ca251e`** (live Pi replies), **`5d7b7f0`** (task 3.2 evidence) and **`8ed22bb`** (the sample lookup tool). At the user's request, both branches were fast-forwarded and pushed atomically on 24 October 2026; both remote hashes matched `9263393f362352cea3aaa91305838ed63549c745`. Original commits and messages were preserved. The full history audit passed with the approved human author/committer and no prohibited attribution. This publication record follows that checkpoint. See [the three fixes and validation evidence](docs/validation.md). The four pending task 3.3 documentation files from the sibling `Chatbot-task-3.3` worktree were incorporated here; that worktree and its local edits were preserved.
@@ -328,10 +330,11 @@ Navigation-fix contributor review on 24 October: the complete-history audit and 
 Read handoff.md, Blueprint.md and Build_Plan.md in this repository.
 Confirm the current Git and Docker state; preserve the existing local history.
 Continue on development, which tracks origin/development.
-Task 3.2 (live replies through a Pi Agent per run) is done and verified on gpt-6-luna.
-If I report the ChatGPT refresh-after-expiry result, record it in docs/provider-matrix.md
-(no tokens or personal data) and close 3.1. Then implement task 3.3: the lookup_reference
-sample tool with schema, permission, timeout and size limit against invented fixtures.
+Tasks 3.1–3.3 and 3.5 are complete; implement task 3.4 next: model-aware context and
+token budgets, with follow-up history and oversized-transcript acceptance.
+Keep Stop guards, bounded tool results and private renewal diagnostics intact.
+The last recorded live grant was invalidated by the provider; check the connection
+status and require the owner's sign-in if needed before any live acceptance.
 Live tests use only openai / gpt-6-luna at reasoning medium or high.
 Never copy host credentials or fall back to API keys.
 Run the relevant checks, document actual results and update the build plan and handoff.

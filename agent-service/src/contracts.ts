@@ -51,7 +51,7 @@ export interface RunRequest {
     connectionId: string | null;
     capabilities: string[];
     messages: RunMessage[];
-    limits: { maxModelRounds: number; maxToolCalls: number; runDeadlineMs: number };
+    limits: { maxInputTokens: number; maxOutputTokens: number; maxModelRounds: number; maxToolCalls: number; runDeadlineMs: number };
 }
 
 export interface CancelRequest {

@@ -50,8 +50,9 @@ class ChatRunController extends Controller
         try {
             $run = $this->factory->forConversation($user, $conversation);
         } catch (RunNotDispatchable $exception) {
-            return $this->problem(409, $exception->reason, match ($exception->reason) {
+            return $this->problem($exception->reason === 'context_too_large' ? 422 : 409, $exception->reason, match ($exception->reason) {
                 'no_pending_user_message' => 'The latest message already has a reply.',
+                'context_too_large' => 'This question is too large for a reply. Send a shorter question.',
                 'connection_required' => "This chat's account is no longer connected. Connect it again on the Connections page.",
                 'connection_not_ready' => "This chat's account needs attention. Check it on the Connections page.",
                 default => 'This conversation cannot get a reply yet.',

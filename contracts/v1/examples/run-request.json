@@ -25,6 +25,8 @@
         }
     ],
     "limits": {
+        "maxInputTokens": 32000,
+        "maxOutputTokens": 4096,
         "maxModelRounds": 4,
         "maxToolCalls": 6,
         "runDeadlineMs": 180000

@@ -39,6 +39,8 @@ final readonly class RunRequest
 
     /** Inclusive [minimum, maximum] for each limit. */
     private const LIMIT_RANGES = [
+        'maxInputTokens' => [1_024, 200_000],
+        'maxOutputTokens' => [1, 32_000],
         'maxModelRounds' => [1, 16],
         'maxToolCalls' => [0, 32],
         'runDeadlineMs' => [1_000, 600_000],
@@ -47,7 +49,7 @@ final readonly class RunRequest
     /**
      * @param  list<string>  $capabilities
      * @param  list<array{id: string, role: string, content: string}>  $messages  roles are checked at runtime
-     * @param  array{maxModelRounds: int, maxToolCalls: int, runDeadlineMs: int}  $limits
+     * @param  array{maxInputTokens: int, maxOutputTokens: int, maxModelRounds: int, maxToolCalls: int, runDeadlineMs: int}  $limits
      */
     public function __construct(
         public string $runId,
@@ -122,6 +124,8 @@ final readonly class RunRequest
                 'content' => $message['content'],
             ], $this->messages),
             'limits' => [
+                'maxInputTokens' => $this->limits['maxInputTokens'],
+                'maxOutputTokens' => $this->limits['maxOutputTokens'],
                 'maxModelRounds' => $this->limits['maxModelRounds'],
                 'maxToolCalls' => $this->limits['maxToolCalls'],
                 'runDeadlineMs' => $this->limits['runDeadlineMs'],
@@ -138,7 +142,9 @@ final readonly class RunRequest
             throw new InvalidArgumentException('The run request cannot be encoded as JSON.', previous: $exception);
         }
 
-        self::require(strlen($json) <= self::MAX_ENCODED_BYTES, 'The encoded run request exceeds the engine body limit.');
+        if (strlen($json) > self::MAX_ENCODED_BYTES) {
+            throw new RunRequestTooLarge('The encoded run request exceeds the engine body limit.');
+        }
 
         return $json;
     }

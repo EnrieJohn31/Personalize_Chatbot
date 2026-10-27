@@ -26,4 +26,9 @@ final class RunNotDispatchable extends RuntimeException
     {
         return new self('no_pending_user_message', 'The latest message must be a user message.');
     }
+
+    public static function contextTooLarge(): self
+    {
+        return new self('context_too_large', 'The latest question exceeds the run request size limit.');
+    }
 }

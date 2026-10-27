@@ -35,7 +35,7 @@ class RunRequestFactoryTest extends TestCase
         $this->assertSame(['provider' => 'simulated', 'id' => 'simulated-echo'], $snapshot['model']);
         // The profile's permitted tools, from server configuration; the browser never chooses them.
         $this->assertSame(['lookup_reference'], $snapshot['capabilities']);
-        $this->assertSame(['maxModelRounds' => 4, 'maxToolCalls' => 6, 'runDeadlineMs' => 180_000], $snapshot['limits']);
+        $this->assertSame(['maxInputTokens' => 32_000, 'maxOutputTokens' => 4_096, 'maxModelRounds' => 4, 'maxToolCalls' => 6, 'runDeadlineMs' => 180_000], $snapshot['limits']);
         $this->assertSame(
             [['user', 'Hello'], ['assistant', 'Hi there.'], ['user', 'A follow-up question']],
             array_map(fn (array $message): array => [$message['role'], $message['content']], $snapshot['messages']),
@@ -52,6 +52,18 @@ class RunRequestFactoryTest extends TestCase
         $messages = $this->factory()->forConversation($owner, $conversation)->messages;
 
         $this->assertSame(['Second', 'Third'], array_column($messages, 'content'));
+    }
+
+    public function test_encoded_snapshot_discards_oldest_messages_but_keeps_the_pending_question(): void
+    {
+        $owner = User::factory()->create();
+        $conversation = $this->conversation($owner, array_merge(array_fill(0, 45, str_repeat('\\', 11_900)), ['What did we discuss?']));
+
+        $request = $this->factory()->forConversation($owner, $conversation);
+
+        $this->assertLessThan(46, count($request->messages));
+        $this->assertSame('What did we discuss?', $request->messages[array_key_last($request->messages)]['content']);
+        $this->assertLessThanOrEqual(RunRequest::MAX_ENCODED_BYTES, strlen($request->toJson()));
     }
 
     public function test_another_users_conversation_is_refused_as_not_found(): void

@@ -3,6 +3,7 @@
 namespace App\Services\Chat;
 
 use App\Data\Agent\RunRequest;
+use App\Data\Agent\RunRequestTooLarge;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
@@ -26,7 +27,7 @@ final class RunRequestFactory
 
     /**
      * @param  array{id: string, version: int, model: array{provider: string, id: string}, capabilities: list<string>}  $profile
-     * @param  array{history_messages: int, max_model_rounds: int, max_tool_calls: int, run_deadline_ms: int}  $limits
+     * @param  array{history_messages: int, max_input_tokens: int, max_output_tokens: int, max_model_rounds: int, max_tool_calls: int, run_deadline_ms: int}  $limits
      */
     public function __construct(
         #[Config('assistant.profile')] private readonly array $profile,
@@ -73,28 +74,47 @@ final class RunRequestFactory
             throw RunNotDispatchable::noPendingUserMessage();
         }
 
-        return new RunRequest(
-            runId: Str::uuid7()->toString(),
-            conversationId: $conversation->id,
-            userId: (string) $user->id,
-            profileId: $this->profile['id'],
-            profileVersion: $this->profile['version'],
-            modelProvider: $model['provider'],
-            modelId: $model['id'],
-            connectionId: $connectionId,
-            capabilities: $this->profile['capabilities'],
-            messages: array_values($messages->map(fn (Message $message): array => [
-                'id' => $message->id,
-                'role' => $message->role,
-                'content' => $message->content,
-            ])->all()),
-            limits: [
-                'maxModelRounds' => $this->limits['max_model_rounds'],
-                'maxToolCalls' => $this->limits['max_tool_calls'],
-                'runDeadlineMs' => $this->limits['run_deadline_ms'],
-            ],
-            modelReasoning: $connectionId === null ? null : $this->reasoning,
-        );
+        $history = array_values($messages->map(fn (Message $message): array => [
+            'id' => $message->id,
+            'role' => $message->role,
+            'content' => $message->content,
+        ])->all());
+        $runId = Str::uuid7()->toString();
+
+        // The signed HTTP body has its own byte limit. Discard oldest messages until the exact
+        // encoded snapshot fits; keep the pending question intact or return an explicit error.
+        do {
+            $request = new RunRequest(
+                runId: $runId,
+                conversationId: $conversation->id,
+                userId: (string) $user->id,
+                profileId: $this->profile['id'],
+                profileVersion: $this->profile['version'],
+                modelProvider: $model['provider'],
+                modelId: $model['id'],
+                connectionId: $connectionId,
+                capabilities: $this->profile['capabilities'],
+                messages: $history,
+                limits: [
+                    'maxInputTokens' => $this->limits['max_input_tokens'],
+                    'maxOutputTokens' => $this->limits['max_output_tokens'],
+                    'maxModelRounds' => $this->limits['max_model_rounds'],
+                    'maxToolCalls' => $this->limits['max_tool_calls'],
+                    'runDeadlineMs' => $this->limits['run_deadline_ms'],
+                ],
+                modelReasoning: $connectionId === null ? null : $this->reasoning,
+            );
+            try {
+                $request->toJson();
+
+                return $request;
+            } catch (RunRequestTooLarge) {
+                if (count($history) === 1) {
+                    throw RunNotDispatchable::contextTooLarge();
+                }
+                array_shift($history);
+            }
+        } while (true);
     }
 
     /**

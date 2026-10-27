@@ -90,8 +90,24 @@
         "limits": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["maxModelRounds", "maxToolCalls", "runDeadlineMs"],
+            "required": [
+                "maxInputTokens",
+                "maxOutputTokens",
+                "maxModelRounds",
+                "maxToolCalls",
+                "runDeadlineMs"
+            ],
             "properties": {
+                "maxInputTokens": {
+                    "type": "integer",
+                    "minimum": 1024,
+                    "maximum": 200000
+                },
+                "maxOutputTokens": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 32000
+                },
                 "maxModelRounds": {
                     "type": "integer",
                     "minimum": 1,

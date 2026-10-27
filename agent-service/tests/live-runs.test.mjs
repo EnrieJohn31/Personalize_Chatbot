@@ -165,6 +165,77 @@ test('reasoning is sent only to models that reason', async () => {
     assert.equal(engine.fake.calls[0].options.reasoning, undefined);
 });
 
+test('a follow-up keeps its relevant recent answer while older history is bounded', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([engine.fake.reply((context) => {
+        const text = JSON.stringify(context.messages);
+        return fauxAssistantMessage(text.includes('SAMPLE-001') ? 'The code remains SAMPLE-001.' : 'Missing context.');
+    })]);
+    const messages = [
+        ...Array.from({ length: 12 }, (_, i) => ({ id: randomUUID(), role: 'user', content: `Old ${i}: ${'x'.repeat(450)}` })),
+        { id: randomUUID(), role: 'assistant', content: 'The sample office uses SAMPLE-001.' },
+        { id: randomUUID(), role: 'user', content: 'What was that code again?' },
+    ];
+    const run = liveRun(connectionId, {}, { messages, limits: { ...example.limits, maxInputTokens: 2_048 } });
+
+    const events = await runToEnd(engine, run);
+
+    assert.equal(ofType(events, 'assistant.final')[0].data.text, 'The code remains SAMPLE-001.');
+    const seen = JSON.stringify(engine.fake.calls[0].context.messages);
+    assert.match(seen, /SAMPLE-001/);
+    assert.doesNotMatch(seen, /Old 0:/);
+    assert.equal(engine.fake.calls[0].options.maxTokens, 4_096);
+});
+
+test('an oversized current question fails clearly before any provider request', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    const run = liveRun(connectionId, {}, { messages: [{ id: randomUUID(), role: 'user', content: 'x'.repeat(4_000) }], limits: { ...example.limits, maxInputTokens: 1_024 } });
+
+    const events = await runToEnd(engine, run);
+
+    assert.equal(failure(events)?.code, 'context_limit_exceeded');
+    assert.equal(engine.fake.calls.length, 0);
+    assert.equal(ofType(events, 'assistant.final').length, 0);
+    assert.equal(events.at(-1).type, 'run.failed');
+});
+
+test('the configured output cap is passed to the selected model', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([engine.fake.reply(() => fauxAssistantMessage('Short answer.'))]);
+
+    const events = await runToEnd(engine, liveRun(connectionId, {}, { limits: { ...example.limits, maxOutputTokens: 256 } }));
+
+    assert.equal(ofType(events, 'run.completed').length, 1);
+    assert.equal(engine.fake.calls[0].options.maxTokens, 256);
+});
+
+test('the selected model window reserves answer space even when the configured input cap is larger', async () => {
+    const engine = await start({ providerOptions: { models: [
+        { id: 'thinker', reasoning: true, contextWindow: 4_096, maxTokens: 2_048 },
+        { id: 'plain' },
+    ] } });
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([engine.fake.reply(() => fauxAssistantMessage('Within the window.'))]);
+    const limits = { ...example.limits, maxInputTokens: 20_000 };
+
+    const ok = await runToEnd(engine, liveRun(connectionId, {}, { limits }));
+    const tooLarge = await runToEnd(engine, liveRun(connectionId, {}, {
+        messages: [{ id: randomUUID(), role: 'user', content: 'x'.repeat(2_000) }], limits,
+    }));
+
+    assert.equal(ofType(ok, 'run.completed').length, 1);
+    assert.equal(engine.fake.calls[0].options.maxTokens, 2_048);
+    assert.equal(failure(tooLarge)?.code, 'context_limit_exceeded');
+    assert.equal(engine.fake.calls.length, 1);
+});
+
 test('runs without their connection, on unknown providers or without a credential store are refused at admission', async () => {
     const engine = await start();
 
@@ -454,13 +525,13 @@ test('text across model rounds stops at the final size limit without saving a sh
     await saveKey(engine, connectionId);
     engine.fake.core.setResponses([
         fauxAssistantMessage([
-            fauxText('a'.repeat(120_000)),
+            fauxText('a'.repeat(80_000)),
             fauxToolCall('lookup_reference', { query: 'SAMPLE-001' }, { id: 'call_1' }),
         ], { stopReason: 'toolUse' }),
-        fauxAssistantMessage('b'.repeat(100_000)),
+        fauxAssistantMessage('b'.repeat(130_000)),
     ]);
 
-    const events = await runToEnd(engine, withTools(connectionId));
+    const events = await runToEnd(engine, withTools(connectionId, { maxInputTokens: 200_000 }));
     const streamed = ofType(events, 'assistant.delta').map((event) => event.data.text).join('');
 
     assert.equal(failure(events)?.code, 'output_limit_exceeded');
@@ -469,6 +540,26 @@ test('text across model rounds stops at the final size limit without saving a sh
     assert.equal(ofType(events, 'assistant.final').length, 0);
     assert.equal(ofType(events, 'run.completed').length, 0);
     assert.ok(events.every((event) => validate('runEvent', event).length === 0));
+    assert.equal(events.at(-1).type, 'run.failed');
+});
+
+test('a tool round that grows beyond the context budget cannot make another model request', async () => {
+    const engine = await start();
+    const connectionId = randomUUID();
+    await saveKey(engine, connectionId);
+    engine.fake.core.setResponses([
+        engine.fake.reply(() => fauxAssistantMessage([
+            fauxText('a'.repeat(1_700)),
+            fauxToolCall('lookup_reference', { query: 'SAMPLE-001' }, { id: 'call_1' }),
+        ], { stopReason: 'toolUse' })),
+        engine.fake.reply(() => fauxAssistantMessage('Should never reach the model.')),
+    ]);
+
+    const events = await runToEnd(engine, withTools(connectionId, { maxInputTokens: 2_048 }));
+
+    assert.equal(engine.fake.calls.length, 1);
+    assert.equal(failure(events)?.code, 'context_limit_exceeded');
+    assert.equal(ofType(events, 'assistant.final').length, 0);
     assert.equal(events.at(-1).type, 'run.failed');
 });
 

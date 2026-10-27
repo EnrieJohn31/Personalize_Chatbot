@@ -71,6 +71,10 @@ return [
     // Blueprint section 12 starting bounds; prototype values, not measured capacity.
     'limits' => [
         'history_messages' => 50,
+        // Conservative UTF-8-byte estimate at the engine, capped again by the selected model's
+        // context window after reserving its answer. These are server-owned run limits.
+        'max_input_tokens' => (int) env('ASSISTANT_MAX_INPUT_TOKENS', 32_000),
+        'max_output_tokens' => (int) env('ASSISTANT_MAX_OUTPUT_TOKENS', 4_096),
         'max_model_rounds' => 4,
         'max_tool_calls' => 6,
         'run_deadline_ms' => 180_000,

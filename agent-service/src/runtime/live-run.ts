@@ -6,12 +6,11 @@ import { safeSlice } from '../text.js';
 import { ToolExecutor } from '../tools/executor.js';
 import type { ToolDefinition } from '../tools/registry.js';
 import type { RunExecution } from './run-execution.js';
+import { ContextBudgetError, estimatedInputTokens, selectHistory, tokenBudget } from './context-budget.js';
 
 /** The contract's bounds for one `assistant.delta` and for `assistant.final` text. */
 const MAX_DELTA_LENGTH = 16_384;
 const MAX_FINAL_LENGTH = 200_000;
-/** Per-request token ceiling; the character budget below also bounds text across model rounds. */
-const MAX_OUTPUT_TOKENS = 32_000;
 /** Streamed text is passed on in batches, so even a run that uses its whole deadline stays far below the per-run event limit. */
 const DELTA_BUDGET = 1_500;
 const MIN_FLUSH_INTERVAL_MS = 100;
@@ -98,6 +97,11 @@ export async function runLive(run: RunRequest, execution: RunExecution, options:
     } catch (error) {
         // An adapter may reject on abort instead of returning an aborted message.
         if (!stopped()) {
+            if (error instanceof ContextBudgetError) {
+                execution.emit('run.failed', { code: 'context_limit_exceeded', message: error.message });
+
+                return;
+            }
             throw error;
         }
     } finally {
@@ -128,19 +132,37 @@ async function answerWith(
     // A tool result needs a further model round to be used, so a single round offers no tools.
     const offerTools = tools.available && run.limits.maxModelRounds > 1;
     let requests = 0;
+    const systemPrompt = offerTools ? SYSTEM_PROMPT + TOOLS_PROMPT : SYSTEM_PROMPT;
+    const agentTools = offerTools ? tools.agentTools() : [];
+    const history = selectHistory(
+        run.messages.map((message) => toAgentMessage(message, model)),
+        systemPrompt,
+        agentTools,
+        tokenBudget(model, run.limits).input,
+    );
+    let contextLimitExceeded = false;
     const agent = new Agent({
         initialState: {
-            systemPrompt: offerTools ? SYSTEM_PROMPT + TOOLS_PROMPT : SYSTEM_PROMPT,
+            systemPrompt,
             model,
             thinkingLevel: thinkingLevel(model, run),
-            messages: run.messages.map((message) => toAgentMessage(message, model)),
-            tools: offerTools ? tools.agentTools() : [],
+            messages: history,
+            tools: agentTools,
         },
-        streamFn: (requestModel, context, streamOptions) =>
-            models.streamSimple(requestModel, context, {
+        streamFn: (requestModel, context, streamOptions) => {
+            const budget = tokenBudget(requestModel, run.limits);
+            // Recheck every model request: tool calls, tool results and previous answer text
+            // grow the context after the initial history was selected.
+            if (estimatedInputTokens(context) > budget.input) {
+                contextLimitExceeded = true;
+                throw new ContextBudgetError();
+            }
+
+            return models.streamSimple(requestModel, context, {
                 ...streamOptions,
-                maxTokens: Math.min(requestModel.maxTokens, MAX_OUTPUT_TOKENS),
-            }),
+                maxTokens: budget.output,
+            });
+        },
         beforeToolCall: async (context, toolSignal) => tools.beforeToolCall(context, toolSignal),
         // Before the last permitted round, or once the tool budget is used up, the tools are
         // withdrawn; Pi tells the model, which then has to answer with what it has.
@@ -202,10 +224,20 @@ async function answerWith(
     const abort = (): void => agent.abort();
     signal.addEventListener('abort', abort, { once: true });
     try {
-        await agent.continue();
+        try {
+            await agent.continue();
+        } catch (error) {
+            if (!contextLimitExceeded) {
+                throw error;
+            }
+        }
     } finally {
         signal.removeEventListener('abort', abort);
         deltas.close(!signal.aborted);
+    }
+
+    if (contextLimitExceeded) {
+        throw new ContextBudgetError();
     }
 
     return {

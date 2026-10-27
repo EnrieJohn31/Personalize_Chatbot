@@ -66,7 +66,7 @@ After the first render, the page uses the `/api/chat` endpoints described in [ch
 
 ## Not included yet
 
-A list of the sources a reply used (the engine already sends them as `source.added`), bounded context beyond the latest 50 messages (task 3.4), a per-chat reasoning choice, reply editing or regeneration, single-message deletion and uploads. User-message writes are still not idempotent: retrying after an ambiguous network failure can save the same text twice (see [chat-history.md](chat-history.md)). Durable execution independent of any reader, server-side event retention, interruption detection after an engine restart, and heartbeats from Laravel to the browser arrive with Phases 4–5.
+A list of the sources a reply used (the engine already sends them as `source.added`), a per-chat reasoning choice, reply editing or regeneration, single-message deletion and uploads. Task 3.4 now bounds the newest history against the selected model's context window; see [context budgets](context-budget.md). User-message writes are still not idempotent: retrying after an ambiguous network failure can save the same text twice (see [chat-history.md](chat-history.md)). Durable execution independent of any reader, server-side event retention, interruption detection after an engine restart, and heartbeats from Laravel to the browser arrive with Phases 4–5.
 
 ## Main files
 

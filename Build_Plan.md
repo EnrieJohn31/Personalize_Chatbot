@@ -174,8 +174,8 @@ Keep a short progress record here as implementation proceeds:
 | --- | --- |
 | Current task | 4.1 — durable run and event records with transactional admission |
 | Last completed task | 3.4 on 27 October: bounded model-aware context and output, with controlled follow-up and oversized-case acceptance |
-| Actual checks run on the application | Latest 27 October: 256 Laravel tests / 1416 assertions, 28 frontend tests, 105 engine tests, static checks and signed connectivity passed. The previous production build remains dated 26 October; no live provider request was made. See docs/validation.md |
-| Git checkpoint and branches | Continue on `development`. Task 3.4 implementation is local commit `f557f78`; the last published checkpoint remains `3289b1c` on both branches. No task 3.4 push was requested |
+| Actual checks run on the application | Publication review on 27 October: 256 Laravel tests / 1416 assertions, 28 frontend tests, 105 engine tests, static checks, production build, signed connectivity and contributor audit passed. No live provider request was made. See docs/validation.md |
+| Git checkpoint and branches | Reviewed task 3.4 through `126f986`, including `f557f78`, and atomically published to both branches on 27 October. Remote hashes matched; this review record follows. Continue on `development` |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
 | Next checkpoint | Task 4.1: persisted run/event lifecycle, idempotency key and request hash, then transactional admission |
 
@@ -264,6 +264,8 @@ Publication review of local model changes on 24 October: no blocking findings ac
 
 - Review of refusal diagnostics, 26 October — Fixed unknown exception/description text reaching responses, logs and unencrypted refusal records; hardened saved-record parsing against null/malformed entries and enforced the 1,000-entry loading bound. Three new regressions failed before the corrections; all 100 engine tests pass afterward. Full application checks (255 Laravel / 1408 assertions, 28 frontend), production build and signed connectivity pass. The running supervisor configuration was verified; the earlier crash-recovery probe was not repeated. Updated the handoff, provider matrix and restart instructions. Task 3.4 remains next.
 - 3.4, 27 October — Laravel trims oldest owned history until the signed request fits 1 MiB. The Pi engine reserves output in the selected model's window, selects recent whole messages under a conservative byte estimate and checks every model round after tools. A follow-up retained its relevant answer while older messages were removed; oversized current and tool-grown contexts failed before another provider call. Configurable input/output caps were added to the shared contract in local commit `f557f78`. All 105 engine, 256 Laravel / 1416 assertions and 28 frontend tests plus static checks and signed connectivity passed. No new live provider request was made because the recorded grant requires sign-in. See [context budgets](docs/context-budget.md) and [validation](docs/validation.md). Task 4.1 follows.
+
+- Publication review, 27 October: task 3.4 code and contracts passed review without a blocking defect. All 105 engine, 256 Laravel / 1416 assertions and 28 frontend tests, static checks, production build and signed connectivity passed. The contributor audit passed and the original commits/messages were pushed atomically to both branches through `126f986`, with matching remote hashes. Corrected a stale chat UI guide entry. Browser/live-provider acceptance and remote CI results remain unverified for this review; the interrupted UI review remains pending. Task 4.1 is next.
 
 ## Completion boundaries
 

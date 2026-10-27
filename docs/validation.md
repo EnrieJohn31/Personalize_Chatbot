@@ -1,5 +1,19 @@
 # Foundation validation
 
+## Publication review of task 3.4 — 27 October 2026
+
+Reviewed implementation `f557f78` and its documentation checkpoint `126f986`. No blocking code defect was found. The shared PHP/engine contract, signed body trimming, recent-history selection, model-window/output reservation and checks after tool rounds agree with the documented behavior. Corrected the chat UI guide's stale statement that task 3.4 was still missing.
+
+- `composer ci:check` passed: **256 Laravel tests / 1416 assertions**, **28 frontend tests**, formatting, lint, TypeScript, Pint (124 files) and PHPStan (92 files).
+- Engine `npm test` passed its TypeScript build and **105 tests**.
+- Signed `php artisan agent:check` passed without starting a run.
+- Production `npm run build` passed in 149 seconds. The existing optional `fontaine` warning remains non-fatal; generated assets stay ignored.
+- The full reachable-history attribution audit passed. Original commits have the approved human author and committer, no co-author trailer or contributor credit, and `.githooks` remains active. Credentials, `.env`, dependency output and `.claude/` are absent from the publication set.
+
+The requested UI review was interrupted before any tracked interface change. Its disposable SQLite test container was removed after checking its identity; existing MySQL data and provider credentials were untouched. No new browser or live-provider acceptance was performed for this publication review. Task 4.1 remains the next numbered build task, and the UI review remains a separate requested follow-up.
+
+The requested atomic push advanced both `main` and `development` through `126f986`, preserving the original commits and messages. `git ls-remote` verified both remote hashes as `126f9864e1dd8b85238da3fd9c902047746a8e2f` before this review record. Remote CI results remain unverified.
+
 ## Task 3.4: bounded context and token budgets — 27 October 2026
 
 Laravel now drops oldest owned messages only when the exact signed run body exceeds 1 MiB. The Pi engine selects whole recent messages under the chosen model's context window, reserves output, and rechecks after tool/model rounds. It reports `context_limit_exceeded` before a provider request that would exceed the budget. [Budget rules and configuration](context-budget.md) contain the calculation and limits.

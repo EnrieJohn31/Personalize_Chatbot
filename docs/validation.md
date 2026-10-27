@@ -1,5 +1,19 @@
 # Foundation validation
 
+## Task 3.4: bounded context and token budgets — 27 October 2026
+
+Laravel now drops oldest owned messages only when the exact signed run body exceeds 1 MiB. The Pi engine selects whole recent messages under the chosen model's context window, reserves output, and rechecks after tool/model rounds. It reports `context_limit_exceeded` before a provider request that would exceed the budget. [Budget rules and configuration](context-budget.md) contain the calculation and limits.
+
+| Check | Result |
+| --- | --- |
+| Engine `npm test` | TypeScript build and **105 tests passed**, including recent-answer recall, oversized newest question, small model window, output cap and tool-round context growth |
+| `composer ci:check` | **256 Laravel tests / 1416 assertions**, **28 frontend tests**, formatting (136 files), lint (96 files), TypeScript, Pint (123 files) and PHPStan (91 files) passed |
+| Signed body | A 46-message owned history was trimmed below the 1 MiB request limit while retaining the pending question; the shared PHP/engine v1 examples and bounds passed |
+| Signed connectivity | `php artisan agent:check` passed after the implementation: engine status `ok`, provider/request authentication configured, signature accepted and unsigned request refused. No run was started |
+| Live provider | No new provider request was made. The recorded ChatGPT renewal refusal still requires the owner's new sign-in before live acceptance can be repeated |
+
+The byte-based input estimate deliberately leaves unused room and is not a provider tokenizer. No production token-usage or throughput measurement was made. The implementation uses the existing local services and test databases; no stored chat or provider credential was changed by the checks.
+
 ## Review of renewal diagnostics and engine recovery — 26 October 2026
 
 Reviewed `912b83a`, which adds a persisted refusal reason/time, the Connections card display and development engine supervision. Two defects were reproduced and corrected before publication:

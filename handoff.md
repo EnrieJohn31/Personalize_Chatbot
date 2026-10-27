@@ -1,10 +1,12 @@
 # Development handoff
 
-Updated: 26 October 2026. Read this file first when resuming work.
+Updated: 27 October 2026. Read this file first when resuming work.
 
 ## Where we stopped
 
-**Phase 2 (tasks 2.1–2.4) and tasks 3.1–3.3 and 3.5 are complete for the chosen ChatGPT connection. Task 3.5 was completed before 3.4 at the user's request: Stop reaches model/tool abort signals, prevents later work and saves no cancelled answer. Live browser cancellation and controlled active-tool cancellation passed on 25 October; this handoff and the local commit were finalized on 26 October. Next build task: 3.4, bounded context and budgets. OpenCode and real local-server acceptance remain unverified.**
+**Phase 2 (tasks 2.1–2.4) and tasks 3.1–3.5 are complete. Task 3.4 now bounds the owned history, reserves output in the selected model's window and rejects oversized model requests. Controlled follow-up, oversized-question and tool-growth checks passed on 27 October. Next build task: 4.1, durable run and event records with transactional admission. A fresh live context check awaits the owner's sign-in after the provider invalidated the earlier grant. OpenCode and real local-server acceptance remain unverified.**
+
+Task 3.4 checks on 27 October: **105 engine tests, 256 Laravel tests / 1416 assertions and 28 frontend tests** passed, with formatting, lint, TypeScript, PHPStan and signed connectivity. The shared request contract now carries configurable input/output token caps. Laravel trims oldest messages only to fit the 1 MiB signed body; the engine keeps recent whole messages under the selected model's context window and checks again after tool rounds. The oversized cases failed explicitly without another provider call. Implementation is local commit **`f557f78`** on `development`. See [context budgets](docs/context-budget.md) and [validation](docs/validation.md). No new live provider request or production build was run in this session.
 
 Latest review on 26 October 2026 covers **`912b83a`**, which records renewal refusal reasons across restarts, shows the reason/time on Connections, and supervises the development engine. The provider's recorded `refresh_token_invalidated` response replaced the earlier HTTPS-scanning hypothesis; why the grant was invalidated is unknown. Review fixed raw unknown-error text reaching diagnostics and malformed refusal records breaking status loading. All **100 engine tests, 255 Laravel tests / 1408 assertions and 28 frontend tests**, static checks, the production build and signed connectivity passed. The running engine already uses the supervisor and `unless-stopped`. No new live provider request was made. See [the dated review](docs/validation.md).
 
@@ -23,7 +25,7 @@ The application provides:
 - A Connections page in the main menu: per-user ChatGPT sign-in and OpenCode Go/Zen keys, encrypted inside the engine, a shared local model server (`LOCAL_LLM_URL`), and a choice of which connection and model chat uses.
 - Each conversation records the choice it started with; the chat header shows it and links to Connections.
 
-Replies stream through a Stage A Laravel relay. They come from the conversation's account and model (`ASSISTANT_LIVE_REPLIES`, default `true`, with `ASSISTANT_REASONING` default `medium`), or from the engine's deterministic simulation when the conversation has none. Live replies may use the tools in `ASSISTANT_CAPABILITIES` (default `lookup_reference`; see [tools](docs/tools.md)). Bounded context and durable runs are not implemented yet. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the connections guide](docs/connections.md).
+Replies stream through a Stage A Laravel relay. They come from the conversation's account and model (`ASSISTANT_LIVE_REPLIES`, default `true`, with `ASSISTANT_REASONING` default `medium`), or from the engine's deterministic simulation when the conversation has none. Live replies may use the tools in `ASSISTANT_CAPABILITIES` (default `lookup_reference`; see [tools](docs/tools.md)). Model-aware context budgets are implemented ([details](docs/context-budget.md)); durable runs are Phase 4. See [the history endpoint contract](docs/chat-history.md), [the engine contracts](contracts/README.md), [the chat page and replies](docs/chat-ui.md) and [the connections guide](docs/connections.md).
 
 | Document                                             | Use it for                                                                           |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -38,6 +40,7 @@ Replies stream through a Stage A Laravel relay. They come from the conversation'
 | [contracts/README.md](contracts/README.md)           | Engine schemas, request signing, admission, event stream and error codes             |
 | [docs/runtime-versions.md](docs/runtime-versions.md) | Installed versions, image identities and compatibility sources                       |
 | [docs/provider-matrix.md](docs/provider-matrix.md)   | Provider path, ownership and what is verified or still untested                      |
+| [docs/context-budget.md](docs/context-budget.md)     | Model-aware input/output budgets, configuration and oversized-run behavior           |
 
 ## Completed and checked
 
@@ -225,25 +228,22 @@ docker compose down
 
 Laravel is on loopback port 8080; Vite uses 5173 when started. MySQL is internal at `mysql:3306`; the engine is internal at `http://agent:3101`, and only its sign-in callback is published, on `127.0.0.1:1455`. Health reports `providerAuth` (`configured` once the engine has its credential key), `requestAuth` and `simulation`. Existing local secrets stay in ignored `.env`; preserve the application key and MySQL volume. Do not use `docker compose down -v` for routine shutdown.
 
-## Next: 3.4
+## Next: 4.1
 
 **3.1 is closed.** The real refresh-after-expiry check passed on 25 October. A later real refusal on 26 October returned `refresh_token_invalidated`; the provider's underlying reason and successful sign-in after that refusal have not been recorded. If Connections still requests sign-in, the owner must reconnect before another live test. Refusal persistence and clearing after new sign-in are covered with fakes. Observations are in [docs/provider-matrix.md](docs/provider-matrix.md). No live sign-in was deliberately revoked and no host security settings were changed in this review.
 
-**3.4 (build): bounded context and budgets.** Load permitted canonical history within the selected model's context budget, reserve output capacity and give oversized requests explicit handling. Verify a follow-up remembers relevant history and an oversized transcript never becomes an uncontrolled provider request. Starting points:
+**4.1 (build): durable runs and transactional admission.** Add `chat_runs` and `chat_run_events` with lifecycle constraints, an idempotency key and request hash. Repeated Send with the same key must produce one run; conflicting reuse must fail. Keep Laravel authoritative for ownership and durable records, and keep Pi as the model/tool engine. Starting points:
 
-- `RunRequestFactory` currently sends the latest 50 messages; add model-aware context selection and budget checks.
-- `runtime/live-run.ts` already enforces model rounds, a per-request token ceiling and the aggregate 200,000-unit text ceiling. Exceeding the text ceiling aborts the model and fails with `output_limit_exceeded`; no shortened answer is saved as complete.
-- `tools/executor.ts` already enforces capability, argument, repeat, tool-count, timeout and result-size checks. Keep truncation notices inside the size cap and validation arguments out of browser events.
-- Keep source metadata separate from tool result text; the page shows retrieval progress but does not yet list sources.
-
-Task 3.5 is complete; preserve its cancellation guards and regression cases while adding context budgets. Task 3.4 stays open despite the existing hard output ceiling; model-aware context and configurable token budgets are still missing. Phase 4 follows after 3.4.
+- Inspect the Stage A `ActiveRuns`, `ChatRunController` and relay before replacing process-local admission assumptions.
+- Design an additive MySQL migration, model/state constraints and transactional creation; use isolated test databases and preserve existing chats.
+- Keep the signed Laravel-to-engine contract in sync and make retry behavior explicit. Task 4.2 adds the short handoff and claim endpoint; tasks 4.3–4.4 add persisted event batches and atomic final save.
+- Preserve task 3.4 context guards and task 3.5 cancellation tests. A new live provider context check needs the owner's sign-in; controlled tests already pass.
 
 ## Remaining work in order
 
 | Tasks   | Remaining result                                                                                   |
 | ------- | -------------------------------------------------------------------------------------------------- |
-| 3.4     | Bounded history and budgets (start here)                                                           |
-| 4.1–4.4 | Durable runs/events, claims, idempotency and transactional final saves                             |
+| 4.1–4.4 | Durable runs/events, claims, idempotency and transactional final saves (start with 4.1)            |
 | 5.1–5.4 | SSE replay, cancellation races, recovery scheduler, capacity and queue deadlines                   |
 | 6.1–6.3 | Foundation regression checks, measurements, integrated demo and pristine-checkout setup validation |
 | 7.1–7.3 | First purpose and authorized connector, after the purpose is selected                              |
@@ -280,7 +280,9 @@ Use the build plan's individual acceptance checks; this table does not replace t
 
 ## Git branches and contributor requirements
 
-Latest published checkpoint: **`7c65af5` — Keep renewal diagnostics private and validate saved refusals**, including original implementation **`912b83a` — Show why a provider refused a sign-in and restart a stalled engine**. Three regressions reproduced the two review findings before the fixes and now pass. The requested atomic push advanced both branches on 26 October; remote hashes matched `7c65af556f6cf684bebb60779c998d1f05a831e5` before this publication record. Original messages, approved human identities and `.githooks` were preserved, with no co-author trailers or contribution credits. Continue on `development` with task 3.4.
+Latest published checkpoint: **`3289b1c` — Record renewal diagnostics review publication**, on both `main` and `development` and both corresponding remote-tracking refs. Task 3.4 implementation is local commit **`f557f78` — Bound live chat context to selected model budgets** on `development`; no push was requested. Continue with task 4.1 after this local checkpoint.
+
+Previous published checkpoint: **`7c65af5` — Keep renewal diagnostics private and validate saved refusals**, including original implementation **`912b83a` — Show why a provider refused a sign-in and restart a stalled engine**. Three regressions reproduced the two review findings before the fixes and now pass. The requested atomic push advanced both branches on 26 October; remote hashes matched `7c65af556f6cf684bebb60779c998d1f05a831e5` before this publication record. Original messages, approved human identities and `.githooks` were preserved, with no co-author trailers or contribution credits.
 
 Previous published implementation checkpoint: **`dc42637` — Keep ChatGPT connected when a token renewal never reaches OpenAI**, including **`3b0c463` — Propagate Stop through model and tool execution** and **`b59ecff` — Verify automatic credential refresh and close task 3.1**. Reviewed and pushed atomically to `main` and `development` on 26 October at the user's request; both remote hashes matched `dc426379d7ea85ead1515642475006d9330499e5`, followed by publication record `55a901c`. All original commits/messages were preserved, with approved human identities and no contribution credits or co-author trailers. See [validation](docs/validation.md).
 
@@ -330,12 +332,13 @@ Navigation-fix contributor review on 24 October: the complete-history audit and 
 Read handoff.md, Blueprint.md and Build_Plan.md in this repository.
 Confirm the current Git and Docker state; preserve the existing local history.
 Continue on development, which tracks origin/development.
-Tasks 3.1–3.3 and 3.5 are complete; implement task 3.4 next: model-aware context and
-token budgets, with follow-up history and oversized-transcript acceptance.
-Keep Stop guards, bounded tool results and private renewal diagnostics intact.
+Tasks 3.1–3.5 are complete; implement task 4.1 next: durable chat_runs and
+chat_run_events, lifecycle constraints, idempotency and transactional admission.
+Keep context budgets, Stop guards, bounded tool results and private renewal diagnostics intact.
 The last recorded live grant was invalidated by the provider; check the connection
 status and require the owner's sign-in if needed before any live acceptance.
-Live tests use only openai / gpt-6-luna at reasoning medium or high.
+If live acceptance is available, use only the previously approved openai / gpt-6-luna
+connection at reasoning medium or high.
 Never copy host credentials or fall back to API keys.
 Run the relevant checks, document actual results and update the build plan and handoff.
 Commit locally with descriptive messages using the configured human identity;

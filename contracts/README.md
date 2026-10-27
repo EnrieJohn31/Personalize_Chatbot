@@ -17,7 +17,7 @@ Introduced by Build Plan task 2.2; the event stream was added in task 2.4 and pr
 
 Every non-2xx response uses `error.schema.json`. `run-event.schema.json` defines the normalized engine events. The engine streams them from the events endpoint, and Laravel validates each one again (`App\Data\Agent\RunEvent`) before relaying it. Tool and source event types arrive with the first tool in task 3.3.
 
-A `202` means admitted, not completed. The run snapshot is created by Laravel from the acting user's owned history. It carries IDs, the profile/model reference, a non-secret connection reference and limits. It never carries credentials, browser-chosen tools or provider-specific transcript data.
+A `202` means admitted, not completed. The run snapshot is created by Laravel from the acting user's owned history. It carries IDs, the profile/model reference, a non-secret connection reference and limits. It never carries credentials, browser-chosen tools or provider-specific transcript data. Since task 3.4, the required limits also include `maxInputTokens` and `maxOutputTokens`; keep Laravel and engine deployments in step when changing this internal v1 contract. See [context budgets](../docs/context-budget.md).
 
 Examples in `v1/examples/` are loaded by both test suites. Keep them valid when a schema changes.
 
@@ -65,7 +65,7 @@ Each run keeps at most 2,000 events in engine memory, with the last slot reserve
 
 A live run (`runtime/live-run.ts`) builds a fresh Pi Agent on the connection's Pi `Models`:
 
-- **Setup.** It uses a short system prompt, the saved history as plain text and the conversation ID as the provider session ID, with output capped at 32,000 tokens per model request (or the model's smaller maximum). Text across all rounds is also bounded by the final-answer limit of 200,000 UTF-16 units; exceeding it aborts the request and fails explicitly rather than saving a shortened success.
+- **Setup.** It uses a short system prompt, bounded saved history as plain text and the conversation ID as the provider session ID. Each model request reserves output inside the selected model's context window and uses the smaller of the configured, model and hard 32,000-token output caps. Text across all rounds is also bounded by the final-answer limit of 200,000 UTF-16 units; exceeding it aborts the request and fails explicitly rather than saving a shortened success. See [context budgets](../docs/context-budget.md).
 - **Events.** It emits `run.started`, `run.progress` (`preparing`, then `answering` with the first text), `assistant.delta`, `assistant.final` and `run.completed`.
 - **Tools.** It offers the model only the tools the run's capabilities permit, through `tools/executor.ts`.
     - A call that runs emits `run.progress` (`retrieving`), `tool.started`, a `source.added` per record used, and `tool.finished`. A refused call emits only `tool.finished` (`blocked` or `invalid_arguments`).
@@ -80,6 +80,7 @@ A live run (`runtime/live-run.ts`) builds a fresh Pi Agent on the connection's P
     - `empty_reply`
     - `deadline_exceeded`
     - `output_limit_exceeded`: the aggregate reply exceeded the text limit; no final answer is saved.
+    - `context_limit_exceeded`: the newest question or a later tool/model round exceeds the selected model's conservative input budget; no further model request is sent.
 - **Stop** aborts the model/tool request and ends an active run with `run.cancelled`. Cancellation is checked before credential setup, each model request and tool dispatch. An adapter rejection after abort is classified as cancellation, and buffered answer text is discarded. A tool stopped before or during execution reports `tool.finished` with `outcome: cancelled`; the run still needs its own terminal event. Completed runs remain completed after a late Stop. See [Stop behavior and acceptance](../docs/stop.md) for the measured delay and transport limits.
 
 The simulated run is deterministic: the same request always yields the same Markdown answer, which quotes the latest question. It emits `run.started`, `run.progress` (`answering`), `assistant.delta` chunks of about three words, `assistant.final` with the complete text, and `run.completed`. The deltas always add up to the final text. `AGENT_SIMULATION_CHUNK_DELAY_MS` (default 35, maximum 1000) sets the pause between chunks. Cancellation ends the run with `run.cancelled` and no final text; passing the run deadline ends it with `run.failed` (`deadline_exceeded`).

@@ -1,12 +1,12 @@
 # Blueprint: Laravel Chatbot Foundation
 
-Updated: 26 October 2026\
-Revision: 18 — Stop guards and chosen-provider cancellation acceptance complete\
-Status: Phase 2 and tasks 3.1–3.3 and 3.5 are complete for the chosen ChatGPT connection. Conversations use their recorded connection and model through a fresh Pi Agent, with an allowed read-only sample lookup. Live acceptance covers sign-in, replies, lookup use, restart persistence, automatic refresh after expiry and Stop in the browser. Task 3.5 was completed before 3.4 at the user's request. Task 3.4 still adds model-aware context/token budgets; Phase 4 adds durable runs. Other providers/accounts remain unverified. Tool arguments stay out of browser events, truncation notices count inside result limits and oversized replies fail explicitly. No provider or throughput benchmark has been produced.
+Updated: 27 October 2026\
+Revision: 19 — bounded context and token budgets\
+Status: Phase 2 and tasks 3.1–3.5 are complete. Conversations use their recorded connection and model through a fresh Pi Agent, with an allowed read-only sample lookup. Live acceptance covers sign-in, replies, lookup use, restart persistence, automatic refresh after expiry and Stop in the browser; task 3.4's context handling has controlled-provider acceptance. The owner's ChatGPT grant later required a new sign-in, so no new live context check was made. Phase 4 adds durable runs. Other providers/accounts remain unverified. Tool arguments stay out of browser events, truncation notices count inside result limits and oversized replies fail explicitly. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
 
-Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified, the remaining work and how to resume task 3.4. Refresh it alongside the build plan after each implementation session.
+Continuation record: [handoff.md](handoff.md) states where work stopped, what was verified and how to resume task 4.1. Refresh it alongside the build plan after each implementation session.
 
 ## 1. Goal and agreed foundation
 
@@ -460,6 +460,8 @@ These are development starting values, not measured capacity guarantees:
 | Replay retention | Initial target 24 hours plus a per-run byte cap |
 
 A maximum step count does not replace a tool-count or token budget.
+
+Task 3.4 implementation, 27 October 2026: Laravel bounds the owned snapshot to 50 recent messages and the engine's 1 MiB signed-body limit. The engine sizes recent whole messages with a conservative UTF-8-byte proxy that includes the system prompt and tool schemas, then caps input by both the configured limit and the selected Pi model's context window after reserving output and margin. It rechecks before each model call, including after tools. Oversized questions or later context growth fail explicitly before another provider request. Output is capped per request by configuration and model metadata; the existing round, tool, deadline and aggregate text limits remain. See [context budgets](docs/context-budget.md) for defaults and limitations. Controlled tests passed; a new live provider check awaits the owner's sign-in.
 
 Enforce the whole-run deadline in the Pi service and propagate cancellation to active work. Size claim expiry and heartbeat intervals together. Short handoff/reporting requests have their own deadlines.
 

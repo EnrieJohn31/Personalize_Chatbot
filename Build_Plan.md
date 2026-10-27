@@ -1,15 +1,15 @@
 # Build Plan: Laravel + Pi Chatbot
 
-Updated: 26 October 2026\
-Version: 17\
-Companion: [Blueprint.md](Blueprint.md), revision 18; [handoff.md](handoff.md) for the continuation record\
-Status: Phases 0–2 and tasks 3.1–3.3 and 3.5 complete for the chosen ChatGPT connection. Owned history, a signed Laravel-to-Pi boundary, the chat page, live replies and the permitted sample lookup are implemented. Task 3.1 includes automatic renewal after an observed expiry, alongside sign-in and restart persistence. Task 3.5 verifies Stop through the live browser/provider path and controlled active tools, with the observed delay and transport limits recorded. Task 3.4 remains open. OpenCode Go/Zen keys and an administrator-configured local model server are implemented but remain unverified with real accounts/servers. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md), [Stop](docs/stop.md) and [validation](docs/validation.md).
+Updated: 27 October 2026\
+Version: 18\
+Companion: [Blueprint.md](Blueprint.md), revision 19; [handoff.md](handoff.md) for the continuation record\
+Status: Phases 0–2 and tasks 3.1–3.5 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page, live replies, the permitted sample lookup, bounded context and Stop are implemented. Task 3.4 passed controlled follow-up and oversized-case checks; a fresh live context check awaits the owner's new sign-in after the provider invalidated the previous grant. OpenCode Go/Zen keys and an administrator-configured local model server remain unverified with real accounts/servers. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md), [context budgets](docs/context-budget.md), [Stop](docs/stop.md) and [validation](docs/validation.md).
 
 ## Start here
 
 Build a reusable chatbot foundation with Laravel, React/Inertia, TypeScript, shadcn/ui, Lucide, MySQL and a private Node/Pi engine. Use Docker Compose/Sail for development. Keep Pi as the engine throughout this plan.
 
-**Next task: 3.4 — bounded context and budgets. At the user's request, task 3.5 was completed before 3.4 on 25 October; 3.4 is still unchecked. Task 3.1 also closed that day after the live refresh-after-expiry check.** Otherwise work in numbered order, completing one task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
+**Next task: 4.1 — durable run and event records with transactional admission.** At the user's request, task 3.5 was completed before 3.4; both are now checked. Otherwise work in numbered order, completing one task at a time. Each task has a concrete result and a completion check. If a task grows too large for one focused coding session, split it into subtasks under the same ID.
 
 Use **Blueprint.md for design decisions** and **this file for work order and progress**. Update both when a decision changes. Read the relevant blueprint sections before each phase; there is no need to reproduce the entire architecture in every task.
 
@@ -79,7 +79,7 @@ Phases 0–3 deliver **Stage A: the connectivity prototype**. Phases 4–6 deliv
 | [x] | 3.1 | Implement the chosen Pi provider's supported login/credential-store integration in the container. | A live request succeeds; credential persistence and expiry/re-authentication behavior are checked. Record refresh behavior as verified or still untested. |
 | [x] | 3.2 | Construct a fresh Pi Agent per run and map its text/error events into the application protocol. | A real answer streams through Laravel; auth and provider errors appear as honest outcomes. |
 | [x] | 3.3 | Register `lookup_reference` with a schema, permission, timeout and size limit against invented fixtures. | Pi calls it, receives a matching result and answers using that result; denied access and invalid arguments do not execute the lookup. |
-| [ ] | 3.4 | Load the permitted canonical transcript and enforce context, output, model-round and tool budgets. | A follow-up remembers the relevant history, and an oversized case gets bounded handling rather than an uncontrolled request. |
+| [x] | 3.4 | Load the permitted canonical transcript and enforce context, output, model-round and tool budgets. | A follow-up remembers the relevant history, and an oversized case gets bounded handling rather than an uncontrolled request. |
 | [x] | 3.5 | Connect the prototype Stop action to Pi and the tool/provider abort signal. | Later steps stop; active-call cancellation delay and any transport limitation are recorded. |
 
 **Stage A checkpoint:** one real provider, one tool, streaming, follow-up context and Stop work together. Use an authenticated server-side save for basic history; Phase 4 will make execution and completion durable independently of the browser.
@@ -172,12 +172,12 @@ Keep a short progress record here as implementation proceeds:
 
 | Field | Current value |
 | --- | --- |
-| Current task | 3.4 — bounded context and budgets |
-| Last completed task | 3.5 on 25 October: model/tool Stop guards and live cancellation acceptance, completed before 3.4 at the user's request |
-| Actual checks run on the application | Latest 26 October review: 255 Laravel tests / 1408 assertions, 28 frontend tests, 100 engine tests, static checks, production build and signed connectivity passed. Previous live Stop measurements remain dated 25 October. See docs/validation.md |
-| Git checkpoint and branches | Published `7c65af5` (privacy/parsing review fixes), including `912b83a` (refusal reasons and engine supervision), to both branches on 26 October. Remote hashes verified; this publication record follows. Continue on `development` |
+| Current task | 4.1 — durable run and event records with transactional admission |
+| Last completed task | 3.4 on 27 October: bounded model-aware context and output, with controlled follow-up and oversized-case acceptance |
+| Actual checks run on the application | Latest 27 October: 256 Laravel tests / 1416 assertions, 28 frontend tests, 105 engine tests, static checks and signed connectivity passed. The previous production build remains dated 26 October; no live provider request was made. See docs/validation.md |
+| Git checkpoint and branches | Continue on `development`. Task 3.4 implementation is local commit `f557f78`; the last published checkpoint remains `3289b1c` on both branches. No task 3.4 push was requested |
 | Known prerequisite for live tests | The operator's eligible ChatGPT account or OpenCode key connected on the Connections page, or a running local server set as `LOCAL_LLM_URL` |
-| Next checkpoint | Task 3.4: follow-up context and oversized-history handling within a model-aware budget, then Phase 4 durable runs |
+| Next checkpoint | Task 4.1: persisted run/event lifecycle, idempotency key and request hash, then transactional admission |
 
 For each completed task, append: `ID — result — verification/evidence — remaining issue, if any`. Record a commit reference when working in Git. Checkboxes remain open for partially implemented or unverified behavior.
 
@@ -263,6 +263,7 @@ Publication review of local model changes on 24 October: no blocking findings ac
 - Fix (user-reported), 26 October — OpenAI ended the ChatGPT grant on its side (`refresh_token_invalidated`); HTTPS scanning was not the cause. The engine now keeps and reports the provider's refusal reason across restarts, logs every renewal, and runs under a development supervisor that restarts it when it stops answering — 97 engine, 255 Laravel and 28 frontend tests passed; a recovery probe stayed down without the supervisor and recovered in 44 s with it — whether and why OpenAI invalidates the grant again is unknown, and a new sign-in is required now.
 
 - Review of refusal diagnostics, 26 October — Fixed unknown exception/description text reaching responses, logs and unencrypted refusal records; hardened saved-record parsing against null/malformed entries and enforced the 1,000-entry loading bound. Three new regressions failed before the corrections; all 100 engine tests pass afterward. Full application checks (255 Laravel / 1408 assertions, 28 frontend), production build and signed connectivity pass. The running supervisor configuration was verified; the earlier crash-recovery probe was not repeated. Updated the handoff, provider matrix and restart instructions. Task 3.4 remains next.
+- 3.4, 27 October — Laravel trims oldest owned history until the signed request fits 1 MiB. The Pi engine reserves output in the selected model's window, selects recent whole messages under a conservative byte estimate and checks every model round after tools. A follow-up retained its relevant answer while older messages were removed; oversized current and tool-grown contexts failed before another provider call. Configurable input/output caps were added to the shared contract in local commit `f557f78`. All 105 engine, 256 Laravel / 1416 assertions and 28 frontend tests plus static checks and signed connectivity passed. No new live provider request was made because the recorded grant requires sign-in. See [context budgets](docs/context-budget.md) and [validation](docs/validation.md). Task 4.1 follows.
 
 ## Completion boundaries
 

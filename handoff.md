@@ -1,6 +1,6 @@
 # Development handoff
 
-Updated: 27 October 2026. Read this file first when resuming work.
+Updated: 28 October 2026. Read this file first when resuming work.
 
 ## Where we stopped
 
@@ -8,7 +8,7 @@ Updated: 27 October 2026. Read this file first when resuming work.
 
 Task 3.4 implementation **`f557f78`** and documentation **`126f986`** were reviewed and pushed to both `main` and `development` on 27 October at the user's request. Both remote hashes were verified as `126f9864e1dd8b85238da3fd9c902047746a8e2f` before this review record. No blocking code defect was found. All **105 engine tests, 256 Laravel tests / 1416 assertions and 28 frontend tests**, formatting, lint, TypeScript, PHPStan, the production build and signed connectivity passed again. The full contributor audit passed; original human identities, messages and hooks were preserved. No new live provider request was made. See [context budgets](docs/context-budget.md) and [validation](docs/validation.md).
 
-The requested UI review remains pending: browser testing was interrupted before any tracked UI change. The disposable SQLite test container has been removed. The existing MySQL data and provider credentials were preserved. Continue the UI review separately when requested; task 4.1 remains the next numbered backend task.
+The requested administration UI refresh is implemented on 28 October: a useful overview replaces the empty dashboard, the sidebar exposes Workspace and Account settings, settings share clear headings/tabs, Connections groups the default model and provider controls, and Appearance offers visual radio choices. The light/dark palette is scoped to the administration layout, including portalled menus; chat retains its existing palette. Mobile navigation closes on selection. Routes, form endpoints, provider polling, database schema and credentials are unchanged. **Checks passed:** 256 Laravel tests / 1416 assertions, 28 frontend tests, formatting/lint/types, Pint, PHPStan, production build (122 seconds) and signed engine connectivity without starting a run. See [the design and checks](docs/admin-ui.md). Browser visual acceptance remains open because Computer Use stopped when it could not confidently determine the active browser URL. Task 4.1 remains the next numbered backend task. Changes are uncommitted; no push was requested.
 
 Earlier review on 26 October 2026 covers **`912b83a`**, which records renewal refusal reasons across restarts, shows the reason/time on Connections, and supervises the development engine. The provider's recorded `refresh_token_invalidated` response replaced the earlier HTTPS-scanning hypothesis; why the grant was invalidated is unknown. Review fixed raw unknown-error text reaching diagnostics and malformed refusal records breaking status loading. All **100 engine tests, 255 Laravel tests / 1408 assertions and 28 frontend tests**, static checks, the production build and signed connectivity passed. The running engine already uses the supervisor and `unless-stopped`. No new live provider request was made. See [the dated review](docs/validation.md).
 

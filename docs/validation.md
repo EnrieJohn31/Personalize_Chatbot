@@ -1,5 +1,17 @@
 # Foundation validation
 
+## Administration UI refresh — 28 October 2026
+
+Implemented the user-requested minimal administration design: useful overview, direct Workspace/Account navigation, settings headings/tabs, visual appearance choices and a clearer Connections layout. Tokens are scoped to the administration layout, with portalled menu support. The chat page keeps its prior palette. No route, PHP, contract, dependency, database or engine source changed. See [administration UI](admin-ui.md) for design decisions and future optimization.
+
+- `composer ci:check` passed: **256 Laravel tests / 1416 assertions**, **28 frontend tests**, formatting (137 files), lint (97 files), TypeScript, Pint (124 files) and PHPStan (92 files). One intermediate formatting failure was corrected and the full command passed afterward.
+- Signed `php artisan agent:check` passed; no run or provider test was started.
+- The final production build passed in 122 seconds (an earlier pass took 145 seconds). The existing optional `fontaine` warning remains non-fatal; generated assets are ignored by Git.
+- New palette text pairs were checked mathematically: the lowest checked ordinary text ratio is 4.67:1. This does not replace rendered accessibility testing.
+- Browser testing remains **unverified**: browser inventory exposed no browser-control surface; the native Computer Use tool then stopped because it could not determine the active browser URL with sufficient confidence. No UI actions, screenshots or visual acceptance passes followed that stop.
+
+The existing Compose stack was started using its existing volumes. Tests use in-memory SQLite, not the user's MySQL data. No provider sign-in, credential change, new account, schema migration, commit or push occurred. Engine tests were not rerun because engine/contracts were unchanged. Remaining acceptance: desktop/mobile appearance and navigation, keyboard focus, saved-theme switching, provider form/error/sign-in states and physical passkey flows. Task 4.1 remains the next backend task.
+
 ## Publication review of task 3.4 — 27 October 2026
 
 Reviewed implementation `f557f78` and its documentation checkpoint `126f986`. No blocking code defect was found. The shared PHP/engine contract, signed body trimming, recent-history selection, model-window/output reservation and checks after tool rounds agree with the documented behavior. Corrected the chat UI guide's stale statement that task 3.4 was still missing.

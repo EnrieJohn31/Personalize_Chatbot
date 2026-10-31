@@ -58,13 +58,13 @@ export function ChatChoice({
     return (
         <section
             aria-labelledby="chat-choice-heading"
-            className="space-y-4 rounded-lg border bg-muted/30 p-4 sm:p-5"
+            className="space-y-5 rounded-xl border bg-card p-5 sm:p-6"
         >
             <div className="space-y-1">
-                <h2 id="chat-choice-heading" className="font-medium">
-                    Use for chat
+                <h2 id="chat-choice-heading" className="font-semibold">
+                    Default for new chats
                 </h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm leading-6 break-words text-muted-foreground">
                     {chat === null
                         ? 'Chat uses the built-in assistant.'
                         : `Chat is set to ${chat.name} with ${chat.model}.`}
@@ -176,7 +176,7 @@ export function ChatChoice({
                             }
                         >
                             {processing && <Spinner />}
-                            Save
+                            {processing ? 'Saving…' : 'Save chat default'}
                         </Button>
                         <InputError
                             message={errors.chat ?? errors.connection}

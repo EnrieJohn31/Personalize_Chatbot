@@ -26,13 +26,11 @@ export default function Security(props: Props) {
         <>
             <Head title="Security settings" />
 
-            <h1 className="sr-only">Security settings</h1>
-
             <div className="space-y-6">
                 <Heading
                     variant="small"
                     title="Update password"
-                    description="Ensure your account is using a long, random password to stay secure"
+                    description="Choose a strong password you don’t use elsewhere."
                 />
 
                 <Form
@@ -116,7 +114,7 @@ export default function Security(props: Props) {
                                     disabled={processing}
                                     data-test="update-password-button"
                                 >
-                                    Save
+                                    {processing ? 'Saving…' : 'Update password'}
                                 </Button>
                             </div>
                         </>

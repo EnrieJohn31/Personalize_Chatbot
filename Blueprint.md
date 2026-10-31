@@ -1,7 +1,7 @@
 # Blueprint: Laravel Chatbot Foundation
 
-Updated: 27 October 2026\
-Revision: 19 — bounded context and token budgets\
+Updated: 28 October 2026\
+Revision: 20 — administration navigation and visual design\
 Status: Phase 2 and tasks 3.1–3.5 are complete. Conversations use their recorded connection and model through a fresh Pi Agent, with an allowed read-only sample lookup. Live acceptance covers sign-in, replies, lookup use, restart persistence, automatic refresh after expiry and Stop in the browser; task 3.4's context handling has controlled-provider acceptance. The owner's ChatGPT grant later required a new sign-in, so no new live context check was made. Phase 4 adds durable runs. Other providers/accounts remain unverified. Tool arguments stay out of browser events, truncation notices count inside result limits and oversized replies fail explicitly. No provider or throughput benchmark has been produced.
 
 Companion: [Build_Plan.md](Build_Plan.md). Follow its numbered tasks for implementation; this blueprint defines the architecture and acceptance requirements. The plan's checkboxes record implementation progress, not capabilities already delivered.
@@ -236,6 +236,8 @@ Pi is the selected engine, not a candidate awaiting replacement by the Laravel A
 Keep uploads, Office generation, broad MCP catalogs and domain-specific workflows out of the initial critical path.
 
 ## 7. UI specification: shadcn/ui and Lucide
+
+Administration refinement, 28 October 2026: the signed-in overview, Connections and account settings share a minimal neutral/blue palette with light/dark variants. Workspace and Account settings are directly available in the sidebar; the overview links to real tasks without synthetic metrics. Settings use section headings/tabs, Appearance uses native radio choices with previews, and Connections puts the new-chat default above the provider grid. The existing Laravel routes, authorization, forms and Pi connection flows are retained. No administrator role or new server configuration editor is introduced. See [administration UI](docs/admin-ui.md) for tokens, implementation, checks and the outstanding browser acceptance.
 
 Use a collapsible conversation sidebar, compact header, readable message column and bottom composer. On mobile, use a Sheet for navigation and keep the composer clear of the on-screen keyboard.
 

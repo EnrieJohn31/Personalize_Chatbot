@@ -66,7 +66,7 @@ function connectedNote(card: ProviderConnectionCard): string {
         // The short-lived access token behind the sign-in renews by itself whenever it is used,
         // so its expiry time is not something the user needs to act on.
         case 'oauth':
-            return `Your ${card.name} account stays connected until you disconnect it. Access renews automatically, so you do not need to sign in again.`;
+            return `Your ${card.name} account is connected. Access renews automatically; if the provider ends access, you’ll be asked to sign in again.`;
         case 'none':
             return `${card.name} answers at ${card.local?.base_url ?? 'the configured address'} with ${card.models.length} ${
                 card.models.length === 1 ? 'model' : 'models'
@@ -108,7 +108,10 @@ function TestMessage({ card }: { card: ProviderConnectionCard }) {
                     <div className="grid gap-2">
                         <Label htmlFor={id}>Test model</Label>
                         <Select name="model_id" defaultValue={initialModel}>
-                            <SelectTrigger id={id} className="w-full sm:w-72">
+                            <SelectTrigger
+                                id={id}
+                                className="w-full sm:max-w-72"
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

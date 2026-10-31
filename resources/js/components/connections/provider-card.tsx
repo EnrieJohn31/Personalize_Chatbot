@@ -1,4 +1,11 @@
-import { Info, TriangleAlert } from 'lucide-react';
+import {
+    CircleCheck,
+    Info,
+    KeyRound,
+    MessageSquare,
+    Server,
+    TriangleAlert,
+} from 'lucide-react';
 import { ApiKeyForm } from '@/components/connections/api-key-form';
 import {
     ChatGptSignInSteps,
@@ -21,12 +28,12 @@ export const isSigningIn = (card: ProviderConnectionCard): boolean =>
     card.login !== null && ACTIVE_SIGN_IN_STATES.includes(card.login.state);
 
 const SUMMARIES: Record<ConnectionProviderId, string> = {
-    openai: "Sign in with your ChatGPT account, for example a Plus or Pro plan. OpenAI decides during sign-in whether your plan can be used here, and replies count toward your plan's usage.",
+    openai: 'Use your ChatGPT account. Availability depends on your plan; replies count toward its usage.',
     'opencode-go':
-        "OpenCode's subscription for open models. Paste your OpenCode API key; replies count toward your Go subscription.",
+        'Open models through your Go subscription. Connect with your OpenCode API key.',
     opencode:
-        "OpenCode's pay-as-you-go gateway to many models. Paste your OpenCode API key; replies are charged to your Zen balance, except on free models.",
-    local: 'A model server on this computer or your local network, such as Ollama, LM Studio, llama.cpp or vLLM. The administrator sets it up for everyone; replies stay on your network and cost nothing per message.',
+        'Pay-as-you-go models using your OpenCode API key. Paid models use your Zen balance.',
+    local: 'Use a model server on your computer or network. Set up once by the administrator and shared with everyone.',
 };
 
 export function ProviderCard({
@@ -39,24 +46,39 @@ export function ProviderCard({
 }) {
     const signingIn = isSigningIn(card);
     const headingId = `${card.provider}-heading`;
+    const Icon =
+        card.auth === 'none'
+            ? Server
+            : card.auth === 'oauth'
+              ? MessageSquare
+              : KeyRound;
 
     return (
         <section
             aria-labelledby={headingId}
-            className="space-y-4 rounded-lg border p-4 sm:p-5"
+            className="min-w-0 space-y-5 rounded-xl border bg-card p-5 sm:p-6"
         >
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 id={headingId} className="font-medium">
-                    {card.name}
-                </h2>
+                <div className="flex items-center gap-3">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                        <Icon aria-hidden="true" className="size-4" />
+                    </span>
+                    <h3 id={headingId} className="font-semibold">
+                        {card.name}
+                    </h3>
+                </div>
                 <StatusBadge card={card} signingIn={signingIn} />
             </div>
 
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm leading-6 text-muted-foreground">
                 {SUMMARIES[card.provider]}
             </p>
 
-            {available && <CardBody card={card} signingIn={signingIn} />}
+            {available && (
+                <div className="border-t pt-5">
+                    <CardBody card={card} signingIn={signingIn} />
+                </div>
+            )}
         </section>
     );
 }
@@ -141,18 +163,30 @@ function LocalServerProblem({ card }: { card: ProviderConnectionCard }) {
                 <AlertTitle>No local model server is set up</AlertTitle>
                 <AlertDescription>
                     <p>
-                        An administrator adds the server&apos;s address to the
-                        server&apos;s <code>.env</code> file and restarts the
-                        engine, for example:
+                        Connect a compatible server such as Ollama or LM Studio
+                        to make local models available.
                     </p>
-                    <code className="block rounded bg-muted px-2 py-1 text-xs break-all">
-                        LOCAL_LLM_URL=http://host.docker.internal:11434/v1
-                    </code>
-                    <p>
-                        Use <code>host.docker.internal</code> for a server on
-                        this computer, or its network address, such as{' '}
-                        <code>http://192.168.1.20:1234/v1</code>.
-                    </p>
+                    <details className="mt-2">
+                        <summary className="cursor-pointer rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                            Server setup instructions
+                        </summary>
+                        <div className="mt-3 space-y-3">
+                            <p>
+                                An administrator adds the server&apos;s address
+                                to the server&apos;s <code>.env</code> file and
+                                restarts the engine, for example:
+                            </p>
+                            <code className="block rounded bg-muted px-2 py-1 text-xs break-all">
+                                LOCAL_LLM_URL=http://host.docker.internal:11434/v1
+                            </code>
+                            <p>
+                                Use <code>host.docker.internal</code> for a
+                                server on this computer, or its network address,
+                                such as <code>http://192.168.1.20:1234/v1</code>
+                                .
+                            </p>
+                        </div>
+                    </details>
                 </AlertDescription>
             </Alert>
         );
@@ -200,7 +234,11 @@ function StatusBadge({
     switch (card.status) {
         case 'connected':
             return (
-                <Badge>
+                <Badge
+                    variant="outline"
+                    className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-200"
+                >
+                    <CircleCheck aria-hidden="true" className="size-3" />
                     {card.auth === 'none' ? 'Available' : 'Connected'}
                 </Badge>
             );

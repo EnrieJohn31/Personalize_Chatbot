@@ -2,13 +2,13 @@ import { Head, usePoll } from '@inertiajs/react';
 import { TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ConnectionsController from '@/actions/App/Http/Controllers/ConnectionsController';
+import { AdminPage } from '@/components/admin-page';
 import { ChatChoice } from '@/components/connections/chat-choice';
 import { FormActivityContext } from '@/components/connections/form-activity';
 import {
     ProviderCard,
     isSigningIn,
 } from '@/components/connections/provider-card';
-import Heading from '@/components/heading';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { ConnectionsOverview } from '@/types';
 
@@ -49,12 +49,10 @@ export default function Connections({
         <FormActivityContext.Provider value={activity}>
             <Head title="Connections" />
 
-            <div className="w-full max-w-3xl space-y-6 px-4 py-6">
-                <Heading
-                    title="Connections"
-                    description="Connect your own AI accounts or a local model server, and choose which one chat uses. Every sign-in and key stays encrypted on this server and is never sent back to your browser."
-                />
-
+            <AdminPage
+                title="Connections"
+                description="Connect your AI accounts, then choose a default model for new conversations."
+            >
                 {!available && (
                     <Alert>
                         <TriangleAlert />
@@ -78,14 +76,41 @@ export default function Connections({
                     disabled={!available}
                 />
 
-                {providers.map((card) => (
-                    <ProviderCard
-                        key={card.provider}
-                        card={card}
-                        available={available}
-                    />
-                ))}
-            </div>
+                <section
+                    aria-labelledby="providers-heading"
+                    className="space-y-5"
+                >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <div className="space-y-1">
+                            <h2
+                                id="providers-heading"
+                                className="text-base font-semibold"
+                            >
+                                Your providers
+                            </h2>
+                            <p className="text-sm text-muted-foreground">
+                                Sign-ins and API keys are stored encrypted on
+                                this server.
+                            </p>
+                        </div>
+                        {available && (
+                            <p className="text-xs text-muted-foreground">
+                                {connected.length} of {providers.length}{' '}
+                                connected
+                            </p>
+                        )}
+                    </div>
+                    <div className="grid items-start gap-5 xl:grid-cols-2">
+                        {providers.map((card) => (
+                            <ProviderCard
+                                key={card.provider}
+                                card={card}
+                                available={available}
+                            />
+                        ))}
+                    </div>
+                </section>
+            </AdminPage>
         </FormActivityContext.Provider>
     );
 }

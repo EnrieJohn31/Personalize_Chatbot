@@ -1,15 +1,15 @@
 import { Link } from '@inertiajs/react';
 import {
-    BookOpen,
     Cable,
-    FolderGit2,
     LayoutGrid,
     MessageSquare,
+    Palette,
+    ShieldCheck,
+    UserRound,
 } from 'lucide-react';
 import ChatPageController from '@/actions/App/Http/Controllers/ChatPageController';
 import ConnectionsController from '@/actions/App/Http/Controllers/ConnectionsController';
 import AppLogo from '@/components/app-logo';
-import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -22,11 +22,14 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { edit as appearance } from '@/routes/appearance';
+import { edit as profile } from '@/routes/profile';
+import { edit as security } from '@/routes/security';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Dashboard',
+        title: 'Overview',
         href: dashboard(),
         icon: LayoutGrid,
     },
@@ -42,23 +45,28 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
-const footerNavItems: NavItem[] = [
+const settingsNavItems: NavItem[] = [
     {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: FolderGit2,
+        title: 'Profile',
+        href: profile(),
+        icon: UserRound,
     },
     {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
+        title: 'Security',
+        href: security(),
+        icon: ShieldCheck,
+    },
+    {
+        title: 'Appearance',
+        href: appearance(),
+        icon: Palette,
     },
 ];
 
 export function AppSidebar() {
     return (
-        <Sidebar collapsible="icon" variant="inset">
-            <SidebarHeader>
+        <Sidebar collapsible="icon" variant="sidebar">
+            <SidebarHeader className="px-3 py-5">
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
@@ -70,12 +78,19 @@ export function AppSidebar() {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <SidebarContent>
-                <NavMain items={mainNavItems} />
+            <SidebarContent className="gap-5">
+                <nav aria-label="Workspace navigation">
+                    <NavMain items={mainNavItems} />
+                </nav>
+                <nav aria-label="Account settings">
+                    <NavMain
+                        items={settingsNavItems}
+                        label="Account settings"
+                    />
+                </nav>
             </SidebarContent>
 
-            <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
+            <SidebarFooter className="border-t border-sidebar-border p-3">
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

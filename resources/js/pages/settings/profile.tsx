@@ -28,12 +28,10 @@ export default function Profile({
         <>
             <Head title="Profile settings" />
 
-            <h1 className="sr-only">Profile settings</h1>
-
             <div className="space-y-6">
                 <Heading
                     variant="small"
-                    title="Profile"
+                    title="Personal information"
                     description="Update your name and email address"
                 />
 
@@ -115,7 +113,7 @@ export default function Profile({
                                     disabled={processing}
                                     data-test="update-profile-button"
                                 >
-                                    Save
+                                    {processing ? 'Saving…' : 'Save changes'}
                                 </Button>
                             </div>
                         </>

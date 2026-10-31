@@ -141,3 +141,75 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* The administration palette also reaches portalled menus and mobile navigation. */
+:root:has(.admin-shell) {
+    --background: #f5f7fa;
+    --foreground: #202b3d;
+    --card: #ffffff;
+    --card-foreground: #202b3d;
+    --popover: #ffffff;
+    --popover-foreground: #202b3d;
+    --primary: #365bcc;
+    --primary-foreground: #ffffff;
+    --secondary: #edf1f7;
+    --secondary-foreground: #34425b;
+    --muted: #edf1f7;
+    --muted-foreground: #637086;
+    --accent: #eaf0ff;
+    --accent-foreground: #304fae;
+    --border: #e1e6ee;
+    --input: #cbd3df;
+    --ring: #365bcc;
+    --sidebar: #ffffff;
+    --sidebar-foreground: #202b3d;
+    --sidebar-primary: #365bcc;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #eaf0ff;
+    --sidebar-accent-foreground: #304fae;
+    --sidebar-border: #e1e6ee;
+    --sidebar-ring: #365bcc;
+}
+
+:root.dark:has(.admin-shell) {
+    --background: #161d29;
+    --foreground: #e6ebf3;
+    --card: #1d2635;
+    --card-foreground: #e6ebf3;
+    --popover: #1d2635;
+    --popover-foreground: #e6ebf3;
+    --primary: #a4bbff;
+    --primary-foreground: #192749;
+    --secondary: #283447;
+    --secondary-foreground: #e6ebf3;
+    --muted: #263144;
+    --muted-foreground: #a8b5c9;
+    --accent: #2b3a59;
+    --accent-foreground: #b8caff;
+    --border: #344156;
+    --input: #485970;
+    --ring: #a4bbff;
+    --sidebar: #1b2330;
+    --sidebar-foreground: #e6ebf3;
+    --sidebar-primary: #a4bbff;
+    --sidebar-primary-foreground: #192749;
+    --sidebar-accent: #2b3a59;
+    --sidebar-accent-foreground: #b8caff;
+    --sidebar-border: #344156;
+    --sidebar-ring: #a4bbff;
+}
+
+@layer components {
+    .settings-content > div {
+        @apply rounded-xl border bg-card p-5 sm:p-7;
+    }
+
+    .settings-content form {
+        @apply max-w-lg;
+    }
+
+    .admin-shell input:not([type='radio']):not([type='checkbox']),
+    .admin-shell [data-slot='select-trigger'] {
+        @apply min-h-10 bg-card shadow-none;
+    }
+}

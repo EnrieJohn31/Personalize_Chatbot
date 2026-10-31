@@ -1,6 +1,6 @@
 ﻿# Administration UI
 
-Updated: 28 October 2026.
+Updated: 31 October 2026.
 
 ## Scope and design
 
@@ -36,7 +36,7 @@ The design review removed the starter's empty metric cards and external framewor
 - Source review: existing routes and form submissions, provider polling, disconnect confirmation, password confirmation and ownership boundaries remain intact. No dependency, migration or engine change.
 - Browser review could not be completed: no browser-control surface was available, and Computer Use stopped because it could not confidently determine the current browser URL. Desktop/mobile layouts, keyboard interaction, theme changes and connected/sign-in/error provider states still need visual acceptance. No screenshots or browser passes are claimed.
 
-The local app is served at `http://localhost:8080/dashboard`. Existing MySQL and provider volumes were retained; no temporary account or test database was created for browser work. Changes are local and uncommitted.
+When the Compose stack is running, the local app is served at `http://localhost:8080/dashboard`. Existing MySQL and provider volumes were retained; no temporary account or test database was created for browser work. Implementation commit `a955d98` was pushed to both `main` and `development` on 31 October; both remote hashes were verified. The publication review preserved the validation evidence above from 28 October. Container tests were not repeated because Docker Desktop's Linux daemon was stopped; application source was unchanged during publication.
 
 ## Future optimization
 

@@ -1,6 +1,6 @@
 # Build Plan: Laravel + Pi Chatbot
 
-Updated: 28 October 2026\
+Updated: 31 October 2026\
 Version: 19\
 Companion: [Blueprint.md](Blueprint.md), revision 20; [handoff.md](handoff.md) for the continuation record\
 Status: Phases 0–2 and tasks 3.1–3.5 complete. Owned history, a signed Laravel-to-Pi boundary, the chat page, live replies, the permitted sample lookup, bounded context and Stop are implemented. Task 3.4 passed controlled follow-up and oversized-case checks; a fresh live context check awaits the owner's new sign-in after the provider invalidated the previous grant. OpenCode Go/Zen keys and an administrator-configured local model server remain unverified with real accounts/servers. See [history endpoints](docs/chat-history.md), [engine contracts](contracts/README.md), [chat page and replies](docs/chat-ui.md), [connections](docs/connections.md), [context budgets](docs/context-budget.md), [Stop](docs/stop.md) and [validation](docs/validation.md).
@@ -270,6 +270,8 @@ Publication review of local model changes on 24 October: no blocking findings ac
 ### User-requested administration UI — 28 October 2026
 
 Replaced the placeholder dashboard with useful task links; exposed account settings in the main navigation; introduced a scoped neutral/blue light/dark palette, consistent headings and settings tabs; organized Connections into a default-chat form and provider grid; added visual theme radio choices and mobile-menu dismissal on navigation. Existing endpoints, authentication, provider polling, credentials and database schema are preserved. See [administration UI](docs/admin-ui.md) and [validation](docs/validation.md) for actual checks and browser-verification limits. This requested UI work does not advance Phase 4; task 4.1 remains next.
+
+Publication, 31 October 2026: reviewed and committed the administration UI as `a955d98`, fast-forwarded `main`, atomically pushed both `main` and `development` and verified matching remote hashes. Approved identities and contributor hooks were preserved. Validation remains the passing 28 October evidence; Docker's Linux daemon was stopped, so checks were not repeated. Browser acceptance and remote CI remain unverified. No numbered task status changed; task 4.1 remains next.
 
 ## Completion boundaries
 

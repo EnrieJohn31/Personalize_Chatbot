@@ -1,5 +1,13 @@
 # Foundation validation
 
+## Administration UI publication — 31 October 2026
+
+Reviewed the pending 24-file UI/documentation change and saved it as `a955d98` using the approved human identity for author and committer. No blocking code defect was found. The pre-existing reachable-history attribution audit, staged diff/whitespace review, saved commit metadata/message and unchanged `.githooks` configuration passed inspection. No credentials, generated assets, dependencies or unrelated files entered the commit.
+
+Fetched GitHub before publication: both remote branches matched the local baseline `1854447`. Fast-forwarded local `main` to the UI commit, pushed `main` and `development` atomically, then verified both live remote hashes as `a955d98b53e79295b2ed1e9cabe6aeb85316d255`. This subsequent documentation checkpoint records those observed results.
+
+Application source is unchanged from the 28 October checks below. `docker compose ps` could not connect because Docker Desktop's Linux daemon was stopped; no container tests, build or live-provider check was repeated on 31 October. Browser acceptance and remote CI remain unverified. No migrations, credential changes or history rewrites occurred. Task 4.1 remains next.
+
 ## Administration UI refresh — 28 October 2026
 
 Implemented the user-requested minimal administration design: useful overview, direct Workspace/Account navigation, settings headings/tabs, visual appearance choices and a clearer Connections layout. Tokens are scoped to the administration layout, with portalled menu support. The chat page keeps its prior palette. No route, PHP, contract, dependency, database or engine source changed. See [administration UI](admin-ui.md) for design decisions and future optimization.
